@@ -1,0 +1,71 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 2,
+  "name": "growtype/search",
+  "version": "0.1.0",
+  "title": "Growtype AI",
+  "category": "text",
+  "icon": "flag",
+  "description": "Display video in advanced way.",
+  "attributes": {
+    "shortcode": {
+      "type": "string",
+      "source": "text",
+      "selector": "div",
+      "default": "[growtype_ai]"
+    },
+    "search_type": {
+      "type": "string",
+      "default": "inline",
+      "options": [
+        {
+          "label": "Inline",
+          "value": "inline"
+        },
+        {
+          "label": "Fixed",
+          "value": "fixed"
+        }
+      ]
+    },
+    "post_types_included": {
+      "type": "string",
+      "default": ""
+    },
+    "search_on_load": {
+      "type": "boolean",
+      "default": false
+    },
+    "search_on_empty": {
+      "type": "boolean",
+      "default": false
+    },
+    "visible_results_amount": {
+      "type": "number",
+      "default": ""
+    },
+    "search_input_placeholder": {
+      "type": "string",
+      "default": ""
+    },
+    "btn_open": {
+      "type": "boolean",
+      "default": true
+    },
+    "parent_id": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "supports": {
+    "html": false,
+    "align": [
+      "none",
+      "full"
+    ]
+  },
+  "textdomain": "growtype-ai",
+  "editorScript": "file:./index.js",
+  "editorStyle": "file:./index.css",
+  "style": "file:./style-index.css"
+}
