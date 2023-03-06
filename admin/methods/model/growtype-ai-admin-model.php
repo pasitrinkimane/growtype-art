@@ -122,7 +122,8 @@ class Growtype_Ai_Admin_Model
         $this->item_obj->process_add_new_action();
         $this->item_obj->process_update_action();
         $this->item_obj->process_sync_action();
-        $this->item_obj->process_generate_action();
+        $this->item_obj->process_generate_image_action();
+        $this->item_obj->process_generate_content_action();
         $this->item_obj->process_retrieve_action();
     }
 }

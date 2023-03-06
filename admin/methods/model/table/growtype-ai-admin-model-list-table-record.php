@@ -98,6 +98,10 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             $model = $_POST['model'];
             $settings = $_POST['settings'];
 
+            if (isset($settings['tags']) && !empty($settings['tags'])) {
+                $settings['tags'] = json_encode(explode(',', $settings['tags']));
+            }
+
             Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODELS_TABLE, $model, $_POST['update_item_id']);
 
             Growtype_Ai_Database::update_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
@@ -112,7 +116,6 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     public function process_sync_action()
     {
         if (isset($_GET['action']) && $_GET['action'] === 'sync-images') {
-            require_once GROWTYPE_AI_PATH . 'includes/methods/crud/cloudinary/Cloudinary_Crud.php';
             $crud = new Cloudinary_Crud();
             $crud->sync_images($_GET['item']);
 
@@ -123,14 +126,39 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     /**
      * @return void
      */
-    public function process_generate_action()
+    public function process_generate_image_action()
     {
         if (isset($_GET['action']) && $_GET['action'] === 'generate-images') {
 
-            require_once GROWTYPE_AI_PATH . 'includes/methods/crud/leonardoai/Leonardo_Ai_Crud.php';
-            $crud = new Leonardo_Ai_Crud();
+            if ($_GET['action'] === 'generate-images') {
+                $crud = new Leonardo_Ai_Crud();
+                $crud->generate_model($_GET['item']);
+            }
 
-            $crud->generate_model($_GET['item']);
+            $redirect = add_query_arg(
+                'message',
+                $_GET['action'],
+                get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&action=%s&item=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $_GET['item']));
+
+            wp_redirect($redirect);
+        }
+    }
+
+    /**
+     * @return void
+     */
+    public function process_generate_content_action()
+    {
+        if (isset($_GET['action']) && ($_GET['action'] === 'generate-model-content' || $_GET['action'] === 'generate-image-content')) {
+            $openai_crud = new Openai_Crud();
+
+            if ($_GET['action'] === 'generate-model-content') {
+                $openai_crud->format_models(null, false, $_GET['item']);
+            }
+
+            if ($_GET['action'] === 'generate-image-content') {
+                $openai_crud->format_model_images($_GET['item']);
+            }
 
             $redirect = add_query_arg(
                 'message',
@@ -147,16 +175,15 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     public function process_retrieve_action()
     {
         if (isset($_GET['action']) && ($_GET['action'] === 'retrieve-images' || $_GET['action'] === 'retrieve-images-all')) {
-            require_once GROWTYPE_AI_PATH . 'includes/methods/crud/leonardoai/Leonardo_Ai_Crud.php';
             $crud = new Leonardo_Ai_Crud();
 
-            $amount = $_GET['action'] === 'retrieve-images-all' ? 50 : 5;
+            $amount = 5;
 
             $model_id = isset($_GET['item']) ? $_GET['item'] : null;
 
-            $users_creadentials = Leonardo_Ai_Crud::user_credentials();
+            $users_credentials = Leonardo_Ai_Crud::user_credentials();
 
-            foreach ($users_creadentials as $user_nr => $user_credentials) {
+            foreach ($users_credentials as $user_nr => $user_credentials) {
 
                 if (empty($user_credentials['cookie']) || empty($user_credentials['user_id'])) {
                     continue;
@@ -187,8 +214,6 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     public function delete_item($id)
     {
         $models = growtype_ai_get_model_details($id);
-
-        require_once GROWTYPE_AI_PATH . 'includes/methods/crud/cloudinary/Cloudinary_Crud.php';
         $crud = new Cloudinary_Crud();
 
         $crud->delete_folder($models['image_folder']);
@@ -266,6 +291,9 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
             $required_keys = [
                 'model_id',
+                'title',
+                'description',
+                'tags',
             ];
 
             $existing_keys = array_pluck($models_settings, 'meta_key');
@@ -283,16 +311,23 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 if (in_array($item['meta_key'], ['id', 'created_at', 'updated_at'])) {
                     continue;
                 }
+
+                $meta_value = $item['meta_value'];
+
+                if ($item['meta_key'] === 'tags' && !empty(json_decode($item['meta_value']))) {
+                    $meta_value = implode(',', json_decode($item['meta_value']));
+                }
+
                 ?>
                 <tr>
                     <th scope="row">
                         <label for=""><?php echo $item['meta_key'] ?></label>
                     </th>
                     <td>
-                        <?php if (in_array($item['meta_key'], ['prompt', 'negative_prompt'])) { ?>
-                            <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $item['meta_value'] ?></textarea>
+                        <?php if (in_array($item['meta_key'], ['prompt', 'negative_prompt', 'description'])) { ?>
+                            <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $meta_value ?></textarea>
                         <?php } else { ?>
-                            <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $item['meta_value'] ?>"/>
+                            <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $meta_value ?>"/>
                         <?php } ?>
                     </td>
                 </tr>
@@ -311,15 +346,28 @@ class Growtype_Ai_Admin_Result_List_Table_Record
         ?>
 
         <div style="display:flex;justify-content: flex-end;">
-            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'generate-images', $id) ?>
-            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Retrieve', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'retrieve-images', $id) ?>
-            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary">' . __('Sync files', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'sync-images', $id) ?>
+            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate model details', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'generate-model-content', $id) ?>
+            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate image details', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'generate-image-content', $id) ?>
+            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate image', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'generate-images', $id) ?>
+            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Retrieve image', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'retrieve-images', $id) ?>
+            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary">' . __('Sync images', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'sync-images', $id) ?>
         </div>
 
         <div style="display: flex;flex-wrap: wrap;margin-top: 50px;">
-            <?php foreach ($model_images as $image) { ?>
+            <?php foreach ($model_images as $image) {
+                $caption = isset($image['settings']['caption']) ? $image['settings']['caption'] : null;
+                $alt_text = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : null;
+                $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;
+                $tags = !empty($tags) ? implode(', ', $tags) : null;
+
+                ?>
                 <div style="max-width: 200px;">
                     <img src="https://res.cloudinary.com/dmm4mlnmq/image/upload/v1677258489/<?php echo $image['folder'] ?>/<?php echo $image['name'] ?>.<?php echo $image['extension'] ?>" alt="" style="max-width: 100%;">
+                    <div style="padding: 5px;">
+                        <p><b>Caption</b>: <?php echo $caption ?></p>
+                        <p><b>Alt text</b>: <?php echo $alt_text ?></p>
+                        <p><b>Tags</b>: <?php echo $tags ?></p>
+                    </div>
                 </div>
             <?php } ?>
         </div>

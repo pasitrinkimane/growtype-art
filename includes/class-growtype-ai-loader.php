@@ -147,6 +147,12 @@ class Growtype_Ai_Loader
         require_once GROWTYPE_AI_PATH . 'includes/helpers/index.php';
 
         /**
+         * Crud
+         */
+        require_once GROWTYPE_AI_PATH . 'includes/methods/crud/class-growtype-ai-crud.php';
+        $this->loader = new Growtype_Ai_Crud();
+
+        /**
          * Shortcode
          */
         require_once GROWTYPE_AI_PATH . 'includes/methods/shortcodes/class-growtype-ai-shortcode.php';

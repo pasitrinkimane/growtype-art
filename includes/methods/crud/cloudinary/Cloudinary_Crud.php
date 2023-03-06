@@ -3,9 +3,7 @@
 require GROWTYPE_AI_PATH . '/vendor/autoload.php';
 
 use Cloudinary\Cloudinary;
-use Cloudinary\Api\Upload\UploadApi;
 use Cloudinary\Configuration\Configuration;
-use Cloudinary\Api\Admin\AdminApi;
 
 class Cloudinary_Crud
 {
@@ -24,7 +22,9 @@ class Cloudinary_Crud
     {
         $upload = json_encode($this->cloudinary->uploadApi()->upload($file['url'], [
             'public_id' => $file['name'],
-            'folder' => $folder_name
+            'folder' => $folder_name,
+//            'tags' => $file['tags'],
+//            'context' => 'alt=' . $file['alt_text'] . '❘caption=' . $file['caption'],
         ]), JSON_PRETTY_PRINT);
 
         return json_decode($upload, true);
@@ -32,12 +32,14 @@ class Cloudinary_Crud
 
     public function get_images($folder_name)
     {
-        $response = json_encode($this->cloudinary->AdminApi()->assets([
+        $args = [
             'resource_type' => 'image',
             'type' => 'upload',
             'prefix' => $folder_name,
             'max_results' => 100
-        ]), JSON_PRETTY_PRINT);
+        ];
+
+        $response = json_encode($this->cloudinary->AdminApi()->assets($args), JSON_PRETTY_PRINT);
 
         return json_decode($response, true);
     }
@@ -69,29 +71,15 @@ class Cloudinary_Crud
 
     public function sync_images($model_id)
     {
-        require_once GROWTYPE_AI_PATH . 'includes/methods/crud/cloudinary/Cloudinary_Crud.php';
-        $cloudinary_crud = new Cloudinary_Crud();
-
-        $model = Growtype_Ai_Database::get_single_record(Growtype_Ai_Database::MODELS_TABLE, [
-            [
-                'key' => 'id',
-                'values' => [$model_id],
-            ]
-        ]);
+        $model = growtype_ai_get_model_details($model_id);
 
         if (empty($model)) {
             return;
         }
 
-        $existing_images = Growtype_Ai_Database::get_pivot_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, Growtype_Ai_Database::IMAGES_TABLE, 'image_id', [
-                [
-                    'key' => 'model_id',
-                    'values' => [$model_id],
-                ]
-            ]
-        );
+        $existing_images = growtype_ai_get_model_images($model_id);
 
-        $external_images = $cloudinary_crud->get_images($model['image_folder']);
+        $external_images = $this->get_images($model['image_folder']);
         $external_images = $external_images['resources'];
 
         $external_images_asset_ids = array_pluck($external_images, 'asset_id');
@@ -111,7 +99,7 @@ class Cloudinary_Crud
         }
 
         foreach ($external_images as $image) {
-            if (!in_array($image['asset_id'], array_pluck($existing_images, 'reference_id'))) {
+            if (!in_array($image['asset_id'], $existing_images_asset_ids)) {
                 $parts = explode('/', $image['public_id']);
                 $new_name = end($parts);
                 $image_id = Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGES_TABLE, [
@@ -126,43 +114,135 @@ class Cloudinary_Crud
 
                 Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
             }
+
+            $existing_image = Growtype_Ai_Database::get_single_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                [
+                    'key' => 'reference_id',
+                    'values' => [$image['asset_id']],
+                ]
+            ]);
+
+            $image_id = $existing_image['id'];
+
+            $this->update_cloudinary_image_details($image_id);
         }
     }
 
-    public function sync_existing_images_with_cloudinary()
+    public function get_asset_details($public_id)
     {
-        $images = Growtype_Ai_Database::get_records(Growtype_Ai_Database::IMAGES_TABLE);
+        $response = json_encode($this->cloudinary->AdminApi()->asset($public_id, $options = []), JSON_PRETTY_PRINT);
+        return json_decode($response, true);
+    }
 
-//        d(count($images));
-
-        $tags_string = [];
-        foreach ($images as $image) {
-
-            $model = growtype_ai_get_image_model_details($image['id']);
-
-            $tags = $model['prompt'];
-
-            $tags_string[preg_replace("/\s+/", "", $tags)] = $tags;
-
-//            dd($tags);
-//            $tags = preg_replace("/\b\S{1,3}\b/", "", $tags);
-//            $tags = preg_split("/\s+/", $tags);
-//            $tags = array_filter($tags);
-//
-//            d($tags);
-
-//            $image['url'] = 'https://res.cloudinary.com/dmm4mlnmq/image/upload/v1677258489/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'];
-//            $image['location'] = 'locally';
-//
-//            growtype_ai_save_file($image, $image['folder']);
-
-//            $this->upload_image([
-//                'url' => 'https://res.cloudinary.com/dmm4mlnmq/image/upload/v1677258489/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'],
-//                'name' => $image['name']
-//            ], $image['folder']);
+    public function update_cloudinary_images_details($model_id = null)
+    {
+        if (empty($model_id)) {
+            $models = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE);
+        } else {
+            $models = [growtype_ai_get_model_details($model_id)];
         }
 
-        d(implode(" ", array_values($tags_string)));
+        foreach ($models as $model) {
+            $images = growtype_ai_get_model_images($model['id']);
+
+            foreach ($images as $image) {
+                $this->update_cloudinary_image_details($image['id']);
+            }
+        }
+    }
+
+    public function update_cloudinary_image_details($image_id)
+    {
+        $image = growtype_ai_get_image_details($image_id);
+
+        $public_id = $image['folder'] . '/' . $image['name'];
+
+        $tags = isset($image['settings']['tags']) ? $image['settings']['tags'] : null;
+        $tags = empty($tags) ? null : json_decode($tags, true);
+        $title = isset($image['settings']['caption']) ? $image['settings']['caption'] : null;
+        $description = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : null;
+
+        $image_meta = $this->get_asset_details($public_id);
+
+        /**
+         * Add tags
+         */
+        if (isset($image_meta['tags'])) {
+            Growtype_Ai_Database::delete_single_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                [
+                    'key' => 'image_id',
+                    'value' => $image_id,
+                ],
+                [
+                    'key' => 'meta_key',
+                    'value' => 'tags',
+                ]
+            ]);
+
+            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                'image_id' => $image_id,
+                'meta_key' => 'tags',
+                'meta_value' => json_encode($image_meta['tags'])
+            ]);
+        } else {
+            if (!empty($tags)) {
+                $this->cloudinary->uploadApi()->addTag($tags, [$public_id], $options = []);
+            }
+        }
+
+        if (isset($image_meta['context']['custom']['alt'])) {
+
+            Growtype_Ai_Database::delete_single_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                [
+                    'key' => 'image_id',
+                    'value' => $image_id,
+                ],
+                [
+                    'key' => 'meta_key',
+                    'value' => 'alt_text',
+                ]
+            ]);
+
+            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                'image_id' => $image_id,
+                'meta_key' => 'alt_text',
+                'meta_value' => $image_meta['context']['custom']['alt']
+            ]);
+
+        } else {
+            if (!empty($title)) {
+                $this->cloudinary->uploadApi()->addContext([
+                    'caption' => $title
+                ], [$public_id], $options = []);
+            }
+        }
+
+        if (isset($image_meta['context']['custom']['caption'])) {
+
+            Growtype_Ai_Database::delete_single_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                [
+                    'key' => 'image_id',
+                    'value' => $image_id,
+                ],
+                [
+                    'key' => 'meta_key',
+                    'value' => 'caption',
+                ]
+            ]);
+
+            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                'image_id' => $image_id,
+                'meta_key' => 'caption',
+                'meta_value' => $image_meta['context']['custom']['caption']
+            ]);
+
+        } else {
+            if (!empty($description)) {
+                $this->cloudinary->uploadApi()->addContext([
+                    'alt' => $description,
+                ], [$public_id], $options = []);
+            }
+        }
     }
 }
 

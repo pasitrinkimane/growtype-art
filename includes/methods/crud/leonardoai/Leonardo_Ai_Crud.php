@@ -82,19 +82,9 @@ class Leonardo_Ai_Crud
         ];
     }
 
-    public function retrieve_models($amount, $model_id = null, $user_nr = null, $generation_id = null)
+    public function retrieve_models($amount, $model_id = null, $user_nr = null)
     {
-        if (empty($token)) {
-            $token = $this->get_access_token($user_nr);
-        }
-
-        if (empty($token)) {
-            throw new Exception('No token');
-        }
-
-        if (!empty($generation_id)) {
-            $amount = 100;
-        }
+        $token = $this->get_access_token($user_nr);
 
         $generations = $this->get_generations($token, $amount, $user_nr);
 
@@ -102,24 +92,58 @@ class Leonardo_Ai_Crud
             throw new Exception('Empty generations');
         }
 
-        if (!empty($generation_id)) {
-            $single_generation = '';
-            foreach ($generations as $generation) {
-                if ($generation['id'] === $generation_id) {
-                    $single_generation = $generation;
-                    break;
-                }
-            }
-
-            if (empty($single_generation)) {
-                throw new Exception('No generation');
-            }
-
-            $generations = [$single_generation];
-        }
-
         $this->save_generations($generations, $model_id);
 
+        $this->delete_external_generations($token, $generations);
+
+        /**
+         * Openai crud
+         */
+        $openai_crud = new Openai_Crud();
+        $openai_crud->format_models(null, false, $model_id);
+        $openai_crud->format_model_images($model_id);
+
+        /**
+         *
+         */
+        $cloudinary_crud = new Cloudinary_Crud();
+        $cloudinary_crud->update_cloudinary_images_details($model_id);
+
+        return $generations;
+    }
+
+    public function retrieve_single_generation($model_id, $user_nr, $generation_id)
+    {
+        $token = $this->get_access_token($user_nr);
+
+        $generations = $this->get_generations($token, 30, $user_nr);
+
+        if (empty($generations)) {
+            throw new Exception('Empty generations');
+        }
+
+        $single_generation = '';
+        foreach ($generations as $generation) {
+            if ($generation['id'] === $generation_id) {
+                $single_generation = $generation;
+                break;
+            }
+        }
+
+        if (empty($single_generation)) {
+            throw new Exception('No generation');
+        }
+
+        $generations = [$single_generation];
+
+        /**
+         * Save generation
+         */
+        $this->save_generations($generations, $model_id);
+
+        /**
+         * Delete generation from Leonardo.ai
+         */
         $this->delete_external_generations($token, $generations);
 
         return $generations;
@@ -422,7 +446,7 @@ class Leonardo_Ai_Crud
                 if (empty($existing_models)) {
                     $model_id = Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODELS_TABLE, [
                         'prompt' => $generation['prompt'],
-                        'negative_prompt' => $generation['negativePrompt'],
+                        'negative_prompt' => !empty($generation['negativePrompt']) ? $generation['negativePrompt'] : 'watermark, watermarked, disfigured, ugly, grain, low resolution, deformed, blurred, bad anatomy, badly drawn face, extra limb, ugly, badly drawn arms, missing limb, floating limbs, detached limbs, deformed arms, out of focus, disgusting, badly drawn, disfigured, tile, badly drawn arms, badly drawn legs, badly drawn face, out of frame, extra limbs, deformed, body out of frame, grainy, clipped, bad proportion, cropped image, blur haze',
                         'reference_id' => $reference_id,
                         'provider' => self::PROVIDER,
                         'image_folder' => $image_folder,
@@ -452,6 +476,9 @@ class Leonardo_Ai_Crud
                             'meta_value' => $value
                         ]);
                     }
+
+                    $openai_crud = new Openai_Crud();
+                    $openai_crud->format_models(null, false, $model_id);
                 } else {
                     $model_id = $existing_models[0]['id'];
                 }
@@ -498,6 +525,20 @@ class Leonardo_Ai_Crud
                     ]);
 
                     Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
+
+                    /**
+                     * Generate image content
+                     */
+                    $openai_crud = new Openai_Crud();
+                    $openai_crud->format_image($image_id);
+
+                    /**
+                     * Update cloudinary image details
+                     */
+                    if ($file['location'] === 'cloudinary') {
+                        $cloudinary_crud = new Cloudinary_Crud();
+                        $cloudinary_crud->update_cloudinary_image_details($image_id);
+                    }
                 }
             }
         }

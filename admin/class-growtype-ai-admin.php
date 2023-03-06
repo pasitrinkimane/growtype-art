@@ -228,6 +228,12 @@ class Growtype_Ai_Admin
                             do_settings_fields('growtype-ai-settings', 'growtype_ai_cloudinary_settings');
                             echo '</table>';
 
+                            echo '<h3>Openai settings</h3>';
+
+                            echo '<table class="form-table">';
+                            do_settings_fields('growtype-ai-settings', 'growtype_ai_openai_settings');
+                            echo '</table>';
+
                             echo '<h3>Image generating settings</h3>';
 
                             echo '<table class="form-table">';
@@ -277,6 +283,14 @@ class Growtype_Ai_Admin
         include_once 'partials/settings/ImageGeneratingSettings.php';
 
         $GeneralSettings = new ImageGeneratingSettings();
+        $GeneralSettings->general_content();
+
+        /**
+         * Openai
+         */
+        include_once 'partials/settings/OpenaiSettings.php';
+
+        $GeneralSettings = new OpenaiSettings();
         $GeneralSettings->general_content();
 
     }

@@ -5,8 +5,8 @@ class Growtype_Ai_Cron
     const GROWTYPE_AI_JOBS_CRON = 'growtype_ai_jobs';
     const GROWTYPE_AI_BUNDLE_JOBS_CRON = 'growtype_ai_bundle_jobs';
 
-    const  RETRIEVE_JOBS_LIMIT = 5;
-    const  JOBS_ATTEMPTS_LIMIT = 2;
+    const  RETRIEVE_JOBS_LIMIT = 3;
+    const  JOBS_ATTEMPTS_LIMIT = 4;
 
     public function __construct()
     {
@@ -24,6 +24,11 @@ class Growtype_Ai_Cron
 
     function cron_custom_intervals()
     {
+        $schedules['every20seconds'] = array (
+            'interval' => 20,
+            'display' => __('Once Every 20 seconds')
+        );
+
         $schedules['every30seconds'] = array (
             'interval' => 30,
             'display' => __('Once Every 30 seconds')
@@ -101,7 +106,6 @@ class Growtype_Ai_Cron
                     ], $job['id']);
 
                     try {
-                        require_once GROWTYPE_AI_PATH . 'includes/methods/crud/leonardoai/Leonardo_Ai_Crud.php';
                         $crud = new Leonardo_Ai_Crud();
                         $crud->generate_model($job_payload['model_id']);
 
@@ -125,9 +129,8 @@ class Growtype_Ai_Cron
                     ], $job['id']);
 
                     try {
-                        require_once GROWTYPE_AI_PATH . 'includes/methods/crud/leonardoai/Leonardo_Ai_Crud.php';
                         $crud = new Leonardo_Ai_Crud();
-                        $crud->retrieve_models($job_payload['amount'], $job_payload['model_id'], $job_payload['user_nr'], $job_payload['generation_id']);
+                        $crud->retrieve_single_generation($job_payload['model_id'], $job_payload['user_nr'], $job_payload['generation_id']);
 
                         /**
                          * Delete job

@@ -17,7 +17,6 @@ class Growtype_Ai_Api
         /**
          * Leonardo Ai
          */
-        require_once GROWTYPE_AI_PATH . 'includes/methods/crud/leonardoai/Leonardo_Ai_Crud.php';
         $this->leonardo_ai_crud = new Leonardo_Ai_Crud();
     }
 

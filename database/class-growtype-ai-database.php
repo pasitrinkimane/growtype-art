@@ -7,7 +7,7 @@ class Growtype_Ai_Database
     const IMAGES_TABLE = 'growtype_ai_images';
     const MODEL_IMAGE_TABLE = 'growtype_ai_model_image';
     const MODEL_JOBS_TABLE = 'growtype_ai_jobs';
-    const TAGS_TABLE = 'growtype_ai_tags';
+    const IMAGE_SETTINGS_TABLE = 'growtype_ai_image_settings';
 
     const REBUILD_TABLE = false; // IMPORTANT: Set to true to rebuild the database tables
     const CLEAN_DUPLICATED_RECORDS = false; // IMPORTANT: Clean duplicated records
@@ -102,6 +102,23 @@ class Growtype_Ai_Database
                 ]
             ],
             [
+                'name' => $wpdb->prefix . self::IMAGE_SETTINGS_TABLE,
+                'fields' => [
+                    array (
+                        'data_field' => 'image_id',
+                        'data_type' => 'bigint unsigned',
+                    ),
+                    array (
+                        'data_field' => 'meta_key',
+                        'data_type' => 'VARCHAR(255)',
+                    ),
+                    array (
+                        'data_field' => 'meta_value',
+                        'data_type' => 'longtext',
+                    )
+                ]
+            ],
+            [
                 'name' => $wpdb->prefix . self::MODEL_IMAGE_TABLE,
                 'fields' => [
                     array (
@@ -146,20 +163,7 @@ class Growtype_Ai_Database
                         'data_type' => 'DATETIME',
                     )
                 ]
-            ],
-//            [
-//                'name' => $wpdb->prefix . self::TAGS_TABLE,
-//                'fields' => [
-//                    array (
-//                        'data_field' => 'name',
-//                        'data_type' => 'TEXT DEFAULT NULL',
-//                    ),
-//                    array (
-//                        'data_field' => 'category',
-//                        'data_type' => 'TEXT DEFAULT NULL',
-//                    )
-//                ]
-//            ]
+            ]
         ];
     }
 
@@ -210,6 +214,17 @@ class Growtype_Ai_Database
                         $wpdb->delete('wp_growtype_ai_model_settings', array ('id' => $record['id']));
                     }
                 }
+
+                $records = $wpdb->get_results("SELECT * FROM wp_growtype_ai_image_settings", ARRAY_A);
+
+                $filtered_records = [];
+                foreach ($records as $record) {
+                    if (!isset($filtered_records[$record['image_id']][$record['meta_key']])) {
+                        $filtered_records[$record['image_id']][$record['meta_key']] = $record;
+                    } else {
+                        $wpdb->delete('wp_growtype_ai_image_settings', array ('id' => $record['id']));
+                    }
+                }
             }
         }
     }
@@ -245,7 +260,7 @@ class Growtype_Ai_Database
                 $placeholders = implode(', ', array_fill(0, count($values), '%s'));
                 $query = "SELECT * FROM " . $table . " WHERE " . $key . " IN($placeholders)";
                 $query = $wpdb->prepare($query, $values);
-            } elseif (!empty($args['search'])) {
+            } elseif (!empty($search)) {
                 $query = "SELECT * from {$table} WHERE id Like '%{$search}%' OR user_id Like '%{$search}%' OR quiz_id Like '%{$search}%' OR answers Like '%{$search}%' ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
             } else {
                 $query = "SELECT * from {$table} ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
@@ -361,11 +376,36 @@ class Growtype_Ai_Database
             ]);
 
             self::delete_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, array_pluck($model_image, 'id'));
+        } elseif ($table_name === self::IMAGE_SETTINGS_TABLE) {
+            $image_setting = self::get_records(self::IMAGE_SETTINGS_TABLE, [
+                [
+                    'key' => 'image_id',
+                    'values' => $ids,
+                ]
+            ]);
+
+            self::delete_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, array_pluck($image_setting, 'id'));
         }
 
         $ids = implode(',', array_map('absint', $ids));
 
         $wpdb->query("DELETE FROM " . $table . " WHERE ID IN($ids)");
+    }
+
+    public static function delete_single_record($table_name, $params)
+    {
+        global $wpdb;
+
+        $table = $wpdb->prefix . $table_name;
+
+        $query_where = [];
+        foreach ($params as $param) {
+            array_push($query_where, $param['key'] . "='" . $param['value'] . "'");
+        }
+
+        $query_where = "DELETE FROM " . $table . " where " . implode(' AND ', $query_where);
+
+        $wpdb->query($query_where);
     }
 }
 

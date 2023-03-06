@@ -32,6 +32,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
             'Psr\\Http\\Message\\' => 17,
             'Psr\\Http\\Client\\' => 16,
         ),
+        'O' => 
+        array (
+            'Orhanerday\\OpenAi\\' => 18,
+        ),
         'M' => 
         array (
             'Monolog\\' => 8,
@@ -65,6 +69,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Psr\\Http\\Client\\' => 
         array (
             0 => __DIR__ . '/..' . '/psr/http-client/src',
+        ),
+        'Orhanerday\\OpenAi\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/orhanerday/open-ai/src',
         ),
         'Monolog\\' => 
         array (
