@@ -4,6 +4,10 @@ require GROWTYPE_AI_PATH . '/vendor/autoload.php';
 
 use Cloudinary\Cloudinary;
 use Cloudinary\Configuration\Configuration;
+use Cloudinary\Tag\ImageTag;
+use Cloudinary\Transformation\Adjust;
+use Cloudinary\Transformation\Delivery;
+use Cloudinary\Transformation\Effect;
 
 class Cloudinary_Crud
 {
@@ -18,28 +22,40 @@ class Cloudinary_Crud
         $this->cloudinary = new Cloudinary($config);
     }
 
-    public function upload_image($file, $folder_name)
+    //https://res.cloudinary.com/dmm4mlnmq/image/upload/w_5.8,c_scale/q_100/v1678257789/leonardoai/f8678b9703ec56106a2935aa617f6fcb/64082e7d3aee0.jpg
+    //https://res.cloudinary.com/dmm4mlnmq/image/upload/e_auto_brightness/q_100/e_vectorize:colors:500:detail:10.9/v1/leonardoai/f8678b9703ec56106a2935aa617f6fcb/640754c1444ab.svg
+    //https://wp-basic.test/wp/wp-admin/admin.php?post_type=growtype_ai_models&page=growtype-ai-models&action=sync-images&item=190
+    public function adjust_image($public_id, $method, $value)
     {
-        $upload = json_encode($this->cloudinary->uploadApi()->upload($file['url'], [
-            'public_id' => $file['name'],
-            'folder' => $folder_name,
-//            'tags' => $file['tags'],
-//            'context' => 'alt=' . $file['alt_text'] . '❘caption=' . $file['caption'],
-        ]), JSON_PRETTY_PRINT);
+        switch ($method) {
+            case 'brightness':
+                if ($value === 'auto') {
+                    $transformed_image_url = (string)$this->cloudinary->image($public_id)->adjust(Adjust::autoBrightness())->delivery(Delivery::quality(100))->toUrl();
+                } else {
+                    $transformed_image_url = (string)$this->cloudinary->image($public_id)->adjust(Adjust::brightness()->level($value))->delivery(Delivery::quality(100))->toUrl();
+                }
+                break;
+            case 'vector':
+                $transformed_image_url = (string)$this->cloudinary->image($public_id)->delivery(Delivery::quality(100))->effect(Effect::vectorize()->numOfColors($value)->detailsLevel(1.0))->toUrl();
+                break;
+        }
 
-        return json_decode($upload, true);
+        return $transformed_image_url;
     }
 
-    public function get_images($folder_name)
+    public function upload_asset($file_url, $options)
     {
-        $args = [
-            'resource_type' => 'image',
-            'type' => 'upload',
-            'prefix' => $folder_name,
-            'max_results' => 100
-        ];
+        try {
+            $upload = json_encode($this->cloudinary->uploadApi()->upload($file_url, $options), JSON_PRETTY_PRINT);
+            return json_decode($upload, true);
+        } catch (Exception $e) {
+            throw new Exception($e);
+        }
+    }
 
-        $response = json_encode($this->cloudinary->AdminApi()->assets($args), JSON_PRETTY_PRINT);
+    public function get_assets($options)
+    {
+        $response = json_encode($this->cloudinary->AdminApi()->assets($options), JSON_PRETTY_PRINT);
 
         return json_decode($response, true);
     }
@@ -51,7 +67,14 @@ class Cloudinary_Crud
 
     public function delete_folder($folder_name)
     {
-        $resources = $this->get_images($folder_name)['resources'];
+        $assets = $this->get_assets([
+            'resource_type' => 'image',
+            'type' => 'upload',
+            'prefix' => $folder_name,
+            'max_results' => 200
+        ]);
+
+        $resources = $assets['resources'];
 
         if (!empty($resources)) {
             $public_ids = array_pluck($resources, 'public_id');
@@ -59,7 +82,8 @@ class Cloudinary_Crud
         }
 
         try {
-            $response = json_encode($this->cloudinary->AdminApi()->deleteFolder($folder_name), JSON_PRETTY_PRINT);
+            $response = $this->cloudinary->AdminApi()->deleteFolder($folder_name);
+            $response = json_encode($response, JSON_PRETTY_PRINT);
 
             return json_decode($response, true);
         } catch (Exception $e) {
@@ -79,7 +103,15 @@ class Cloudinary_Crud
 
         $existing_images = growtype_ai_get_model_images($model_id);
 
-        $external_images = $this->get_images($model['image_folder']);
+        $external_images = $this->get_assets([
+            'resource_type' => 'image',
+            'type' => 'upload',
+            'prefix' => $model['image_folder'],
+            'max_results' => 200,
+            'tags' => true,
+            'context' => true
+        ]);
+
         $external_images = $external_images['resources'];
 
         $external_images_asset_ids = array_pluck($external_images, 'asset_id');
@@ -115,23 +147,34 @@ class Cloudinary_Crud
                 Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
             }
 
-            $existing_image = Growtype_Ai_Database::get_single_record(Growtype_Ai_Database::IMAGES_TABLE, [
-                [
-                    'key' => 'reference_id',
-                    'values' => [$image['asset_id']],
-                ]
-            ]);
+            $tags = isset($image['tags']) ? $image['tags'] : null;
+            $alt_text = isset($image['context']['custom']['alt']) ? $image['context']['custom']['alt'] : null;
+            $caption_text = isset($image['context']['custom']['caption']) ? $image['context']['custom']['caption'] : null;
 
-            $image_id = $existing_image['id'];
+            if (empty($tags) || empty($alt_text) || empty($caption_text)) {
+                $existing_image = Growtype_Ai_Database::get_single_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                    [
+                        'key' => 'reference_id',
+                        'values' => [$image['asset_id']],
+                    ]
+                ]);
 
-            $this->update_cloudinary_image_details($image_id);
+                $image_id = $existing_image['id'];
+
+                $this->update_cloudinary_image_details($image_id);
+            }
         }
     }
 
-    public function get_asset_details($public_id)
+    public function get_asset_details($public_id, $options = [])
     {
-        $response = json_encode($this->cloudinary->AdminApi()->asset($public_id, $options = []), JSON_PRETTY_PRINT);
-        return json_decode($response, true);
+        try {
+            $response = $this->cloudinary->AdminApi()->asset($public_id, $options);
+            $response = json_encode($response, JSON_PRETTY_PRINT);
+            return json_decode($response, true);
+        } catch (Exception $e) {
+            return null;
+        }
     }
 
     public function update_cloudinary_images_details($model_id = null)
@@ -155,14 +198,21 @@ class Cloudinary_Crud
     {
         $image = growtype_ai_get_image_details($image_id);
 
-        $public_id = $image['folder'] . '/' . $image['name'];
+        if (empty($image)) {
+            return null;
+        }
 
-        $tags = isset($image['settings']['tags']) ? $image['settings']['tags'] : null;
-        $tags = empty($tags) ? null : json_decode($tags, true);
+        $public_id = growtype_ai_get_cloudinary_public_id($image);
+
+        $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;
         $title = isset($image['settings']['caption']) ? $image['settings']['caption'] : null;
         $description = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : null;
 
         $image_meta = $this->get_asset_details($public_id);
+
+        if (empty($image_meta)) {
+            return null;
+        }
 
         /**
          * Add tags
@@ -243,6 +293,11 @@ class Cloudinary_Crud
                 ], [$public_id], $options = []);
             }
         }
+    }
+
+    public function add_context($public_id, $context)
+    {
+        $this->cloudinary->uploadApi()->addContext($context, [$public_id], $options = []);
     }
 }
 

@@ -46,7 +46,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     /**
      * @return void
      */
-    public function process_bulk_action()
+    public function process_bundle_action()
     {
         if (isset($_POST['action']) && ($_POST['action'] === 'add-to-bundle' || $_POST['action'] === 'remove-from-bundle')) {
             $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
@@ -61,6 +61,16 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             }
 
             update_option('growtype_ai_bundle_ids', implode(',', array_filter($bundle_ids)));
+
+            $redirect = add_query_arg(
+                'message',
+                $_GET['action'],
+                get_admin_url() . 'admin.php?' . sprintf('page=%s&paged=%s', $_REQUEST['page'], $_REQUEST['paged'])
+            );
+
+            wp_redirect($redirect);
+
+            exit();
         }
     }
 
@@ -86,6 +96,8 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             );
 
             wp_redirect($redirect);
+
+            exit();
         }
     }
 
@@ -113,13 +125,19 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     /**
      * @return void
      */
-    public function process_sync_action()
+    public function process_sync_model_images_action()
     {
-        if (isset($_GET['action']) && $_GET['action'] === 'sync-images') {
+        if (isset($_GET['action']) && $_GET['action'] === 'sync-model-images') {
+//            growtype_ai_init_job('sync-model-images', json_encode([
+//                'model_id' => $_GET['item']
+//            ]), 10);
+
             $crud = new Cloudinary_Crud();
             $crud->sync_images($_GET['item']);
 
             wp_redirect(get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&action=%s&item=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $_GET['item']));
+
+            exit();
         }
     }
 
@@ -128,19 +146,29 @@ class Growtype_Ai_Admin_Result_List_Table_Record
      */
     public function process_generate_image_action()
     {
-        if (isset($_GET['action']) && $_GET['action'] === 'generate-images') {
+        if (isset($_GET['action']) && ($_GET['action'] === 'generate-images' || $_GET['action'] === 'index-generate-images')) {
 
-            if ($_GET['action'] === 'generate-images') {
+            if ($_GET['action'] === 'generate-images' || $_GET['action'] === 'index-generate-images') {
                 $crud = new Leonardo_Ai_Crud();
                 $crud->generate_model($_GET['item']);
+            }
+
+            $redirect_url = get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&action=%s&item=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $_GET['item']);
+            $page = isset($_REQUEST['paged']) ? $_REQUEST['paged'] : 1;
+
+            if ($_GET['action'] === 'index-generate-images') {
+                $redirect_url = get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&paged=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], $page);
             }
 
             $redirect = add_query_arg(
                 'message',
                 $_GET['action'],
-                get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&action=%s&item=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $_GET['item']));
+                $redirect_url
+            );
 
             wp_redirect($redirect);
+
+            exit();
         }
     }
 
@@ -163,9 +191,12 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             $redirect = add_query_arg(
                 'message',
                 $_GET['action'],
-                get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&action=%s&item=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $_GET['item']));
+                get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&action=%s&item=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $_GET['item'])
+            );
 
             wp_redirect($redirect);
+
+            exit();
         }
     }
 
@@ -177,7 +208,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
         if (isset($_GET['action']) && ($_GET['action'] === 'retrieve-images' || $_GET['action'] === 'retrieve-images-all')) {
             $crud = new Leonardo_Ai_Crud();
 
-            $amount = 5;
+            $amount = 1;
 
             $model_id = isset($_GET['item']) ? $_GET['item'] : null;
 
@@ -185,13 +216,14 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
             foreach ($users_credentials as $user_nr => $user_credentials) {
 
-                if (empty($user_credentials['cookie']) || empty($user_credentials['user_id'])) {
+                if (empty($user_credentials['user_id'])) {
                     continue;
                 }
 
-                try {
-                    $crud->retrieve_models($amount, $model_id, $user_nr);
-                } catch (Exception $e) {
+                $generations = $crud->retrieve_models($amount, $model_id, $user_nr);
+
+                if (empty($generations)) {
+                    continue;
                 }
             }
 
@@ -208,6 +240,71 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             );
 
             wp_redirect($redirect);
+
+            exit();
+        }
+    }
+
+    /**
+     * @return void
+     */
+    public function process_optimize_images_action()
+    {
+        if (isset($_GET['action']) && $_GET['action'] === 'optimize-images') {
+            $model_images = growtype_ai_get_model_images($_GET['item']);
+
+            foreach ($model_images as $image) {
+                $image_id = $image['id'];
+
+                if (isset($image['settings']['real_esrgan'])) {
+                    continue;
+                }
+
+                $cloudinary_public_id = growtype_ai_get_cloudinary_public_id($image);
+
+                $cloudinary = new Cloudinary_Crud();
+                $asset = $cloudinary->get_asset_details($cloudinary_public_id);
+
+                if (isset($asset['context']['custom']['real_esrgan'])) {
+                    if (!isset($image['settings']['real_esrgan'])) {
+                        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                            'image_id' => $image_id,
+                            'meta_key' => 'real_esrgan',
+                            'meta_value' => 'true',
+                        ]);
+                    }
+
+                    if (!isset($image['settings']['compressed'])) {
+                        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                            'image_id' => $image_id,
+                            'meta_key' => 'compressed',
+                            'meta_value' => 'true',
+                        ]);
+                    }
+
+                    continue;
+                }
+
+                $upscale_image_url = $asset['url'];
+
+                $real_esrgan = new Replicate();
+                $real_esrgan->upscale($upscale_image_url, [
+                    'id' => $image['id'],
+                    'public_id' => $cloudinary_public_id
+                ]);
+            }
+
+            $redirect_url = get_admin_url() . 'admin.php?' . sprintf('?post_type=%s&page=%s&action=%s&item=%s', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $_GET['item']);
+
+            $redirect = add_query_arg(
+                'message',
+                $_GET['action'],
+                $redirect_url
+            );
+
+            wp_redirect($redirect);
+
+            exit();
         }
     }
 
@@ -316,6 +413,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
                 if ($item['meta_key'] === 'tags' && !empty(json_decode($item['meta_value']))) {
                     $meta_value = implode(',', json_decode($item['meta_value']));
+                    $meta_value = strtolower($meta_value);
                 }
 
                 ?>
@@ -348,13 +446,15 @@ class Growtype_Ai_Admin_Result_List_Table_Record
         <div style="display:flex;justify-content: flex-end;">
             <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate model details', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'generate-model-content', $id) ?>
             <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate image details', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'generate-image-content', $id) ?>
+            <?php echo '<span style="margin-left: 0px;margin-right: 10px;line-height: 25px;">-</span>' ?>
+            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Optimize images', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'optimize-images', $id) ?>
             <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate image', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'generate-images', $id) ?>
             <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary" style="margin-right: 15px;">' . __('Retrieve image', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'retrieve-images', $id) ?>
-            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary">' . __('Sync images', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'sync-images', $id) ?>
+            <?php echo sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s" class="button button-primary">' . __('Sync images', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'sync-model-images', $id) ?>
         </div>
 
         <div style="display: flex;flex-wrap: wrap;margin-top: 50px;">
-            <?php foreach ($model_images as $image) {
+            <?php foreach (array_reverse($model_images) as $image) {
                 $caption = isset($image['settings']['caption']) ? $image['settings']['caption'] : null;
                 $alt_text = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : null;
                 $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;

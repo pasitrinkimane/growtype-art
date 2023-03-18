@@ -15,11 +15,14 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'c0908dd0408c67235210b4bf031d1290' => __DIR__ . '/..' . '/rappasoft/laravel-helpers/src/classes.php',
         '728cd66d334b33c0fb1ed0fe1060a82b' => __DIR__ . '/..' . '/rappasoft/laravel-helpers/src/helpers.php',
         'daf45b1134c9868f305965e4c0e0f06c' => __DIR__ . '/..' . '/rappasoft/laravel-helpers/src/strings.php',
+        '74ed299072414d276bb7568fe71d5b0c' => __DIR__ . '/..' . '/tinify/tinify/lib/Tinify.php',
+        '9635627915aaea7a98d6d14d04ca5b56' => __DIR__ . '/..' . '/tinify/tinify/lib/Tinify/Exception.php',
     );
 
     public static $prefixLengthsPsr4 = array (
         'T' => 
         array (
+            'Tinify\\' => 7,
             'Teapot\\StatusCode\\' => 18,
         ),
         'R' => 
@@ -49,6 +52,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
     );
 
     public static $prefixDirsPsr4 = array (
+        'Tinify\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/tinify/tinify/lib/Tinify',
+        ),
         'Teapot\\StatusCode\\' => 
         array (
             0 => __DIR__ . '/..' . '/teapot/status-code/src',

@@ -6,6 +6,7 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
+    'Tinify\\' => array($vendorDir . '/tinify/tinify/lib/Tinify'),
     'Teapot\\StatusCode\\' => array($vendorDir . '/teapot/status-code/src'),
     'React\\EventLoop\\' => array($vendorDir . '/react/event-loop/src'),
     'Psr\\Log\\' => array($vendorDir . '/psr/log/Psr/Log'),

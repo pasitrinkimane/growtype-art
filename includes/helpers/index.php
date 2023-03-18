@@ -70,31 +70,38 @@ if (!function_exists('growtype_ai_save_file')) {
             case 'locally':
                 $upload_dir = wp_upload_dir();
 
-                if (!empty($upload_dir['basedir'])) {
-                    $growtype_ai_upload_dir = !empty($folder_name) ? $upload_dir['basedir'] . '/growtype-ai-uploads' . '/' . $folder_name : $upload_dir['basedir'] . '/growtype-ai-uploads';
+                $growtype_ai_upload_dir = growtype_ai_get_upload_dir($folder_name);
 
-                    if (!file_exists($growtype_ai_upload_dir)) {
-                        wp_mkdir_p($growtype_ai_upload_dir);
-                    }
-
-                    // If the function it's not available, require it.
-                    if (!function_exists('download_url')) {
-                        require_once ABSPATH . 'wp-admin/includes/file.php';
-                    }
-
-                    $tmp_file = download_url($file['url']);
-
-                    $filepath = $growtype_ai_upload_dir . '/' . $file['name'] . '.' . $file['extension'];
-
-                    copy($tmp_file, $filepath);
-
-                    @unlink($tmp_file);
+                if (!file_exists($growtype_ai_upload_dir)) {
+                    wp_mkdir_p($growtype_ai_upload_dir);
                 }
+
+                // If the function it's not available, require it.
+                if (!function_exists('download_url')) {
+                    require_once ABSPATH . 'wp-admin/includes/file.php';
+                }
+
+                $tmp_file = download_url($file['url']);
+
+                $filepath = $growtype_ai_upload_dir . '/' . $file['name'] . '.' . $file['extension'];
+
+                copy($tmp_file, $filepath);
+
+                @unlink($tmp_file);
 
                 break;
             case 'cloudinary':
-                $cloudinary_crud = new Cloudinary_Crud();
-                return $cloudinary_crud->upload_image($file, $folder_name);
+                try {
+                    $cloudinary_crud = new Cloudinary_Crud();
+                    $image = $cloudinary_crud->upload_asset($file['url'], [
+                        'public_id' => $file['name'],
+                        'folder' => $folder_name
+                    ]);
+                } catch (Exception $e) {
+                    throw new Exception($e);
+                }
+
+                return $image;
                 break;
         }
     }
@@ -146,6 +153,10 @@ if (!function_exists('growtype_ai_get_model_details')) {
                 'values' => [$model_id],
             ]
         ]);
+
+        if (empty($model)) {
+            return null;
+        }
 
         $models_settings = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
             [
@@ -211,6 +222,10 @@ if (!function_exists('growtype_ai_get_image_model_details')) {
             ]
         ]);
 
+        if (empty($image_model)) {
+            return null;
+        }
+
         return growtype_ai_get_model_details($image_model['model_id']);
     }
 }
@@ -225,35 +240,15 @@ if (!function_exists('growtype_ai_generate_reference_id')) {
     }
 }
 
-/**
- * Model details
- */
-if (!function_exists('growtype_ai_init_generate_image_job')) {
-    function growtype_ai_init_generate_image_job($payload)
+if (!function_exists('growtype_ai_init_job')) {
+    function growtype_ai_init_job($job_name, $payload, $delay = 5)
     {
         Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-            'queue' => 'generate-model',
+            'queue' => $job_name,
             'payload' => $payload,
             'attempts' => 0,
             'reserved_at' => wp_date('Y-m-d H:i:s'),
-            'available_at' => date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + 5),
-            'reserved' => 0
-        ]);
-    }
-}
-
-/**
- * Model details
- */
-if (!function_exists('growtype_ai_init_retrieve_image_job')) {
-    function growtype_ai_init_retrieve_image_job($payload)
-    {
-        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-            'queue' => 'retrieve-model',
-            'payload' => $payload,
-            'attempts' => 0,
-            'reserved_at' => wp_date('Y-m-d H:i:s'),
-            'available_at' => date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + 30),
+            'available_at' => date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + $delay),
             'reserved' => 0
         ]);
     }
@@ -297,5 +292,27 @@ if (!function_exists('growtype_ai_get_model_single_setting')) {
                 return $setting;
             }
         }
+    }
+}
+
+/**
+ * Model details
+ */
+if (!function_exists('growtype_ai_get_upload_dir')) {
+    function growtype_ai_get_upload_dir($folder_name = null)
+    {
+        $upload_dir = wp_upload_dir();
+
+        return !empty($folder_name) ? $upload_dir['basedir'] . '/growtype-ai-uploads' . '/' . $folder_name : $upload_dir['basedir'] . '/growtype-ai-uploads';
+    }
+}
+
+/**
+ * Public id
+ */
+if (!function_exists('growtype_ai_get_cloudinary_public_id')) {
+    function growtype_ai_get_cloudinary_public_id($image)
+    {
+        return $image['folder'] . '/' . $image['name'];
     }
 }

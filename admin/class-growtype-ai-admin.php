@@ -234,6 +234,18 @@ class Growtype_Ai_Admin
                             do_settings_fields('growtype-ai-settings', 'growtype_ai_openai_settings');
                             echo '</table>';
 
+                            echo '<h3>Replicate settings</h3>';
+
+                            echo '<table class="form-table">';
+                            do_settings_fields('growtype-ai-settings', 'growtype_ai_replicate_settings');
+                            echo '</table>';
+
+                            echo '<h3>TinyPng settings</h3>';
+
+                            echo '<table class="form-table">';
+                            do_settings_fields('growtype-ai-settings', 'growtype_ai_tinypng_settings');
+                            echo '</table>';
+
                             echo '<h3>Image generating settings</h3>';
 
                             echo '<table class="form-table">';
@@ -291,6 +303,22 @@ class Growtype_Ai_Admin
         include_once 'partials/settings/OpenaiSettings.php';
 
         $GeneralSettings = new OpenaiSettings();
+        $GeneralSettings->general_content();
+
+        /**
+         * Replicate
+         */
+        include_once 'partials/settings/ReplicateSettings.php';
+
+        $GeneralSettings = new ReplicateSettings();
+        $GeneralSettings->general_content();
+
+        /**
+         * Tinypng
+         */
+        include_once 'partials/settings/TinyPngSettings.php';
+
+        $GeneralSettings = new TinyPngSettings();
         $GeneralSettings->general_content();
 
     }

@@ -14,4 +14,6 @@ return array(
     'c0908dd0408c67235210b4bf031d1290' => $vendorDir . '/rappasoft/laravel-helpers/src/classes.php',
     '728cd66d334b33c0fb1ed0fe1060a82b' => $vendorDir . '/rappasoft/laravel-helpers/src/helpers.php',
     'daf45b1134c9868f305965e4c0e0f06c' => $vendorDir . '/rappasoft/laravel-helpers/src/strings.php',
+    '74ed299072414d276bb7568fe71d5b0c' => $vendorDir . '/tinify/tinify/lib/Tinify.php',
+    '9635627915aaea7a98d6d14d04ca5b56' => $vendorDir . '/tinify/tinify/lib/Tinify/Exception.php',
 );

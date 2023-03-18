@@ -5,7 +5,7 @@ class Growtype_Ai_Cron
     const GROWTYPE_AI_JOBS_CRON = 'growtype_ai_jobs';
     const GROWTYPE_AI_BUNDLE_JOBS_CRON = 'growtype_ai_bundle_jobs';
 
-    const  RETRIEVE_JOBS_LIMIT = 3;
+    const  RETRIEVE_JOBS_LIMIT = 5;
     const  JOBS_ATTEMPTS_LIMIT = 4;
 
     public function __construct()
@@ -24,6 +24,11 @@ class Growtype_Ai_Cron
 
     function cron_custom_intervals()
     {
+        $schedules['every10seconds'] = array (
+            'interval' => 10,
+            'display' => __('Once Every 10 seconds')
+        );
+
         $schedules['every20seconds'] = array (
             'interval' => 20,
             'display' => __('Once Every 20 seconds')
@@ -60,11 +65,11 @@ class Growtype_Ai_Cron
     function cron_activation()
     {
         if (!wp_next_scheduled(self::GROWTYPE_AI_JOBS_CRON)) {
-            wp_schedule_event(time(), 'everyminute', self::GROWTYPE_AI_JOBS_CRON);
+            wp_schedule_event(time(), 'every10seconds', self::GROWTYPE_AI_JOBS_CRON);
         }
 
         if (!wp_next_scheduled(self::GROWTYPE_AI_BUNDLE_JOBS_CRON)) {
-            wp_schedule_event(time(), 'every5minute', self::GROWTYPE_AI_BUNDLE_JOBS_CRON);
+            wp_schedule_event(time(), 'every10minute', self::GROWTYPE_AI_BUNDLE_JOBS_CRON);
         }
     }
 
@@ -130,6 +135,7 @@ class Growtype_Ai_Cron
 
                     try {
                         $crud = new Leonardo_Ai_Crud();
+
                         $crud->retrieve_single_generation($job_payload['model_id'], $job_payload['user_nr'], $job_payload['generation_id']);
 
                         /**
@@ -141,6 +147,106 @@ class Growtype_Ai_Cron
                             'reserved' => 0,
                             'exception' => $e->getMessage(),
                         ], $job['id']);
+                    }
+
+                    sleep(5);
+
+                    break;
+                case 'retrieve-upscale-image':
+
+                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                        'reserved' => 1,
+                        'attempts' => (int)$job['attempts'] + 1,
+                    ], $job['id']);
+
+                    /**
+                     * Try to retrieve the image
+                     */
+                    $get_url = $job_payload['upscaled_image']['urls']['get'];
+
+                    $replicate = new Replicate();
+
+                    $retrieve = $replicate->real_esrgan_retrieve($get_url);
+
+                    $output = $retrieve['output'];
+
+                    error_log(print_r([
+                        'action' => 'retrieved',
+                        'url' => $output
+                    ], true));
+
+                    if (!empty($output)) {
+                        try {
+                            /**
+                             * Compress image
+                             */
+                            $resmush = new Resmush();
+
+                            $img_url = $resmush->compress($output);
+
+                            if (empty($img_url)) {
+                                Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                                    'exception' => 'Image not compressed',
+                                    'reserved' => 0
+                                ], $job['id']);
+
+                                break;
+                            }
+
+                            error_log(print_r([
+                                'action' => 'compressed',
+                                'url' => $img_url,
+                                'public_id' => $job_payload['original_image']['public_id'],
+                            ], true));
+
+                            $cloudinary = new Cloudinary_Crud();
+
+                            $public_id = $job_payload['original_image']['public_id'];
+
+                            $cloudinary->upload_asset($img_url, [
+                                'public_id' => $public_id
+                            ]);
+
+                            $cloudinary->add_context($public_id, [
+                                'real_esrgan' => 'true',
+                                'compressed' => 'true'
+                            ]);
+
+                            $image_id = $job_payload['original_image']['id'];
+
+                            $image = growtype_ai_get_image_details($image_id);
+
+                            if (!isset($image['settings']['real_esrgan'])) {
+                                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                                    'image_id' => $image_id,
+                                    'meta_key' => 'real_esrgan',
+                                    'meta_value' => 'true',
+                                ]);
+                            }
+
+                            if (!isset($image['settings']['compressed'])) {
+                                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                                    'image_id' => $image_id,
+                                    'meta_key' => 'compressed',
+                                    'meta_value' => 'true',
+                                ]);
+                            }
+
+                            Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
+                        } catch (Exception $e) {
+                            Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                                'exception' => $e->getMessage(),
+                            ], $job['id']);
+
+                            break;
+                        }
+                    } else {
+                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                            'exception' => 'Not generated yet',
+                            'reserved' => 0
+                        ], $job['id']);
+
+                        break;
                     }
 
                     sleep(5);
@@ -192,7 +298,7 @@ class Growtype_Ai_Cron
                 continue;
             }
 
-            growtype_ai_init_generate_image_job(json_encode(['model_id' => $model['id']]));
+            growtype_ai_init_job('generate-model', json_encode(['model_id' => $model['id']]));
 
             sleep(5);
         }

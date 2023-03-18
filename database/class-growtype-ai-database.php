@@ -234,7 +234,7 @@ class Growtype_Ai_Database
         return !empty(self::get_records($table, $params)) ? self::get_records($table, $params)[0] : null;
     }
 
-    public static function get_records($table, $params = null)
+    public static function get_records($table, $params = null, $condition = null)
     {
         global $wpdb;
 
@@ -246,29 +246,40 @@ class Growtype_Ai_Database
 
         $records = [];
 
-        foreach ($params as $param) {
+        if (!empty($condition) && $condition === 'where') {
+            $query_where = [];
 
-            $limit = isset($param['limit']) ? $param['limit'] : 1000;
-            $offset = isset($param['offset']) ? $param['offset'] : 0;
-            $search = isset($param['search']) ? $param['search'] : null;
-            $orderby = isset($param['orderby']) ? $param['orderby'] : 'created_at';
-            $order = isset($param['order']) ? $param['order'] : 'desc';
-            $values = isset($param['values']) ? $param['values'] : null;
-            $key = isset($param['key']) ? $param['key'] : null;
-
-            if (!empty($values) && !empty($key)) {
-                $placeholders = implode(', ', array_fill(0, count($values), '%s'));
-                $query = "SELECT * FROM " . $table . " WHERE " . $key . " IN($placeholders)";
-                $query = $wpdb->prepare($query, $values);
-            } elseif (!empty($search)) {
-                $query = "SELECT * from {$table} WHERE id Like '%{$search}%' OR user_id Like '%{$search}%' OR quiz_id Like '%{$search}%' OR answers Like '%{$search}%' ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
-            } else {
-                $query = "SELECT * from {$table} ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
+            foreach ($params as $param) {
+                array_push($query_where, $param['key'] . "='" . $param['value'] . "'");
             }
 
-            $results = $wpdb->get_results($query, ARRAY_A);
+            $query = "SELECT * FROM " . $table . " where " . implode(' AND ', $query_where);
 
-            $records = array_merge($records, $results);
+            $records = $wpdb->get_results($query, ARRAY_A);
+        } else {
+            foreach ($params as $param) {
+                $limit = isset($param['limit']) ? $param['limit'] : 1000;
+                $offset = isset($param['offset']) ? $param['offset'] : 0;
+                $search = isset($param['search']) ? $param['search'] : null;
+                $orderby = isset($param['orderby']) ? $param['orderby'] : 'created_at';
+                $order = isset($param['order']) ? $param['order'] : 'desc';
+                $values = isset($param['values']) ? $param['values'] : null;
+                $key = isset($param['key']) ? $param['key'] : null;
+
+                if (!empty($values) && !empty($key)) {
+                    $placeholders = implode(', ', array_fill(0, count($values), '%s'));
+                    $query = "SELECT * FROM " . $table . " WHERE " . $key . " IN($placeholders)";
+                    $query = $wpdb->prepare($query, $values);
+                } elseif (!empty($search)) {
+                    $query = "SELECT * from {$table} WHERE id Like '%{$search}%' OR prompt Like '%{$search}%' OR negative_prompt Like '%{$search}%' OR reference_id Like '%{$search}%' ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
+                } else {
+                    $query = "SELECT * from {$table} ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
+                }
+
+                $results = $wpdb->get_results($query, ARRAY_A);
+
+                $records = array_merge($records, $results);
+            }
         }
 
         return $records;

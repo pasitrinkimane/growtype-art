@@ -13,15 +13,18 @@ class Leonardo_Ai_Crud
         return [
             '1' => [
                 'cookie' => get_option('growtype_ai_leonardo_access_key'),
-                'user_id' => get_option('growtype_ai_leonardo_user_id')
+                'user_id' => get_option('growtype_ai_leonardo_user_id'),
+                'access_token' => get_option('growtype_ai_leonardo_access_token')
             ],
             '2' => [
                 'cookie' => get_option('growtype_ai_leonardo_access_key_2'),
-                'user_id' => get_option('growtype_ai_leonardo_user_id_2')
+                'user_id' => get_option('growtype_ai_leonardo_user_id_2'),
+                'access_token' => get_option('growtype_ai_leonardo_access_token_2')
             ],
             '3' => [
                 'cookie' => get_option('growtype_ai_leonardo_access_key_3'),
-                'user_id' => get_option('growtype_ai_leonardo_user_id_3')
+                'user_id' => get_option('growtype_ai_leonardo_user_id_3'),
+                'access_token' => get_option('growtype_ai_leonardo_access_token_3')
             ]
         ];
     }
@@ -41,14 +44,12 @@ class Leonardo_Ai_Crud
 
         $generation_details = $this->get_generation_details($token, $model_id);
 
-        growtype_ai_init_retrieve_image_job(json_encode([
+        growtype_ai_init_job('retrieve-model', json_encode([
             'user_nr' => $generation_details['user_nr'],
             'amount' => 1,
             'model_id' => $model_id,
             'generation_id' => $generation_details['generation_id'],
-        ]));
-
-//        $this->retrieve_generation($token, $generation_id);
+        ]), 30);
     }
 
     public function get_generation_details($token, $model_id)
@@ -89,25 +90,12 @@ class Leonardo_Ai_Crud
         $generations = $this->get_generations($token, $amount, $user_nr);
 
         if (empty($generations)) {
-            throw new Exception('Empty generations');
+            return null;
         }
 
         $this->save_generations($generations, $model_id);
 
         $this->delete_external_generations($token, $generations);
-
-        /**
-         * Openai crud
-         */
-        $openai_crud = new Openai_Crud();
-        $openai_crud->format_models(null, false, $model_id);
-        $openai_crud->format_model_images($model_id);
-
-        /**
-         *
-         */
-        $cloudinary_crud = new Cloudinary_Crud();
-        $cloudinary_crud->update_cloudinary_images_details($model_id);
 
         return $generations;
     }
@@ -119,7 +107,7 @@ class Leonardo_Ai_Crud
         $generations = $this->get_generations($token, 30, $user_nr);
 
         if (empty($generations)) {
-            throw new Exception('Empty generations');
+            throw new Exception('Empty generations. Token: ' . $token);
         }
 
         $single_generation = '';
@@ -154,10 +142,12 @@ class Leonardo_Ai_Crud
     public function get_access_token($user_nr = null)
     {
         $cookie = $this->get_user_credentials($user_nr)['cookie'];
-        $token = $this->retrieve_access_token($cookie);
+        $access_token = $this->get_user_credentials($user_nr)['access_token'];
+
+        $token = !empty($access_token) ? $access_token : $this->retrieve_access_token($cookie);
 
         if (empty($token)) {
-            throw new Exception('No token');
+            throw new Exception('No token user_nr: ' . $user_nr);
         }
 
         return $token;
@@ -405,6 +395,9 @@ class Leonardo_Ai_Crud
      */
     function save_generations($generations, $existing_model_id = null)
     {
+        /**
+         * Group generations by unique key
+         */
         $grouped_generations = [];
         foreach ($generations as $generation) {
             $unique_key = implode('-', [
@@ -484,61 +477,40 @@ class Leonardo_Ai_Crud
                 }
 
                 foreach ($generation['generated_images'] as $image) {
+                    $image['imageWidth'] = $generation['imageWidth'];
+                    $image['imageHeight'] = $generation['imageHeight'];
+                    $image['folder'] = $image_folder;
+                    $image['location'] = $image_location;
 
-                    $filename = basename($image['url']);
-                    $ext = pathinfo($filename, PATHINFO_EXTENSION);
-                    $new_name = uniqid();
+                    $saved_image = Growtype_Ai_Crud::save_image($image);
 
-                    $file = [
-                        'name' => $new_name,
-                        'extension' => $ext,
-                        'width' => $generation['imageWidth'],
-                        'height' => $generation['imageHeight'],
-                        'url' => $image['url'],
-                        'folder' => $image_folder,
-                        'location' => $image_location,
-                    ];
-
-                    /**
-                     * Backup images to local drive if they are stored in cloudinary
-                     */
-                    $backup_images = false;
-
-                    if ($backup_images && $file['location'] === 'cloudinary') {
-                        $saving_locations = ['locally', 'cloudinary'];
-                        foreach ($saving_locations as $saving_location) {
-                            $file['location'] = $saving_location;
-                            $saved_image = growtype_ai_save_file($file, $file['folder']);
-                        }
-                    } else {
-                        $saved_image = growtype_ai_save_file($file, $file['folder']);
+                    if (empty($saved_image)) {
+                        continue;
                     }
 
-                    $image_id = Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGES_TABLE, [
-                        'name' => $new_name,
-                        'extension' => $ext,
-                        'width' => $generation['imageWidth'],
-                        'height' => $generation['imageHeight'],
-                        'location' => $file['location'],
-                        'folder' => $file['folder'],
-                        'reference_id' => isset($saved_image['asset_id']) ? $saved_image['asset_id'] : null,
+                    /**
+                     * Assign image to model
+                     */
+                    Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, [
+                        'model_id' => $model_id,
+                        'image_id' => $saved_image['id']
                     ]);
-
-                    Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
 
                     /**
                      * Generate image content
                      */
                     $openai_crud = new Openai_Crud();
-                    $openai_crud->format_image($image_id);
+                    $openai_crud->format_image($saved_image['id']);
 
                     /**
                      * Update cloudinary image details
                      */
-                    if ($file['location'] === 'cloudinary') {
+                    if ($image['location'] === 'cloudinary') {
                         $cloudinary_crud = new Cloudinary_Crud();
-                        $cloudinary_crud->update_cloudinary_image_details($image_id);
+                        $cloudinary_crud->update_cloudinary_image_details($saved_image['id']);
                     }
+
+                    sleep(2);
                 }
             }
         }

@@ -54,7 +54,24 @@ class Openai_Crud
 
         $completion = json_decode($complete, true);
 
-        return $completion['choices'][0]['message']['content'];
+        $content = $completion['choices'][0]['message']['content'];
+
+        if (strpos($content, "Im sorry") !== false) {
+            $content = null;
+        }
+
+        if (!empty($content) && $type == 'tags') {
+            $content = json_decode($content, true);
+
+            if (!empty($content)) {
+                $content = implode(',', $content);
+                $content = strtolower($content);
+                $content = explode(',', $content);
+                $content = json_encode($content);
+            }
+        }
+
+        return $content;
     }
 
     public function format_models($generation_type = null, $regenerate_values = false, $model_id = null)
@@ -108,6 +125,10 @@ class Openai_Crud
                 }
 
                 $new_content = $this->generate_content($model['prompt'], $type['meta_key']);
+
+                if (empty($new_content)) {
+                    continue;
+                }
 
                 if ($type['encode']) {
                     $new_content = json_decode($new_content, true);
@@ -169,39 +190,48 @@ class Openai_Crud
     {
         $model = growtype_ai_get_image_model_details($image_id);
 
-        $tags = $model['settings']['tags'];
-        $tags = empty($tags) ? null : json_decode($tags, true);
-        $title = $model['settings']['title'];
-        $description = $model['settings']['description'];
+        if (empty($model)) {
+            throw new Exception('Empty model for image id: ' . $image_id);
+        }
+
+        $tags = !empty($model) && isset($model['settings']['tags']) && !empty($model['settings']['tags']) ? json_decode($model['settings']['tags'], true) : [];
+        $title = !empty($model) ? $model['settings']['title'] : null;
+        $description = !empty($model) ? $model['settings']['description'] : null;
 
         if (!isset($image['settings']['caption'])) {
             $alt_title = $this->generate_content($title, 'alt-title');
-            $alt_title = str_replace('"', "", $alt_title);
-            $alt_title = str_replace("'", "", $alt_title);
 
-            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                'image_id' => $image_id,
-                'meta_key' => 'caption',
-                'meta_value' => $alt_title,
-            ]);
+            if (!empty($alt_title)) {
+                $alt_title = str_replace('"', "", $alt_title);
+                $alt_title = str_replace("'", "", $alt_title);
+
+                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                    'image_id' => $image_id,
+                    'meta_key' => 'caption',
+                    'meta_value' => $alt_title,
+                ]);
+            }
         }
 
         if (!isset($image['settings']['alt_text'])) {
             $alt_description = $this->generate_content($description, 'alt-description');
-            $alt_description = str_replace('"', "", $alt_description);
 
-            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                'image_id' => $image_id,
-                'meta_key' => 'alt_text',
-                'meta_value' => $alt_description,
-            ]);
+            if (!empty($alt_description)) {
+                $alt_description = str_replace('"', "", $alt_description);
+
+                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                    'image_id' => $image_id,
+                    'meta_key' => 'alt_text',
+                    'meta_value' => $alt_description,
+                ]);
+            }
         }
 
         if (!isset($image['settings']['tags'])) {
             Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
                 'image_id' => $image_id,
                 'meta_key' => 'tags',
-                'meta_value' => json_encode($tags),
+                'meta_value' => !empty($tags) ? json_encode($tags) : null,
             ]);
         }
     }

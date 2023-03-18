@@ -46,7 +46,7 @@ class Growtype_Ai_Admin_Model
 
         $args = [
             'label' => 'Items',
-            'default' => 20,
+            'default' => 10,
             'option' => 'items_per_page'
         ];
 
@@ -117,14 +117,22 @@ class Growtype_Ai_Admin_Model
 
         $this->item_obj = new Growtype_Ai_Admin_Result_List_Table_Record();
 
+        /**
+         * General table
+         */
         $this->item_obj->process_delete_action();
-        $this->item_obj->process_bulk_action();
         $this->item_obj->process_add_new_action();
+        $this->item_obj->process_bundle_action();
+
+        /**
+         * Single record
+         */
         $this->item_obj->process_update_action();
-        $this->item_obj->process_sync_action();
+        $this->item_obj->process_sync_model_images_action();
         $this->item_obj->process_generate_image_action();
         $this->item_obj->process_generate_content_action();
         $this->item_obj->process_retrieve_action();
+        $this->item_obj->process_optimize_images_action();
     }
 }
 

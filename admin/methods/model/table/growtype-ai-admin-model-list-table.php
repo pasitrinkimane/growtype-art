@@ -32,7 +32,32 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
     function extra_tablenav($which)
     {
         if ($which == "top") { ?>
-            <div style="display: inline-block;">
+            <div class="alignleft actions">
+                <?php
+                $options = [
+                    [
+                        'value' => 'filter-models-inbundle',
+                        'title' => 'In Bundle',
+                    ]
+                ];
+
+                if ($options) { ?>
+                    <select name="filter_action_custom" class="ewc-filter-cat">
+                        <option value="">Filter records</option>
+                        <?php foreach ($options as $option) { ?>
+                            <option value="<?php echo $option['value']; ?>" <?php selected($option['value'] === $_REQUEST['filter_action_custom']) ?>><?php echo $option['title']; ?></option>
+                        <?php } ?>
+                    </select>
+                    <?php
+                }
+                ?>
+
+                <?php
+                submit_button(__('Filter'), '', 'filter_action', false, array ('id' => 'post-query-submit'));
+                ?>
+            </div>
+
+            <div style="display: inline-block;margin-left: 5px;">
                 <div class="actions-box" style="display: flex;gap: 10px;">
                     <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary">' . __('Retrieve models', 'growtype-ai') . '</a>', $_REQUEST['page'], 'retrieve-images-all') ?>
                 </div>
@@ -75,9 +100,22 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
             $args['order'] = $_REQUEST['order'];
         }
 
+        if (isset($_REQUEST['filter_action_custom'])) {
+            if ($_REQUEST['filter_action_custom'] === 'filter-models-inbundle') {
+                $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
+
+                $args['key'] = 'id';
+                $args['values'] = $bundle_ids;
+            }
+        }
+
         $items = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE, [$args]);
 
-        $total_items = count(Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE));
+        if (isset($_REQUEST['action'])) {
+            $total_items = count($items);
+        } else {
+            $total_items = count(Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE));
+        }
 
         $this->items = $items;
 
@@ -189,6 +227,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
     {
         $actions = array (
             'edit' => sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s">' . __('Edit', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'edit', $item['id']),
+            'generate' => sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s">' . __('Generate image', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'index-generate-images', $item['id']),
             'delete' => sprintf('<a href="?post_type=%s&page=%s&action=%s&item=%s&_wpnonce=%s">' . __('Delete', 'growtype-ai') . '</a>', Growtype_Ai_Admin::POST_TYPE, $_REQUEST['page'], 'delete', $item['id'], wp_create_nonce(Growtype_Ai_Admin::DELETE_NONCE)),
         );
 
@@ -226,7 +265,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
     public function column_images($row = null)
     {
         $model_images = growtype_ai_get_model_images($row['id']);
-        $model_images = array_slice($model_images, 0, 6);
+        $model_images = array_slice(array_reverse($model_images), 0, 3);
 
         ?>
         <div style="display: flex;flex-wrap: wrap;">

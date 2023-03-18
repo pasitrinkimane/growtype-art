@@ -23,7 +23,7 @@
 class Growtype_Ai_Public
 {
 
-    const GROWTYPE_SEARCH_AJAX_ACTION = 'growtype_ai';
+    const AJAX_ACTION = 'growtype_ai';
 
     /**
      * The ID of this plugin.
@@ -75,8 +75,7 @@ class Growtype_Ai_Public
      *
      * @since    1.0.0
      */
-    public
-    function enqueue_styles()
+    public function enqueue_styles()
     {
         wp_enqueue_style($this->growtype_ai, GROWTYPE_AI_URL_PUBLIC . 'styles/growtype-ai.css', array (), $this->version, 'all');
     }
@@ -99,7 +98,7 @@ class Growtype_Ai_Public
         wp_localize_script($this->growtype_ai, 'growtype_ai_ajax', array (
             'url' => $ajax_url,
             'nonce' => wp_create_nonce('ajax-nonce'),
-            'action' => self::GROWTYPE_SEARCH_AJAX_ACTION
+            'action' => self::AJAX_ACTION
         ));
     }
 

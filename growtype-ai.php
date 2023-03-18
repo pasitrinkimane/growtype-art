@@ -63,7 +63,7 @@ define('GROWTYPE_AI_URL_PUBLIC', plugin_dir_url(__FILE__) . 'public/');
  */
 function activate_growtype_ai()
 {
-    require_once plugin_dir_path(__FILE__) . 'includes/class-growtype-ai-activator.php';
+    require_once GROWTYPE_AI_PATH . 'includes/class-growtype-ai-activator.php';
     Growtype_Ai_Activator::activate();
 }
 
@@ -73,7 +73,7 @@ function activate_growtype_ai()
  */
 function deactivate_growtype_ai()
 {
-    require_once plugin_dir_path(__FILE__) . 'includes/class-growtype-ai-deactivator.php';
+    require_once GROWTYPE_AI_PATH . 'includes/class-growtype-ai-deactivator.php';
     Growtype_Ai_Deactivator::deactivate();
 }
 
@@ -84,13 +84,13 @@ register_deactivation_hook(__FILE__, 'deactivate_growtype_ai');
  * The core plugin class that is used to define internationalization,
  * admin-specific hooks, and public-facing site hooks.
  */
-require plugin_dir_path(__FILE__) . 'includes/class-growtype-ai.php';
+require GROWTYPE_AI_PATH . 'includes/class-growtype-ai.php';
 
 /**
  * The core plugin class that is used to define internationalization,
  * admin-specific hooks, and public-facing site hooks.
  */
-require plugin_dir_path(__FILE__) . 'database/class-growtype-ai-database.php';
+require GROWTYPE_AI_PATH . 'database/class-growtype-ai-database.php';
 
 /**
  * Begins execution of the plugin.
