@@ -107,64 +107,13 @@ class Openai_Crud
         }
 
         foreach ($generation_types as $type) {
-            foreach ($models as $key => $model) {
-
-                $existing_content = growtype_ai_get_model_single_setting($model['id'], $type['meta_key']);
-
-                $meta_value = isset($existing_content['meta_value']) ? $existing_content['meta_value'] : null;
-
-                if (!empty($meta_value) && $type['encode']) {
-                    $meta_value = json_decode($meta_value, true);
-                    $meta_value = is_array($meta_value) ? $meta_value : null;
-                }
-
-                if (!$regenerate_values) {
-                    if (!empty($meta_value)) {
-                        continue;
-                    }
-                }
-
-                $new_content = $this->generate_content($model['prompt'], $type['meta_key']);
-
-                if (empty($new_content)) {
-                    continue;
-                }
-
-                if ($type['encode']) {
-                    $new_content = json_decode($new_content, true);
-                    $new_content = json_encode($new_content);
-                } else {
-                    $new_content = str_replace('"', "", $new_content);
-                }
-
-                if (empty($new_content)) {
-                    continue;
-                }
-
-                /**
-                 * tags
-                 */
-                if (!empty($existing_content)) {
-                    $update_record = $regenerate_values;
-
-                    if (!$regenerate_values) {
-                        $update_record = empty($meta_value) ? true : false;
-                    }
-
-                    if ($update_record) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
-                            'model_id' => $model['id'],
-                            'meta_key' => $type['meta_key'],
-                            'meta_value' => $new_content,
-                        ], $existing_content['id']);
-                    }
-                } else {
-                    Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
-                        'model_id' => $model['id'],
-                        'meta_key' => $type['meta_key'],
-                        'meta_value' => $new_content,
-                    ]);
-                }
+            foreach ($models as $model) {
+                growtype_ai_init_job('generate-content-model', json_encode([
+                    'meta_key' => $type['meta_key'],
+                    'model_id' => $model_id,
+                    'encode' => $type['encode'],
+                    'prompt' => $model['prompt'],
+                ]), 30);
             }
         }
     }
@@ -188,52 +137,9 @@ class Openai_Crud
 
     public function format_image($image_id)
     {
-        $model = growtype_ai_get_image_model_details($image_id);
-
-        if (empty($model)) {
-            throw new Exception('Empty model for image id: ' . $image_id);
-        }
-
-        $tags = !empty($model) && isset($model['settings']['tags']) && !empty($model['settings']['tags']) ? json_decode($model['settings']['tags'], true) : [];
-        $title = !empty($model) ? $model['settings']['title'] : null;
-        $description = !empty($model) ? $model['settings']['description'] : null;
-
-        if (!isset($image['settings']['caption'])) {
-            $alt_title = $this->generate_content($title, 'alt-title');
-
-            if (!empty($alt_title)) {
-                $alt_title = str_replace('"', "", $alt_title);
-                $alt_title = str_replace("'", "", $alt_title);
-
-                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                    'image_id' => $image_id,
-                    'meta_key' => 'caption',
-                    'meta_value' => $alt_title,
-                ]);
-            }
-        }
-
-        if (!isset($image['settings']['alt_text'])) {
-            $alt_description = $this->generate_content($description, 'alt-description');
-
-            if (!empty($alt_description)) {
-                $alt_description = str_replace('"', "", $alt_description);
-
-                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                    'image_id' => $image_id,
-                    'meta_key' => 'alt_text',
-                    'meta_value' => $alt_description,
-                ]);
-            }
-        }
-
-        if (!isset($image['settings']['tags'])) {
-            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                'image_id' => $image_id,
-                'meta_key' => 'tags',
-                'meta_value' => !empty($tags) ? json_encode($tags) : null,
-            ]);
-        }
+        growtype_ai_init_job('generate-content-image', json_encode([
+            'image_id' => $image_id
+        ]), 30);
     }
 }
 

@@ -252,6 +252,127 @@ class Growtype_Ai_Cron
                     sleep(5);
 
                     break;
+                case 'generate-content-model':
+
+                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                        'reserved' => 1,
+                        'attempts' => (int)$job['attempts'] + 1,
+                    ], $job['id']);
+
+                    $existing_content = growtype_ai_get_model_single_setting($job_payload['model_id'], $job_payload['meta_key']);
+
+                    $openai_crud = new Openai_Crud();
+                    $new_content = $openai_crud->generate_content($job_payload['prompt'], $job_payload['meta_key']);
+
+                    if (empty($new_content)) {
+                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                            'exception' => 'empty content',
+                            'reserved' => 0
+                        ], $job['id']);
+
+                        continue;
+                    }
+
+                    if ($job_payload['encode']) {
+                        $new_content = json_decode($new_content, true);
+                        $new_content = json_encode($new_content);
+                    } else {
+                        $new_content = str_replace('"', "", $new_content);
+                    }
+
+                    if (empty($new_content)) {
+                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                            'exception' => 'empty content',
+                            'reserved' => 0
+                        ], $job['id']);
+
+                        continue;
+                    }
+
+                    /**
+                     * tags
+                     */
+                    if (!empty($existing_content)) {
+                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+                            'model_id' => $job_payload['model_id'],
+                            'meta_key' => $job_payload['meta_key'],
+                            'meta_value' => $new_content,
+                        ], $existing_content['id']);
+                    } else {
+                        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+                            'model_id' => $job_payload['model_id'],
+                            'meta_key' => $job_payload['meta_key'],
+                            'meta_value' => $new_content,
+                        ]);
+                    }
+
+                    Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
+
+                    break;
+                case 'generate-content-image':
+
+                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                        'reserved' => 1,
+                        'attempts' => (int)$job['attempts'] + 1,
+                    ], $job['id']);
+
+                    $model = growtype_ai_get_image_model_details($job_payload['image_id']);
+
+                    if (empty($model)) {
+                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                            'exception' => 'Empty model for image',
+                            'reserved' => 0
+                        ], $job['id']);
+
+                        continue;
+                    }
+
+                    $tags = !empty($model) && isset($model['settings']['tags']) && !empty($model['settings']['tags']) ? json_decode($model['settings']['tags'], true) : [];
+                    $title = !empty($model) ? $model['settings']['title'] : null;
+                    $description = !empty($model) ? $model['settings']['description'] : null;
+
+                    if (!isset($image['settings']['caption'])) {
+                        $openai_crud = new Openai_Crud();
+                        $alt_title = $openai_crud->generate_content($title, 'alt-title');
+
+                        if (!empty($alt_title)) {
+                            $alt_title = str_replace('"', "", $alt_title);
+                            $alt_title = str_replace("'", "", $alt_title);
+
+                            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                                'image_id' => $job_payload['image_id'],
+                                'meta_key' => 'caption',
+                                'meta_value' => $alt_title,
+                            ]);
+                        }
+                    }
+
+                    if (!isset($image['settings']['alt_text'])) {
+                        $openai_crud = new Openai_Crud();
+                        $alt_description = $openai_crud->generate_content($description, 'alt-description');
+
+                        if (!empty($alt_description)) {
+                            $alt_description = str_replace('"', "", $alt_description);
+
+                            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                                'image_id' => $job_payload['image_id'],
+                                'meta_key' => 'alt_text',
+                                'meta_value' => $alt_description,
+                            ]);
+                        }
+                    }
+
+                    if (!isset($image['settings']['tags'])) {
+                        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                            'image_id' => $job_payload['image_id'],
+                            'meta_key' => 'tags',
+                            'meta_value' => !empty($tags) ? json_encode($tags) : null,
+                        ]);
+                    }
+
+                    Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
+
+                    break;
             }
         }
     }

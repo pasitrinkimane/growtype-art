@@ -150,13 +150,13 @@ class Growtype_Ai_Loader
          * Crud
          */
         require_once GROWTYPE_AI_PATH . 'includes/methods/crud/class-growtype-ai-crud.php';
-        $this->loader = new Growtype_Ai_Crud();
+        new Growtype_Ai_Crud();
 
         /**
          * Shortcode
          */
         require_once GROWTYPE_AI_PATH . 'includes/methods/shortcodes/class-growtype-ai-shortcode.php';
-        $this->loader = new Growtype_Ai_Shortcode();
+        new Growtype_Ai_Shortcode();
 
         /**
          * Block
@@ -167,12 +167,12 @@ class Growtype_Ai_Loader
          * Api
          */
         require_once GROWTYPE_AI_PATH . 'includes/methods/api/growtype-ai-api.php';
-        $this->loader = new Growtype_Ai_Api();
+        new Growtype_Ai_Api();
 
         /**
          * Cron
          */
         require_once GROWTYPE_AI_PATH . 'includes/methods/cron/growtype-ai-cron.php';
-        $this->loader = new Growtype_Ai_Cron();
+        new Growtype_Ai_Cron();
     }
 }
