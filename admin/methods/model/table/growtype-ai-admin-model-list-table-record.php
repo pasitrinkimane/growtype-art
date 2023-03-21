@@ -214,7 +214,6 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
             $users_credentials = Leonardo_Ai_Crud::user_credentials();
 
-            $counter = 0;
             foreach ($users_credentials as $user_nr => $user_credentials) {
 
                 if (empty($user_credentials['user_id'])) {
@@ -226,12 +225,6 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 if (empty($generations)) {
                     continue;
                 }
-
-                if ($counter > 8) {
-                    break;
-                }
-
-                $counter++;
             }
 
             if ($_GET['action'] === 'retrieve-images') {

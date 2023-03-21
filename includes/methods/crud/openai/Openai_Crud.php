@@ -108,7 +108,7 @@ class Openai_Crud
 
         foreach ($generation_types as $type) {
             foreach ($models as $model) {
-                growtype_ai_init_job('generate-content-model', json_encode([
+                growtype_ai_init_job('generate-model-content', json_encode([
                     'meta_key' => $type['meta_key'],
                     'model_id' => $model_id,
                     'encode' => $type['encode'],
@@ -137,7 +137,7 @@ class Openai_Crud
 
     public function format_image($image_id)
     {
-        growtype_ai_init_job('generate-content-image', json_encode([
+        growtype_ai_init_job('generate-image-content', json_encode([
             'image_id' => $image_id
         ]), 30);
     }
