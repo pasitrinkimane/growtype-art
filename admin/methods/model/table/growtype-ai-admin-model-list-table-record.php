@@ -367,6 +367,11 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 <tr>
                     <th scope="row">
                         <label for=""><?php echo $key ?></label>
+                        <?php
+                        if ($key === 'prompt') {
+                            echo '<p class="text">Use <code>{prompt_variable}</code> to insert random prompt variable</p>';
+                        }
+                        ?>
                     </th>
                     <td>
                         <?php if (in_array($key, ['prompt', 'negative_prompt'])) { ?>
@@ -391,6 +396,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 'title',
                 'description',
                 'tags',
+                'prompt_variables',
             ];
 
             $existing_keys = array_pluck($models_settings, 'meta_key');
@@ -422,7 +428,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                         <label for=""><?php echo $item['meta_key'] ?></label>
                     </th>
                     <td>
-                        <?php if (in_array($item['meta_key'], ['prompt', 'negative_prompt', 'description'])) { ?>
+                        <?php if (in_array($item['meta_key'], ['prompt', 'negative_prompt', 'description', 'prompt_variables'])) { ?>
                             <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $meta_value ?></textarea>
                         <?php } else { ?>
                             <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $meta_value ?>"/>

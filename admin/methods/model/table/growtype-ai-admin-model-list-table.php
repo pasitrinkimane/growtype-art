@@ -45,7 +45,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
                     <select name="filter_action_custom" class="ewc-filter-cat">
                         <option value="">Filter records</option>
                         <?php foreach ($options as $option) { ?>
-                            <option value="<?php echo $option['value']; ?>" <?php selected($option['value'] === $_REQUEST['filter_action_custom']) ?>><?php echo $option['title']; ?></option>
+                            <option value="<?php echo $option['value']; ?>" <?php selected(isset($_REQUEST['filter_action_custom']) && $option['value'] === $_REQUEST['filter_action_custom']) ?>><?php echo $option['title']; ?></option>
                         <?php } ?>
                     </select>
                     <?php
@@ -100,13 +100,11 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
             $args['order'] = $_REQUEST['order'];
         }
 
-        if (isset($_REQUEST['filter_action_custom'])) {
-            if ($_REQUEST['filter_action_custom'] === 'filter-models-inbundle') {
-                $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
+        if (isset($_REQUEST['filter_action_custom']) && $_REQUEST['filter_action_custom'] === 'filter-models-inbundle') {
+            $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
 
-                $args['key'] = 'id';
-                $args['values'] = $bundle_ids;
-            }
+            $args['key'] = 'id';
+            $args['values'] = $bundle_ids;
         }
 
         $items = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE, [$args]);

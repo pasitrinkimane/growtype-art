@@ -107,7 +107,7 @@ class Cloudinary_Crud
             'resource_type' => 'image',
             'type' => 'upload',
             'prefix' => $model['image_folder'],
-            'max_results' => 200,
+            'max_results' => 50,
             'tags' => true,
             'context' => true
         ]);

@@ -178,7 +178,7 @@ class Leonardo_Ai_Crud
 
         $response = wp_remote_post($url, array (
             'headers' => array (
-                'cookie' => $cookie,
+                'cookie' => 'appSession=' . $cookie . '; Path=/; Expires=Wed, 22 Mar 2024 11:16:24 GMT; HttpOnly; Secure; SameSite=Lax',
             ),
             'method' => 'GET',
             'data_format' => 'body',
@@ -227,11 +227,21 @@ class Leonardo_Ai_Crud
         if (!empty($model_id)) {
             $model_details = growtype_ai_get_model_details($model_id);
 
+            $image_prompt = $model_details['prompt'];
+            $prompt_variables = isset($model_details['settings']['prompt_variables']) ? $model_details['settings']['prompt_variables'] : null;
+            $prompt_variables = !empty($prompt_variables) ? explode('|', $prompt_variables) : null;
+
+            if (!empty($prompt_variables) && str_contains($image_prompt, '{prompt_variable}')) {
+                $rendom_promp_variable_key = array_rand($prompt_variables, 1);
+
+                $image_prompt = str_replace('{prompt_variable}', $prompt_variables[$rendom_promp_variable_key], $image_prompt);
+            }
+
             $parameters = [
                 'operationName' => 'CreateSDGenerationJob',
                 'variables' => [
                     'arg1' => [
-                        'prompt' => $model_details['prompt'],
+                        'prompt' => $image_prompt,
                         'negative_prompt' => $model_details['negative_prompt'],
                         'nsfw' => true,
                         'num_images' => 1,
@@ -463,6 +473,13 @@ class Leonardo_Ai_Crud
                     ];
 
                     foreach ($model_settings as $key => $value) {
+
+                        $existing_content = growtype_ai_get_model_single_setting($model_id, $key);
+
+                        if (!empty($existing_content)) {
+                            continue;
+                        }
+
                         Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
                             'model_id' => $model_id,
                             'meta_key' => $key,

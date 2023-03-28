@@ -20,7 +20,7 @@ class LeonardoAiSettings
             [
                 [
                     'key' => 'growtype_ai_leonardo_access_key',
-                    'label' => 'Leonardo AI - User Cookie',
+                    'label' => 'Leonardo AI - Session Cookie',
                     'type' => 'textarea'
                 ],
                 [
@@ -36,7 +36,7 @@ class LeonardoAiSettings
             [
                 [
                     'key' => 'growtype_ai_leonardo_access_key_2',
-                    'label' => 'Leonardo AI - User Cookie 2',
+                    'label' => 'Leonardo AI - Session Cookie 2',
                     'type' => 'textarea'
                 ],
                 [
@@ -52,7 +52,7 @@ class LeonardoAiSettings
             [
                 [
                     'key' => 'growtype_ai_leonardo_access_key_3',
-                    'label' => 'Leonardo AI - User Cookie 3',
+                    'label' => 'Leonardo AI - Session Cookie 3',
                     'type' => 'textarea'
                 ],
                 [
@@ -101,7 +101,7 @@ class LeonardoAiSettings
     {
         $value = get_option($setting['key']);
 
-        if ($setting['type'] === 'textarea') {
+        if (isset($setting['type']) && $setting['type'] === 'textarea') {
             ?>
             <textarea type="text" rows="10" class="large-text code" name="<?php echo $setting['key'] ?>" value="<?php echo $value ?>"><?php echo $value ?></textarea>
             <?php

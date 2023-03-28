@@ -267,7 +267,7 @@ class Growtype_Ai_Cron
                             'reserved' => 0
                         ], $job['id']);
 
-                        continue;
+                        break;
                     }
 
                     if ($job_payload['encode']) {
@@ -283,7 +283,7 @@ class Growtype_Ai_Cron
                             'reserved' => 0
                         ], $job['id']);
 
-                        continue;
+                        break;
                     }
 
                     /**
@@ -321,7 +321,7 @@ class Growtype_Ai_Cron
                             'reserved' => 0
                         ], $job['id']);
 
-                        continue;
+                        break;
                     }
 
                     try {
