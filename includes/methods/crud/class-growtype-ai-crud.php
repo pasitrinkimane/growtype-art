@@ -22,7 +22,7 @@ class Growtype_Ai_Crud
         /**
          * Check generated image id, to prevent duplicates
          */
-        $existing_generated_image_id = Growtype_Ai_Database::get_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+        $existing_generated_image_id = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
             [
                 'key' => 'meta_key',
                 'value' => 'generated_image_id',
@@ -54,7 +54,7 @@ class Growtype_Ai_Crud
         /**
          * Save image record
          */
-        $image_id = Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGES_TABLE, [
+        $image_id = Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGES_TABLE, [
             'name' => $new_name,
             'extension' => $ext,
             'width' => $image['imageWidth'],
@@ -66,7 +66,7 @@ class Growtype_Ai_Crud
         /**
          * Save external id, to prevent duplicates
          */
-        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+        Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
             'image_id' => $image_id,
             'meta_key' => 'generated_image_id',
             'meta_value' => $image['id']
@@ -90,7 +90,7 @@ class Growtype_Ai_Crud
         /**
          * Update reference id
          */
-        Growtype_Ai_Database::update_record(Growtype_Ai_Database::IMAGES_TABLE, [
+        Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::IMAGES_TABLE, [
             'reference_id' => isset($saved_image['asset_id']) ? $saved_image['asset_id'] : null
         ], $image_id);
 

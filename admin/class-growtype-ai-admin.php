@@ -23,8 +23,10 @@
 class Growtype_Ai_Admin
 {
     const DELETE_NONCE = 'growtype_ai_delete_item';
-    const PAGE_NAME = 'growtype-ai-models';
+    const SETTINGS_PAGE_NAME = 'growtype-ai-settings';
+    const PAGE_NAME = 'growtype-ai';
     const POST_TYPE = 'growtype_ai_models';
+    const GROWTYPE_AI_SETTINGS_DEFAULT_TAB = 'general';
 
     /**
      * The ID of this plugin.
@@ -61,17 +63,10 @@ class Growtype_Ai_Admin
         $this->version = $version;
 
         if (is_admin()) {
-            add_action('admin_menu', array ($this, 'admin_menu_pages'));
-
             /**
              * Load methods
              */
-            add_action('admin_init', array ($this, 'add_options_settings'));
-
-            /**
-             * Load settings
-             */
-            $this->load_settings();
+            add_action('init', array ($this, 'add_pages'));
         }
     }
 
@@ -82,21 +77,7 @@ class Growtype_Ai_Admin
      */
     public function enqueue_styles()
     {
-
-        /**
-         * This function is provided for demonstration purposes only.
-         *
-         * An instance of this class should be passed to the run() function
-         * defined in growtype_ai as all of the hooks are defined
-         * in that particular class.
-         *
-         * The growtype_ai will then create the relationship
-         * between the defined hooks and the functions defined in this
-         * class.
-         */
-
         wp_enqueue_style($this->growtype_ai, plugin_dir_url(__FILE__) . 'css/growtype-ai-admin.css', array (), $this->version, 'all');
-
     }
 
     /**
@@ -106,232 +87,19 @@ class Growtype_Ai_Admin
      */
     public function enqueue_scripts()
     {
-
-        /**
-         * This function is provided for demonstration purposes only.
-         *
-         * An instance of this class should be passed to the run() function
-         * defined in Growtype_Ai_Loader as all of the hooks are defined
-         * in that particular class.
-         *
-         * The Growtype_Ai_Loader will then create the relationship
-         * between the defined hooks and the functions defined in this
-         * class.
-         */
-
         wp_enqueue_script($this->growtype_ai, plugin_dir_url(__FILE__) . 'js/growtype-ai-admin.js', array ('jquery'), $this->version, false);
-
-    }
-
-    /**
-     * Register the options page with the Wordpress menu.
-     */
-    function admin_menu_pages()
-    {
-
-        /**
-         * Data
-         */
-        add_menu_page(
-            __('Growtype Ai', 'growtype-ai'),
-            __('Growtype Ai', 'growtype-ai'),
-            'manage_options',
-            'growtype-ai-models',
-            array ($this, 'growtype_ai_models')
-        );
-
-        /**
-         * Options
-         */
-        add_submenu_page(
-            'growtype-ai-models',
-            'Settings',
-            'Settings',
-            'manage_options',
-            'growtype-ai-settings',
-            array ($this, 'growtype_ai_settings'),
-            1
-        );
-    }
-
-    function growtype_ai_models()
-    {
-    }
-
-    /**
-     * @param $current
-     * @return void
-     */
-    function growtype_ai_settings_tabs($current = 'login')
-    {
-        $tabs['general'] = 'General';
-
-        if (class_exists('woocompress')) {
-            $tabs['woocommerce'] = 'Woocommerce';
-        }
-
-        echo '<div id="icon-themes" class="icon32"><br></div>';
-        echo '<h2 class="nav-tab-wrapper">';
-        foreach ($tabs as $tab => $name) {
-            $class = ($tab == $current) ? ' nav-tab-active' : '';
-            echo "<a class='nav-tab$class' href='?page=growtype-ai-settings&tab=$tab'>$name</a>";
-
-        }
-        echo '</h2>';
-    }
-
-    /**
-     * @return void
-     */
-    function growtype_ai_settings()
-    {
-        if (isset($_GET['page']) && $_GET['page'] == 'growtype-ai-settings') { ?>
-
-            <div class="wrap">
-
-                <h1>Growtype - AI settings</h1>
-
-                <?php
-                if (isset($_GET['updated']) && 'true' == esc_attr($_GET['updated'])) {
-                    echo '<div class="updated" ><p>Theme Settings Updated.</p></div>';
-                }
-
-                if (isset ($_GET['tab'])) {
-                    $this->growtype_ai_settings_tabs($_GET['tab']);
-                } else {
-                    $this->growtype_ai_settings_tabs();
-                }
-                ?>
-
-                <form id="growtype_ai_main_settings" method="post" action="options.php">
-                    <?php
-
-                    if (isset ($_GET['tab'])) {
-                        $tab = $_GET['tab'];
-                    } else {
-                        $tab = 'general';
-                    }
-
-                    switch ($tab) {
-                        case 'general':
-                            settings_fields('growtype_ai_settings');
-
-                            echo '<h3>Leonardo AI settings</h3>';
-
-                            echo '<table class="form-table">';
-                            do_settings_fields('growtype-ai-settings', 'growtype_ai_leonardoai_settings');
-                            echo '</table>';
-
-                            echo '<h3>Cloudinary settings</h3>';
-
-                            echo '<table class="form-table">';
-                            do_settings_fields('growtype-ai-settings', 'growtype_ai_cloudinary_settings');
-                            echo '</table>';
-
-                            echo '<h3>Openai settings</h3>';
-
-                            echo '<table class="form-table">';
-                            do_settings_fields('growtype-ai-settings', 'growtype_ai_openai_settings');
-                            echo '</table>';
-
-                            echo '<h3>Replicate settings</h3>';
-
-                            echo '<table class="form-table">';
-                            do_settings_fields('growtype-ai-settings', 'growtype_ai_replicate_settings');
-                            echo '</table>';
-
-                            echo '<h3>TinyPng settings</h3>';
-
-                            echo '<table class="form-table">';
-                            do_settings_fields('growtype-ai-settings', 'growtype_ai_tinypng_settings');
-                            echo '</table>';
-
-                            echo '<h3>Image generating settings</h3>';
-
-                            echo '<table class="form-table">';
-                            do_settings_fields('growtype-ai-settings', 'growtype_ai_image_generating_settings');
-                            echo '</table>';
-
-                            break;
-                    }
-
-                    if ($tab !== 'examples') {
-                        submit_button();
-                    }
-
-                    ?>
-                </form>
-            </div>
-
-            <?php
-        }
     }
 
     /**
      * Load the required methods for this plugin.
      *
      */
-    public function add_options_settings()
+    public function add_pages()
     {
         /**
-         * Leonardo ai settings
+         * Plugin settings
          */
-        include_once 'partials/settings/LeonardoAiSettings.php';
-
-        $GeneralSettings = new LeonardoAiSettings();
-        $GeneralSettings->general_content();
-
-        /**
-         * Cloudinary settings
-         */
-        include_once 'partials/settings/CloudinarySettings.php';
-
-        $GeneralSettings = new CloudinarySettings();
-        $GeneralSettings->general_content();
-
-        /**
-         * Image generating settings
-         */
-        include_once 'partials/settings/ImageGeneratingSettings.php';
-
-        $GeneralSettings = new ImageGeneratingSettings();
-        $GeneralSettings->general_content();
-
-        /**
-         * Openai
-         */
-        include_once 'partials/settings/OpenaiSettings.php';
-
-        $GeneralSettings = new OpenaiSettings();
-        $GeneralSettings->general_content();
-
-        /**
-         * Replicate
-         */
-        include_once 'partials/settings/ReplicateSettings.php';
-
-        $GeneralSettings = new ReplicateSettings();
-        $GeneralSettings->general_content();
-
-        /**
-         * Tinypng
-         */
-        include_once 'partials/settings/TinyPngSettings.php';
-
-        $GeneralSettings = new TinyPngSettings();
-        $GeneralSettings->general_content();
-
-    }
-
-    /**
-     * @return void
-     */
-    private function load_settings()
-    {
-        /**
-         * Result
-         */
-        require_once GROWTYPE_AI_PATH . 'admin/methods/model/growtype-ai-admin-model.php';
-        $this->loader = new Growtype_Ai_Admin_Model();
+        require GROWTYPE_AI_PATH . '/admin/pages/growtype-ai-admin-pages.php';
+        new Growtype_Ai_Admin_Pages();
     }
 }

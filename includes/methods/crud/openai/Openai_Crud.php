@@ -14,6 +14,8 @@ class Openai_Crud
 
     public function generate_content($text, $type)
     {
+        error_log('GPT generating content');
+
         $open_ai = new OpenAi($this->open_ai_key);
 
         switch ($type) {
@@ -77,14 +79,14 @@ class Openai_Crud
     public function format_models($generation_type = null, $regenerate_values = false, $model_id = null)
     {
         if (!empty($model_id)) {
-            $models = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE, [
+            $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE, [
                 [
                     'key' => 'id',
                     'values' => [$model_id],
                 ]
             ]);
         } else {
-            $models = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE);
+            $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
         }
 
         $generation_types = [
@@ -121,7 +123,7 @@ class Openai_Crud
     public function format_model_images($model_id = null)
     {
         if (empty($model_id)) {
-            $models = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE);
+            $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
         } else {
             $models = [growtype_ai_get_model_details($model_id)];
         }

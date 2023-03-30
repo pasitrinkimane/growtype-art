@@ -9,9 +9,9 @@ if (!function_exists('d')) {
 }
 
 if (!function_exists('ddd')) {
-    function ddd($arr)
+    function ddd($data)
     {
-        return '<pre>' . var_export($arr, false) . '</pre>';
+        return highlight_string("<?php\n" . var_export($data, true) . ";\n?>");
     }
 }
 
@@ -76,18 +76,28 @@ if (!function_exists('growtype_ai_save_file')) {
                     wp_mkdir_p($growtype_ai_upload_dir);
                 }
 
-                // If the function it's not available, require it.
-                if (!function_exists('download_url')) {
-                    require_once ABSPATH . 'wp-admin/includes/file.php';
-                }
+                $url = $file['url'];
 
-                $tmp_file = download_url($file['url']);
+                $save_file_loc = $growtype_ai_upload_dir . '/' . $file['name'] . '.' . $file['extension'];
 
-                $filepath = $growtype_ai_upload_dir . '/' . $file['name'] . '.' . $file['extension'];
+                // Initialize the cURL session
+                $ch = curl_init($url);
 
-                copy($tmp_file, $filepath);
+                // Open file
+                $fp = fopen($save_file_loc, 'wb');
 
-                @unlink($tmp_file);
+                // It set an option for a cURL transfer
+                curl_setopt($ch, CURLOPT_FILE, $fp);
+                curl_setopt($ch, CURLOPT_HEADER, 0);
+
+                // Perform a cURL session
+                curl_exec($ch);
+
+                // Closes a cURL session and frees all resources
+                curl_close($ch);
+
+                // Close file
+                fclose($fp);
 
                 break;
             case 'cloudinary':
@@ -124,7 +134,7 @@ if (!function_exists('growtype_ai_get_external_folder_url')) {
 if (!function_exists('growtype_ai_get_model_images')) {
     function growtype_ai_get_model_images($model_id)
     {
-        $images = Growtype_Ai_Database::get_pivot_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, Growtype_Ai_Database::IMAGES_TABLE, 'image_id', [
+        $images = Growtype_Ai_Database_Crud::get_pivot_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, Growtype_Ai_Database::IMAGES_TABLE, 'image_id', [
                 [
                     'key' => 'model_id',
                     'values' => [$model_id],
@@ -147,7 +157,11 @@ if (!function_exists('growtype_ai_get_model_images')) {
 if (!function_exists('growtype_ai_get_model_details')) {
     function growtype_ai_get_model_details($model_id)
     {
-        $model = Growtype_Ai_Database::get_single_record(Growtype_Ai_Database::MODELS_TABLE, [
+        if (empty($model_id)) {
+            return null;
+        }
+
+        $model = Growtype_Ai_Database_Crud::get_single_record(Growtype_Ai_Database::MODELS_TABLE, [
             [
                 'key' => 'id',
                 'values' => [$model_id],
@@ -158,7 +172,7 @@ if (!function_exists('growtype_ai_get_model_details')) {
             return null;
         }
 
-        $models_settings = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+        $models_settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
             [
                 'key' => 'model_id',
                 'values' => [$model['id']],
@@ -183,14 +197,14 @@ if (!function_exists('growtype_ai_get_model_details')) {
 if (!function_exists('growtype_ai_get_image_details')) {
     function growtype_ai_get_image_details($image_id)
     {
-        $image = Growtype_Ai_Database::get_single_record(Growtype_Ai_Database::IMAGES_TABLE, [
+        $image = Growtype_Ai_Database_Crud::get_single_record(Growtype_Ai_Database::IMAGES_TABLE, [
             [
                 'key' => 'id',
                 'values' => [$image_id],
             ]
         ]);
 
-        $models_settings = Growtype_Ai_Database::get_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+        $models_settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
             [
                 'key' => 'image_id',
                 'values' => [$image['id']],
@@ -215,7 +229,7 @@ if (!function_exists('growtype_ai_get_image_details')) {
 if (!function_exists('growtype_ai_get_image_model_details')) {
     function growtype_ai_get_image_model_details($image_id)
     {
-        $image_model = Growtype_Ai_Database::get_single_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, [
+        $image_model = Growtype_Ai_Database_Crud::get_single_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, [
             [
                 'key' => 'image_id',
                 'values' => [$image_id],
@@ -243,7 +257,7 @@ if (!function_exists('growtype_ai_generate_reference_id')) {
 if (!function_exists('growtype_ai_init_job')) {
     function growtype_ai_init_job($job_name, $payload, $delay = 5)
     {
-        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+        Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
             'queue' => $job_name,
             'payload' => $payload,
             'attempts' => 0,
@@ -262,15 +276,15 @@ if (!function_exists('growtype_ai_delete_model_images')) {
     {
         $model_images = growtype_ai_get_model_images($model_id);
 
-        $model_image = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, [
+        $model_image = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, [
             [
                 'key' => 'model_id',
                 'values' => [$model_id],
             ]
         ]);
 
-        Growtype_Ai_Database::delete_records(Growtype_Ai_Database::IMAGES_TABLE, array_pluck($model_images, 'id'));
-        Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, array_pluck($model_image, 'id'));
+        Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::IMAGES_TABLE, array_pluck($model_images, 'id'));
+        Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::MODEL_IMAGE_TABLE, array_pluck($model_image, 'id'));
     }
 }
 
@@ -280,7 +294,7 @@ if (!function_exists('growtype_ai_delete_model_images')) {
 if (!function_exists('growtype_ai_get_model_single_setting')) {
     function growtype_ai_get_model_single_setting($model_id, $setting_key)
     {
-        $settings = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+        $settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
             [
                 'key' => 'model_id',
                 'values' => [$model_id],
@@ -308,11 +322,66 @@ if (!function_exists('growtype_ai_get_upload_dir')) {
 }
 
 /**
+ * Model details
+ */
+if (!function_exists('growtype_ai_get_upload_dir_public')) {
+    function growtype_ai_get_upload_dir_public($folder_name = null)
+    {
+        $upload_dir = wp_upload_dir();
+        $upload_dir = $upload_dir['baseurl'];
+
+        return !empty($folder_name) ? $upload_dir . '/growtype-ai-uploads' . '/' . $folder_name : $upload_dir . '/growtype-ai-uploads';
+    }
+}
+
+/**
+ * Image
+ */
+if (!function_exists('growtype_ai_get_image_url')) {
+    function growtype_ai_get_image_url($image)
+    {
+        $location = isset($image['location']) && !empty($image['location']) ? $image['location'] : 'locally';
+
+        $img_url = '';
+
+        if ($location === 'locally') {
+            $img_url = growtype_ai_get_upload_dir_public() . '/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'];
+        } elseif ($location === 'cloudinary') {
+            $img_url = 'https://res.cloudinary.com/dmm4mlnmq/image/upload/v1677258489/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'];
+        }
+
+        return $img_url;
+    }
+}
+
+/**
+ * Image
+ */
+if (!function_exists('growtype_ai_get_image_path')) {
+    function growtype_ai_get_image_path($image_id)
+    {
+        $image = growtype_ai_get_image_details($image_id);
+
+        return growtype_ai_get_upload_dir() . '/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'];
+    }
+}
+
+/**
  * Public id
  */
 if (!function_exists('growtype_ai_get_cloudinary_public_id')) {
     function growtype_ai_get_cloudinary_public_id($image)
     {
         return $image['folder'] . '/' . $image['name'];
+    }
+}
+
+/**
+ * Public id
+ */
+if (!function_exists('growtype_ai_get_images_saving_location')) {
+    function growtype_ai_get_images_saving_location()
+    {
+        return get_option('growtype_ai_images_saving_location', 'locally');
     }
 }

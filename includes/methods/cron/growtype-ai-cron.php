@@ -5,7 +5,7 @@ class Growtype_Ai_Cron
     const GROWTYPE_AI_JOBS_CRON = 'growtype_ai_jobs';
     const GROWTYPE_AI_BUNDLE_JOBS_CRON = 'growtype_ai_bundle_jobs';
 
-    const  RETRIEVE_JOBS_LIMIT = 5;
+    const  RETRIEVE_JOBS_LIMIT = 2;
     const  JOBS_ATTEMPTS_LIMIT = 4;
 
     public function __construct()
@@ -20,6 +20,8 @@ class Growtype_Ai_Cron
             $this,
             'cron_activation'
         ));
+
+//        $this->process_jobs();
     }
 
     function cron_custom_intervals()
@@ -75,13 +77,23 @@ class Growtype_Ai_Cron
 
     function process_jobs()
     {
-        $jobs = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODEL_JOBS_TABLE);
+        $jobs = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_JOBS_TABLE);
 
         foreach ($jobs as $job) {
             $job_date = $job['available_at'];
             $job_payload = json_decode($job['payload'], true);
 
             if ($job_date > wp_date('Y-m-d H:i:s')) {
+                continue;
+            }
+
+            /**
+             * Check if new job is available
+             */
+            if (!$this->new_generate_job_is_available($job['queue'])) {
+
+                error_log("Job - not available - " . $job['id'], 0);
+
                 continue;
             }
 
@@ -99,313 +111,47 @@ class Growtype_Ai_Cron
                 continue;
             }
 
-            switch ($job['queue']) {
-                case 'generate-model':
-                    if (!$this->new_generate_job_is_available()) {
-                        break;
-                    }
+            Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                'reserved' => 1,
+                'attempts' => (int)$job['attempts'] + 1,
+            ], $job['id']);
 
-                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                        'reserved' => 1,
-                        'attempts' => (int)$job['attempts'] + 1,
-                    ], $job['id']);
+            if (file_exists(GROWTYPE_AI_PATH . 'includes/methods/cron/jobs/' . $job['queue'] . '.php')) {
 
-                    try {
-                        $crud = new Leonardo_Ai_Crud();
-                        $crud->generate_model($job_payload['model_id']);
+                error_log('job started - ' . $job['id'], 0);
 
-                        /**
-                         * Delete job
-                         */
-                        Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
-                    } catch (Exception $e) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                            'reserved' => 0,
-                            'exception' => $e->getMessage(),
-                        ], $job['id']);
-                    }
-
-                    break;
-                case 'retrieve-model':
-
-                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                        'reserved' => 1,
-                        'attempts' => (int)$job['attempts'] + 1,
-                    ], $job['id']);
-
-                    try {
-                        $crud = new Leonardo_Ai_Crud();
-
-                        $crud->retrieve_single_generation($job_payload['model_id'], $job_payload['user_nr'], $job_payload['generation_id']);
-
-                        /**
-                         * Delete job
-                         */
-                        Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
-                    } catch (Exception $e) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                            'reserved' => 0,
-                            'exception' => $e->getMessage(),
-                        ], $job['id']);
-                    }
-
-                    sleep(5);
-
-                    break;
-                case 'retrieve-upscale-image':
-
-                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                        'reserved' => 1,
-                        'attempts' => (int)$job['attempts'] + 1,
-                    ], $job['id']);
-
-                    /**
-                     * Try to retrieve the image
-                     */
-                    $get_url = $job_payload['upscaled_image']['urls']['get'];
-
-                    $replicate = new Replicate();
-
-                    $retrieve = $replicate->real_esrgan_retrieve($get_url);
-
-                    $output = $retrieve['output'];
-
-                    error_log(print_r([
-                        'action' => 'retrieved',
-                        'url' => $output
-                    ], true));
-
-                    if (!empty($output)) {
-                        try {
-                            /**
-                             * Compress image
-                             */
-                            $resmush = new Resmush();
-
-                            $img_url = $resmush->compress($output);
-
-                            if (empty($img_url)) {
-                                Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                                    'exception' => 'Image not compressed',
-                                    'reserved' => 0
-                                ], $job['id']);
-
-                                break;
-                            }
-
-                            error_log(print_r([
-                                'action' => 'compressed',
-                                'url' => $img_url,
-                                'public_id' => $job_payload['original_image']['public_id'],
-                            ], true));
-
-                            $cloudinary = new Cloudinary_Crud();
-
-                            $public_id = $job_payload['original_image']['public_id'];
-
-                            $cloudinary->upload_asset($img_url, [
-                                'public_id' => $public_id
-                            ]);
-
-                            $cloudinary->add_context($public_id, [
-                                'real_esrgan' => 'true',
-                                'compressed' => 'true'
-                            ]);
-
-                            $image_id = $job_payload['original_image']['id'];
-
-                            $image = growtype_ai_get_image_details($image_id);
-
-                            if (!isset($image['settings']['real_esrgan'])) {
-                                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                                    'image_id' => $image_id,
-                                    'meta_key' => 'real_esrgan',
-                                    'meta_value' => 'true',
-                                ]);
-                            }
-
-                            if (!isset($image['settings']['compressed'])) {
-                                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                                    'image_id' => $image_id,
-                                    'meta_key' => 'compressed',
-                                    'meta_value' => 'true',
-                                ]);
-                            }
-
-                            Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
-                        } catch (Exception $e) {
-                            Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                                'exception' => $e->getMessage(),
-                                'reserved' => 0
-                            ], $job['id']);
-                        }
-                    } else {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                            'exception' => 'Not generated yet',
-                            'reserved' => 0
-                        ], $job['id']);
-                    }
-
-                    sleep(5);
-
-                    break;
-                case 'generate-model-content':
-
-                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                        'reserved' => 1,
-                        'attempts' => (int)$job['attempts'] + 1,
-                    ], $job['id']);
-
-                    $existing_content = growtype_ai_get_model_single_setting($job_payload['model_id'], $job_payload['meta_key']);
-
-                    $openai_crud = new Openai_Crud();
-                    $new_content = $openai_crud->generate_content($job_payload['prompt'], $job_payload['meta_key']);
-
-                    if (empty($new_content)) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                            'exception' => 'empty content',
-                            'reserved' => 0
-                        ], $job['id']);
-
-                        break;
-                    }
-
-                    if ($job_payload['encode']) {
-                        $new_content = json_decode($new_content, true);
-                        $new_content = json_encode($new_content);
-                    } else {
-                        $new_content = str_replace('"', "", $new_content);
-                    }
-
-                    if (empty($new_content)) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                            'exception' => 'empty content',
-                            'reserved' => 0
-                        ], $job['id']);
-
-                        break;
-                    }
-
-                    /**
-                     * tags
-                     */
-                    if (!empty($existing_content)) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
-                            'model_id' => $job_payload['model_id'],
-                            'meta_key' => $job_payload['meta_key'],
-                            'meta_value' => $new_content,
-                        ], $existing_content['id']);
-                    } else {
-                        Growtype_Ai_Database::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
-                            'model_id' => $job_payload['model_id'],
-                            'meta_key' => $job_payload['meta_key'],
-                            'meta_value' => $new_content,
-                        ]);
-                    }
-
-                    Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
-
-                    break;
-                case 'generate-image-content':
-
-                    Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                        'reserved' => 1,
-                        'attempts' => (int)$job['attempts'] + 1,
-                    ], $job['id']);
-
-                    $model = growtype_ai_get_image_model_details($job_payload['image_id']);
-
-                    if (empty($model)) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                            'exception' => 'Empty model for image',
-                            'reserved' => 0
-                        ], $job['id']);
-
-                        break;
-                    }
-
-                    try {
-                        $tags = !empty($model) && isset($model['settings']['tags']) && !empty($model['settings']['tags']) ? json_decode($model['settings']['tags'], true) : [];
-                        $title = !empty($model) ? $model['settings']['title'] : null;
-                        $description = !empty($model) ? $model['settings']['description'] : null;
-
-                        if (!isset($image['settings']['caption']) && empty($image['settings']['caption'])) {
-                            $openai_crud = new Openai_Crud();
-                            $alt_title = $openai_crud->generate_content($title, 'alt-title');
-
-                            if (!empty($alt_title)) {
-                                $alt_title = str_replace('"', "", $alt_title);
-                                $alt_title = str_replace("'", "", $alt_title);
-
-                                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                                    'image_id' => $job_payload['image_id'],
-                                    'meta_key' => 'caption',
-                                    'meta_value' => $alt_title,
-                                ]);
-                            }
-                        }
-
-                        if (!isset($image['settings']['alt_text']) && empty($image['settings']['alt_text'])) {
-                            $openai_crud = new Openai_Crud();
-                            $alt_description = $openai_crud->generate_content($description, 'alt-description');
-
-                            if (!empty($alt_description)) {
-                                $alt_description = str_replace('"', "", $alt_description);
-
-                                Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                                    'image_id' => $job_payload['image_id'],
-                                    'meta_key' => 'alt_text',
-                                    'meta_value' => $alt_description,
-                                ]);
-                            }
-                        }
-
-                        if (!isset($image['settings']['tags']) && empty($image['settings']['tags'])) {
-                            Growtype_Ai_Database::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                                'image_id' => $job_payload['image_id'],
-                                'meta_key' => 'tags',
-                                'meta_value' => !empty($tags) ? json_encode($tags) : null,
-                            ]);
-                        }
-
-                        $cloudinary_crud = new Cloudinary_Crud();
-                        $cloudinary_crud->update_cloudinary_image_details($job_payload['image_id']);
-
-                        Growtype_Ai_Database::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
-                    } catch (Exception $e) {
-                        Growtype_Ai_Database::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                            'exception' => $e->getMessage(),
-                            'reserved' => 0
-                        ], $job['id']);
-                    }
-
-                    break;
+                include 'jobs/' . $job['queue'] . '.php';
+            } else {
+                Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                    'exception' => 'job does not exist',
+                    'reserved' => 0
+                ], $job['id']);
             }
         }
     }
 
-    function new_generate_job_is_available()
+    function new_generate_job_is_available($queue)
     {
-        $retrieve_jobs = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+        $retrieve_jobs = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
             [
                 'key' => 'queue',
-                'values' => ['retrieve-model'],
+                'values' => [$queue],
             ]
         ]);
 
-        $expired_jobs = [];
-        foreach ($retrieve_jobs as $retrieve_job) {
-            if ((int)$retrieve_job['attempts'] === self::JOBS_ATTEMPTS_LIMIT) {
-                array_push($expired_jobs, $retrieve_job['id']);
+        $reserved_jobs = [];
+        foreach ($retrieve_jobs as $job) {
+            if ($job['reserved']) {
+                array_push($reserved_jobs, $job['id']);
             }
         }
 
-        $existing_retrieve_jobs_amount = count($retrieve_jobs) - count($expired_jobs);
+        $active_jobs = count($reserved_jobs);
 
         /**
          * Do not generate more than 5 retrieve jobs at the same time
          */
-        if ($existing_retrieve_jobs_amount >= self::RETRIEVE_JOBS_LIMIT) {
+        if ($active_jobs >= self::RETRIEVE_JOBS_LIMIT) {
             return false;
         }
 
@@ -414,7 +160,7 @@ class Growtype_Ai_Cron
 
     function generate_random_jobs()
     {
-        $models = Growtype_Ai_Database::get_records(Growtype_Ai_Database::MODELS_TABLE);
+        $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
         $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
 
         if (empty($bundle_ids)) {
