@@ -148,7 +148,6 @@ class Growtype_Ai_Admin_Result_List_Table_Record
      */
     public function process_generate_image_action()
     {
-//        d($_GET);
         if (isset($_GET['action']) && ($_GET['action'] === 'generate-images' || $_GET['action'] === 'index-generate-images')) {
             $model_id = isset($_GET['model']) ? $_GET['model'] : null;
 
@@ -399,7 +398,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
     public function redirect_single()
     {
-        $redirect_url = get_admin_url() . 'admin.php?' . sprintf('?page=%s&action=%s&item=%s', $_REQUEST['page'], 'edit', $_GET['model']);
+        $redirect_url = get_admin_url() . 'admin.php?' . sprintf('?page=%s&action=%s&model=%s', $_REQUEST['page'], 'edit', $_GET['model']);
 
         $redirect = add_query_arg(
             'message',
@@ -571,7 +570,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                         <a href="<?php echo $img_url ?>" target="_blank">
                             <img src="<?php echo $img_url ?>" alt="" style="max-width: 100%;">
                         </a>
-                        <?php echo sprintf('<a href="?page=%s&action=%s&image=%s&model=%s" class="button button-primary" style="margin-right: 15px;">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete-image', $image['id'], $_GET['item']) ?>
+                        <?php echo sprintf('<a href="?page=%s&action=%s&image=%s&model=%s" class="button button-primary" style="margin-right: 15px;">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete-image', $image['id'], $_GET['model']) ?>
                         <div style="padding: 5px;">
                             <p><b>Caption</b>: <?php echo $caption ?></p>
                             <p><b>Alt text</b>: <?php echo $alt_text ?></p>

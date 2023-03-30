@@ -433,6 +433,10 @@ class Leonardo_Ai_Crud
             if (!empty($existing_model_id)) {
                 $model = growtype_ai_get_model_details($existing_model_id);
                 $reference_id = $model['reference_id'];
+
+                if (empty($reference_id)) {
+                    $reference_id = growtype_ai_generate_reference_id();
+                }
             }
 
             foreach ($generations_group as $generation) {
@@ -493,8 +497,8 @@ class Leonardo_Ai_Crud
                 }
 
                 foreach ($generation['generated_images'] as $image) {
-                    $image['imageWidth'] = $generation['imageWidth'];
-                    $image['imageHeight'] = $generation['imageHeight'];
+                    $image['imageWidth'] = isset($generation['imageWidth']) ? $generation['imageWidth'] : null;
+                    $image['imageHeight'] = isset($generation['imageHeight']) ? $generation['imageHeight'] : null;
                     $image['folder'] = $image_folder;
                     $image['location'] = $image_location;
 

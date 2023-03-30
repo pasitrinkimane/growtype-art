@@ -66,7 +66,7 @@ class Growtype_Ai_Admin_Models
         $message = $this->get_message();
 
         $action = isset($_GET['action']) ? $_GET['action'] : '';
-        $id = isset($_GET['item']) ? $_GET['item'] : '';
+        $id = isset($_GET['model']) ? $_GET['model'] : '';
 
         $title = $action === 'edit' ? (__('Edit records id', 'growtype-ai') . ': ' . $id) : __('Models', 'growtype-ai') . ' ' . sprintf('<a href="?page=%s&action=%s" class="page-title-action">' . __('Add new', 'growtype-ai') . '</a>', $_REQUEST['page'], 'create-model');
 
@@ -138,7 +138,9 @@ class Growtype_Ai_Admin_Models
          */
         $this->item_obj->process_update_action();
         $this->item_obj->process_sync_model_images_action();
+
         $this->item_obj->process_generate_image_action();
+
         $this->item_obj->process_generate_content_action();
         $this->item_obj->process_optimize_images_action();
         $this->item_obj->process_delete_image();
