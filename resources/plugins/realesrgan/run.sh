@@ -1,1 +1,1 @@
-/Users/vydi/www/packages/plugins/growtype-ai/resources/plugins/realesrgan/realesrgan-ncnn-vulkan -i $1 -o $2 -s $3
+./realesrgan-ncnn-vulkan -i $1 -o $2 -n realesrgan-x4plus -s 2

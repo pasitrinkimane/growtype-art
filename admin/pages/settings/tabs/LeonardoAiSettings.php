@@ -62,51 +62,67 @@ class LeonardoAiSettings
         return [
             [
                 [
-                    'key' => 'growtype_ai_leonardo_access_key',
-                    'label' => 'Leonardo AI - Session Cookie',
-                    'type' => 'textarea'
-                ],
-                [
-                    'key' => 'growtype_ai_leonardo_access_token',
-                    'label' => 'Leonardo AI - User Token',
-                    'type' => 'textarea'
-                ],
-                [
                     'key' => 'growtype_ai_leonardo_user_id',
-                    'label' => 'Leonardo AI - User ID'
-                ]
+                    'label' => 'Leonardo AI - User ID (newcool)'
+                ],
+                [
+                    'key' => 'growtype_ai_leonardo_cookie',
+                    'label' => 'Leonardo AI - Access Token',
+                    'type' => 'textarea'
+                ],
+//                [
+//                    'key' => 'growtype_ai_leonardo_id_token',
+//                    'label' => 'Leonardo AI - Id Token',
+//                    'type' => 'textarea'
+//                ]
             ],
             [
-                [
-                    'key' => 'growtype_ai_leonardo_access_key_2',
-                    'label' => 'Leonardo AI - Session Cookie 2',
-                    'type' => 'textarea'
-                ],
-                [
-                    'key' => 'growtype_ai_leonardo_access_token_2',
-                    'label' => 'Leonardo AI - User Token 2',
-                    'type' => 'textarea'
-                ],
                 [
                     'key' => 'growtype_ai_leonardo_user_id_2',
-                    'label' => 'Leonardo AI - User ID 2'
-                ]
+                    'label' => 'Leonardo AI - User ID 2 (hell)'
+                ],
+                [
+                    'key' => 'growtype_ai_leonardo_cookie_2',
+                    'label' => 'Leonardo AI - Access Token 2',
+                    'type' => 'textarea'
+                ],
+//                [
+//                    'key' => 'growtype_ai_leonardo_id_token_2',
+//                    'label' => 'Leonardo AI - Id Token 2',
+//                    'type' => 'textarea'
+//                ]
             ],
             [
                 [
-                    'key' => 'growtype_ai_leonardo_access_key_3',
-                    'label' => 'Leonardo AI - Session Cookie 3',
-                    'type' => 'textarea'
-                ],
-                [
-                    'key' => 'growtype_ai_leonardo_access_token_3',
-                    'label' => 'Leonardo AI - User Token 3',
-                    'type' => 'textarea'
-                ],
-                [
                     'key' => 'growtype_ai_leonardo_user_id_3',
-                    'label' => 'Leonardo AI - User ID 3'
-                ]
+                    'label' => 'Leonardo AI - User ID 3 (dev)'
+                ],
+                [
+                    'key' => 'growtype_ai_leonardo_cookie_3',
+                    'label' => 'Leonardo AI - Access Token 3',
+                    'type' => 'textarea'
+                ],
+//                [
+//                    'key' => 'growtype_ai_leonardo_id_token_3',
+//                    'label' => 'Leonardo AI - Id Token 3',
+//                    'type' => 'textarea'
+//                ]
+            ],
+            [
+                [
+                    'key' => 'growtype_ai_leonardo_user_id_4',
+                    'label' => 'Leonardo AI - User ID 4 (newcooldev@gmail.com)'
+                ],
+                [
+                    'key' => 'growtype_ai_leonardo_cookie_4',
+                    'label' => 'Leonardo AI - Access Token 4',
+                    'type' => 'textarea'
+                ],
+//                [
+//                    'key' => 'growtype_ai_leonardo_id_token_3',
+//                    'label' => 'Leonardo AI - Id Token 3',
+//                    'type' => 'textarea'
+//                ]
             ]
         ];
     }

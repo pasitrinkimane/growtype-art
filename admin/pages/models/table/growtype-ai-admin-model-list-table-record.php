@@ -291,11 +291,18 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     public function process_delete_image()
     {
         if (isset($_GET['action']) && $_GET['action'] === 'delete-image') {
-            $image_path = growtype_ai_get_image_path($_GET['image']);
 
-            unlink($image_path);
+            $image_id = isset($_GET['image']) ? $_GET['image'] : null;
 
-            Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::IMAGES_TABLE, [$_GET['image']]);
+            if (!empty($image_id)) {
+                $image_path = growtype_ai_get_image_path($image_id);
+
+                if (file_exists($image_path)) {
+                    unlink($image_path);
+                }
+
+                Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::IMAGES_TABLE, [$image_id]);
+            }
 
             $this->redirect_single();
         }
@@ -561,16 +568,33 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 $caption = isset($image['settings']['caption']) ? $image['settings']['caption'] : null;
                 $alt_text = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : null;
                 $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;
+                $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;
                 $tags = !empty($tags) ? implode(', ', $tags) : null;
 
-                $img_url = growtype_ai_get_image_url($image);
+                $compressed = isset($image['settings']['compressed']) ? true : false;
+                $real_esrgan = isset($image['settings']['real_esrgan']) ? true : false;
+
+                $img_url = growtype_ai_get_image_url($image['id']);
 
                 if (!empty($img_url)) { ?>
-                    <div style="max-width: 200px;">
-                        <a href="<?php echo $img_url ?>" target="_blank">
-                            <img src="<?php echo $img_url ?>" alt="" style="max-width: 100%;">
+                    <div style="max-width: 20%;">
+                        <a href="<?php echo $img_url ?>?v=<?php echo time() ?>" target="_blank">
+                            <img src="<?php echo $img_url ?>?v=<?php echo time() ?>" alt="" style="max-width: 100%;">
                         </a>
-                        <?php echo sprintf('<a href="?page=%s&action=%s&image=%s&model=%s" class="button button-primary" style="margin-right: 15px;">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete-image', $image['id'], $_GET['model']) ?>
+                        <div>
+                            <?php echo sprintf('<a href="?page=%s&action=%s&image=%s&model=%s" class="button button-primary" style="margin-right: 15px;">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete-image', $image['id'], $_GET['model']) ?>
+                        </div>
+                        <?php
+                        if ($real_esrgan) {
+                            echo '<span style="color: green;display:inline-block;padding-top: 20px;">Upscaled</span>';
+                        }
+                        ?>
+
+                        <?php
+                        if ($compressed) {
+                            echo '<span style="color: green;display:inline-block;padding-top: 20px;">Compressed</span>';
+                        }
+                        ?>
                         <div style="padding: 5px;">
                             <p><b>Caption</b>: <?php echo $caption ?></p>
                             <p><b>Alt text</b>: <?php echo $alt_text ?></p>

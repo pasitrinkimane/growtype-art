@@ -80,24 +80,26 @@ if (!function_exists('growtype_ai_save_file')) {
 
                 $save_file_loc = $growtype_ai_upload_dir . '/' . $file['name'] . '.' . $file['extension'];
 
-                // Initialize the cURL session
-                $ch = curl_init($url);
+                if (file_exists($growtype_ai_upload_dir)) {
+                    // Initialize the cURL session
+                    $ch = curl_init($url);
 
-                // Open file
-                $fp = fopen($save_file_loc, 'wb');
+                    // Open file
+                    $fp = fopen($save_file_loc, 'wb');
 
-                // It set an option for a cURL transfer
-                curl_setopt($ch, CURLOPT_FILE, $fp);
-                curl_setopt($ch, CURLOPT_HEADER, 0);
+                    // It set an option for a cURL transfer
+                    curl_setopt($ch, CURLOPT_FILE, $fp);
+                    curl_setopt($ch, CURLOPT_HEADER, 0);
 
-                // Perform a cURL session
-                curl_exec($ch);
+                    // Perform a cURL session
+                    curl_exec($ch);
 
-                // Closes a cURL session and frees all resources
-                curl_close($ch);
+                    // Closes a cURL session and frees all resources
+                    curl_close($ch);
 
-                // Close file
-                fclose($fp);
+                    // Close file
+                    fclose($fp);
+                }
 
                 break;
             case 'cloudinary':
@@ -338,8 +340,10 @@ if (!function_exists('growtype_ai_get_upload_dir_public')) {
  * Image
  */
 if (!function_exists('growtype_ai_get_image_url')) {
-    function growtype_ai_get_image_url($image)
+    function growtype_ai_get_image_url($image_id)
     {
+        $image = growtype_ai_get_image_details($image_id);
+
         $location = isset($image['location']) && !empty($image['location']) ? $image['location'] : 'locally';
 
         $img_url = '';

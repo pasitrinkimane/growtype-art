@@ -5,7 +5,7 @@ class Growtype_Ai_Cron
     const GROWTYPE_AI_JOBS_CRON = 'growtype_ai_jobs';
     const GROWTYPE_AI_BUNDLE_JOBS_CRON = 'growtype_ai_bundle_jobs';
 
-    const  RETRIEVE_JOBS_LIMIT = 2;
+    const  RETRIEVE_JOBS_LIMIT = 1;
     const  JOBS_ATTEMPTS_LIMIT = 4;
 
     public function __construct()

@@ -176,4 +176,37 @@ class Growtype_Ai_Database_Optimize
 
         return $existing_images_amount;
     }
+
+    public static function optimize_all_images($generator = 'leonardoai')
+    {
+        error_log('Optimizing local images...');
+
+        /**
+         * Uploaded existing images in folders
+         */
+        $upload_dir = growtype_ai_get_upload_dir() . '/' . $generator;
+        $folders = glob($upload_dir . '/*', GLOB_ONLYDIR);
+
+        $folders = array_slice($folders, 0, 150);
+
+        foreach ($folders as $folder) {
+
+            $folder_images = glob($folder . '/*');
+
+            if (empty($folder_images)) {
+                continue;
+            }
+
+            $delay = 5;
+            foreach ($folder_images as $folder_image) {
+                $size = getimagesize($folder_image);
+
+                if ($size[0] < 1280) {
+                    growtype_ai_init_job('upscale-image-local', json_encode([
+                        'path' => $folder_image,
+                    ]), $delay += 3);
+                }
+            }
+        }
+    }
 }

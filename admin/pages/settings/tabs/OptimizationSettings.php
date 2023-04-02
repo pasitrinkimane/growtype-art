@@ -107,6 +107,25 @@ class OptimizationSettings
                 'name' => 'growtype_ai_optimization_sync_models'
             ]
         );
+
+        /**
+         *
+         */
+        register_setting(
+            'growtype_ai_settings_optimization',
+            'growtype_ai_optimization_optimize_all_images'
+        );
+
+        add_settings_field(
+            'growtype_ai_optimization_optimize_all_images',
+            'Optimize images (upscale and compress images)',
+            array ($this, 'growtype_ai_optimization_input'),
+            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
+            'growtype_ai_optimization_settings',
+            [
+                'name' => 'growtype_ai_optimization_optimize_all_images'
+            ]
+        );
     }
 
     /**

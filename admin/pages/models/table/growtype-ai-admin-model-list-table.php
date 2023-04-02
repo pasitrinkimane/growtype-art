@@ -272,7 +272,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
         ?>
         <div style="display: flex;flex-wrap: wrap;">
             <?php foreach ($model_images as $image) {
-                $image_url = growtype_ai_get_image_url($image);
+                $image_url = growtype_ai_get_image_url($image['id']);
                 ?>
                 <div style="max-width: 50px;">
                     <img src="<?php echo $image_url ?>" alt="" style="max-width: 100%;">

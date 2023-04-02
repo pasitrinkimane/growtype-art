@@ -180,6 +180,10 @@ class Growtype_Ai_Admin_Settings
                     Growtype_Ai_Database_Optimize::sync_models();
                 }
 
+                if (isset($_POST['growtype_ai_optimization_optimize_all_images'])) {
+                    Growtype_Ai_Database_Optimize::optimize_all_images();
+                }
+
                 wp_redirect(admin_url('admin.php?page=growtype-ai-settings&tab=optimization&updated=true'));
                 exit();
             }

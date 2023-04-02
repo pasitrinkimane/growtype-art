@@ -17,33 +17,33 @@ class Growtype_Ai_Api
         /**
          * Leonardo Ai
          */
-        $this->leonardo_ai_crud = new Leonardo_Ai_Crud();
+//        $this->leonardo_ai_crud = new Leonardo_Ai_Crud();
     }
 
     function register_routes()
     {
         $permission = current_user_can('manage_options');
 
-        register_rest_route('growtype-ai/v1', 'generate/(?P<service>\w+)', array (
-            'methods' => 'GET',
-            'callback' => array (
-                $this,
-                'generate_images_callback'
-            ),
-            'permission_callback' => function () use ($permission) {
-                return $permission;
-            }
-        ));
+//        register_rest_route('growtype-ai/v1', 'generate/(?P<service>\w+)', array (
+//            'methods' => 'GET',
+//            'callback' => array (
+//                $this,
+//                'generate_images_callback'
+//            ),
+//            'permission_callback' => function () use ($permission) {
+//                return $permission;
+//            }
+//        ));
 
-        register_rest_route('growtype-ai/v1', 'retrieve/(?P<service>\w+)/(?P<amount>\d+)', array (
+        register_rest_route('growtype-ai/v1', 'retrieve/(?P<service>\w+)/(?P<model>\d+)', array (
             'methods' => 'GET',
             'callback' => array (
                 $this,
                 'retrieve_images_callback'
             ),
-            'permission_callback' => function ($user) use ($permission) {
-                return $permission;
-            }
+//            'permission_callback' => function ($user) use ($permission) {
+//                return $permission;
+//            }
         ));
 
         // generate
@@ -62,17 +62,24 @@ class Growtype_Ai_Api
 
     function retrieve_images_callback($data)
     {
-        $service = isset($data['service']) ? $data['service'] : null;
-        $amount = isset($data['amount']) ? $data['amount'] : 1;
+        $model_id = isset($data['model']) ? $data['model'] : null;
 
-        $images = null;
-
-        if ($service === 'leonardoai') {
-//            $images = $this->leonardo_ai_crud->retrieve_models($amount);
+        if (empty($model_id)) {
+            return;
         }
 
+        $images = growtype_ai_get_model_images($model_id);
+
+        $return_data = [];
+        foreach ($images as $image) {
+
+            $image['url'] = growtype_ai_get_image_url($image['id']);
+
+            array_push($return_data, $image);
+        };
+
         return wp_send_json([
-            'data' => $images,
+            'data' => $return_data,
         ], 200);
     }
 }
