@@ -295,13 +295,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             $image_id = isset($_GET['image']) ? $_GET['image'] : null;
 
             if (!empty($image_id)) {
-                $image_path = growtype_ai_get_image_path($image_id);
-
-                if (file_exists($image_path)) {
-                    unlink($image_path);
-                }
-
-                Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::IMAGES_TABLE, [$image_id]);
+                Growtype_Ai_Crud::delete_image($image_id);
             }
 
             $this->redirect_single();
@@ -501,6 +495,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 'description',
                 'tags',
                 'prompt_variables',
+                'categories'
             ];
 
             $existing_keys = array_pluck($models_settings, 'meta_key');
@@ -534,6 +529,22 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                     <td>
                         <?php if (in_array($item['meta_key'], ['prompt', 'negative_prompt', 'description', 'prompt_variables'])) { ?>
                             <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $meta_value ?></textarea>
+                        <?php } elseif ($item['meta_key'] === 'categories') { ?>
+                            <ul class="category-select">
+                                <?php foreach (growtype_ai_get_images_categories() as $category => $values) { ?>
+                                    <li>
+                                        <label><input type="checkbox" class="category" data-value="<?php echo $category ?>"><?php echo $category ?></label>
+                                        <ul style="margin-left: 30px;margin-top: 10px;margin-bottom: 10px;">
+                                            <?php foreach ($values as $value) { ?>
+                                                <li><label><input type="checkbox" class="category-child" data-value="<?php echo $category ?>_<?php echo $value ?>"><?php echo $value ?></label></li>
+                                            <?php } ?>
+                                        </ul>
+                                    </li>
+                                <?php } ?>
+                            </ul>
+
+                            <input type="hidden" name="settings[categories]" value=""/>
+
                         <?php } else { ?>
                             <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $meta_value ?>"/>
                         <?php } ?>
@@ -549,9 +560,10 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             <input type="submit" name="submit" id="submit" class="button button-primary" value="Save Changes">
         </p>
 
-        <?php
-        $model_images = growtype_ai_get_model_images($id);
-        ?>
+        <br>
+        <hr>
+        <br>
+        <br>
 
         <div style="display:flex;justify-content: flex-end;">
             <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary" style="margin-right: 15px;">' . __('Generate model details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-model-content', $id) ?>
@@ -563,26 +575,33 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Pull images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'pull-model-images', $id) ?>
         </div>
 
+        <?php
+        $model_images = growtype_ai_get_model_images($id);
+        ?>
+
         <div style="display: flex;flex-wrap: wrap;margin-top: 50px;">
             <?php foreach (array_reverse($model_images) as $image) {
-                $caption = isset($image['settings']['caption']) ? $image['settings']['caption'] : null;
-                $alt_text = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : null;
-                $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;
-                $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;
-                $tags = !empty($tags) ? implode(', ', $tags) : null;
+                $prompt = isset($image['settings']['prompt']) ? $image['settings']['prompt'] : '';
+                $caption = isset($image['settings']['caption']) ? $image['settings']['caption'] : '';
+                $alt_text = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : '';
+                $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : '';
+                $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : '';
+                $tags = !empty($tags) ? implode(', ', $tags) : '';
 
                 $compressed = isset($image['settings']['compressed']) ? true : false;
                 $real_esrgan = isset($image['settings']['real_esrgan']) ? true : false;
 
                 $img_url = growtype_ai_get_image_url($image['id']);
 
+                $main_colors = isset($image['settings']['main_colors']) ? json_decode($image['settings']['main_colors'], true) : [];
+
                 if (!empty($img_url)) { ?>
-                    <div style="max-width: 20%;">
+                    <div class="image" style="max-width: 20%;">
                         <a href="<?php echo $img_url ?>?v=<?php echo time() ?>" target="_blank">
                             <img src="<?php echo $img_url ?>?v=<?php echo time() ?>" alt="" style="max-width: 100%;">
                         </a>
                         <div>
-                            <?php echo sprintf('<a href="?page=%s&action=%s&image=%s&model=%s" class="button button-primary" style="margin-right: 15px;">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete-image', $image['id'], $_GET['model']) ?>
+                            <?php echo sprintf('<a href="?page=%s&action=%s&image=%s&model=%s" class="button button-primary button-delete" style="margin-right: 15px;" data-id="' . $image['id'] . '">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete-image', $image['id'], $_GET['model']) ?>
                         </div>
                         <?php
                         if ($real_esrgan) {
@@ -596,6 +615,8 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                         }
                         ?>
                         <div style="padding: 5px;">
+                            <p><b>Main Colors</b>: <?php echo implode(',', $main_colors) ?></p>
+                            <p><b>Prompt</b>: <?php echo $prompt ?></p>
                             <p><b>Caption</b>: <?php echo $caption ?></p>
                             <p><b>Alt text</b>: <?php echo $alt_text ?></p>
                             <p><b>Tags</b>: <?php echo $tags ?></p>
@@ -605,6 +626,71 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
             <?php } ?>
         </div>
+
+        <script>
+            $ = jQuery;
+
+            $('.button-delete').click(function (e) {
+                e.preventDefault();
+
+                let image = $(this).closest('.image');
+
+                $.ajax({
+                    type: 'POST',
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    data: {
+                        action: 'remove_image',
+                        image_id: $(this).attr('data-id'),
+                    },
+                    success: function (res) {
+                        image.remove();
+                    },
+                    error: function (err) {
+                        console.error(err);
+                    }
+                })
+            })
+
+            /**
+             * Category select
+             */
+
+            window.categorySelect = '<?php echo !empty(growtype_ai_get_model_single_setting($_GET['model'], 'categories')) ? growtype_ai_get_model_single_setting($_GET['model'], 'categories')['meta_value'] : "" ?>';
+
+            window.categorySelect = window.categorySelect ? JSON.parse(window.categorySelect) : {}
+
+            Object.entries(window.categorySelect).forEach(([key, value]) => {
+                $('.category-select input[data-value="' + key + '"]').prop('checked', true)
+
+                Object.entries(value).forEach(([key, value]) => {
+                    $('.category-select input[data-value="' + key + '"]').prop('checked', true)
+                })
+            })
+
+            $('input[name="settings[categories]"]').val(JSON.stringify(window.categorySelect))
+
+            $('.category-select input[type="checkbox"]').click(function () {
+                window.categorySelect = {}
+
+                $('.category-select > li').each(function (index, element) {
+                    let parent = $(element).find('input[type="checkbox"]:checked').attr('data-value')
+
+                    if (parent) {
+                        window.categorySelect[parent] = {}
+
+                        $(element).find('li').each(function (index, element) {
+                            let child = $(element).find('input[type="checkbox"]:checked').attr('data-value')
+
+                            if (child) {
+                                window.categorySelect[parent][child] = {}
+                            }
+                        })
+                    }
+                })
+
+                $('input[name="settings[categories]"]').val(JSON.stringify(window.categorySelect))
+            });
+        </script>
 
         <?php
     }

@@ -5,8 +5,10 @@ class Growtype_Ai_Cron
     const GROWTYPE_AI_JOBS_CRON = 'growtype_ai_jobs';
     const GROWTYPE_AI_BUNDLE_JOBS_CRON = 'growtype_ai_bundle_jobs';
 
-    const  RETRIEVE_JOBS_LIMIT = 1;
-    const  JOBS_ATTEMPTS_LIMIT = 4;
+    const  RETRIEVE_JOBS_LIMIT = 2;
+    const  JOBS_ATTEMPTS_LIMIT = 3;
+
+    const TEST_CRON = false;
 
     public function __construct()
     {
@@ -21,7 +23,28 @@ class Growtype_Ai_Cron
             'cron_activation'
         ));
 
-//        $this->process_jobs();
+        $this->load_jobs();
+
+        if (self::TEST_CRON) {
+            $this->process_jobs();
+        }
+    }
+
+    /**
+     * Load the required traits for this plugin.
+     */
+    private function load_jobs()
+    {
+        /**
+         * Frontend traits
+         */
+        spl_autoload_register(function ($name) {
+            $fileName = GROWTYPE_AI_PATH . 'includes/methods/cron/jobs/' . $name . '.php';
+
+            if (file_exists($fileName)) {
+                include $fileName;
+            }
+        });
     }
 
     function cron_custom_intervals()
@@ -111,22 +134,55 @@ class Growtype_Ai_Cron
                 continue;
             }
 
-            Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                'reserved' => 1,
-                'attempts' => (int)$job['attempts'] + 1,
-            ], $job['id']);
-
-            if (file_exists(GROWTYPE_AI_PATH . 'includes/methods/cron/jobs/' . $job['queue'] . '.php')) {
-
-                error_log('job started - ' . $job['id'], 0);
-
-                include 'jobs/' . $job['queue'] . '.php';
-            } else {
+            if (!self::TEST_CRON) {
                 Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                    'exception' => 'job does not exist',
-                    'reserved' => 0
+                    'reserved' => 1,
+                    'attempts' => (int)$job['attempts'] + 1,
                 ], $job['id']);
             }
+
+            $this->init_job($job);
+        }
+    }
+
+    function init_job($job)
+    {
+        try {
+            error_log('job started - ' . $job['id'], 0);
+
+            $jobs = [
+                'extract-image-colors' => new Extract_Image_Colors_Job(),
+                'generate-image-content' => new Generate_Image_Content_Job(),
+                'optimize-database' => new Optimize_Database_Job(),
+                'retrieve-model' => new Retrieve_Model_Job(),
+                'upscale-image' => new Upscale_Image_Job(),
+                'upscale-image-local' => new Upscale_Image_Local_Job(),
+                'retrieve-upscale-image' => new Retrieve_Upscale_Image_Job(),
+                'generate-model-content' => new Generate_Model_Content_Job(),
+                'generate-model' => new Generate_Model_Job(),
+                'download-model-images' => new Download_Model_Images_Job(),
+                'download-cloudinary-folder' => new Download_Cloudinary_Folder_Job(),
+                'model-assign-categories' => new Model_Assign_Categories_Job(),
+            ];
+
+            if (!isset($jobs[$job['queue']])) {
+                throw new Exception('No job class registered');
+            }
+
+            /**
+             * Run job
+             */
+            $jobs[$job['queue']]->run(json_decode($job['payload'], true));
+
+            /**
+             * Delete job
+             */
+            Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
+        } catch (Exception $e) {
+            Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+                'exception' => $e->getMessage(),
+                'reserved' => 0
+            ], $job['id']);
         }
     }
 

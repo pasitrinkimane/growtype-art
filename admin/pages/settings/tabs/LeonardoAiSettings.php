@@ -117,12 +117,18 @@ class LeonardoAiSettings
                     'key' => 'growtype_ai_leonardo_cookie_4',
                     'label' => 'Leonardo AI - Access Token 4',
                     'type' => 'textarea'
+                ]
+            ],
+            [
+                [
+                    'key' => 'growtype_ai_leonardo_user_id_5',
+                    'label' => 'Leonardo AI - User ID 5 (vdirzauskas@gmail.com)'
                 ],
-//                [
-//                    'key' => 'growtype_ai_leonardo_id_token_3',
-//                    'label' => 'Leonardo AI - Id Token 3',
-//                    'type' => 'textarea'
-//                ]
+                [
+                    'key' => 'growtype_ai_leonardo_cookie_5',
+                    'label' => 'Leonardo AI - Access Token 5',
+                    'type' => 'textarea'
+                ]
             ]
         ];
     }

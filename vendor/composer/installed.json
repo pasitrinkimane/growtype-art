@@ -470,6 +470,70 @@
             "install-path": "../guzzlehttp/psr7"
         },
         {
+            "name": "league/color-extractor",
+            "version": "0.4.0",
+            "version_normalized": "0.4.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/thephpleague/color-extractor.git",
+                "reference": "21fcac6249c5ef7d00eb83e128743ee6678fe505"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/thephpleague/color-extractor/zipball/21fcac6249c5ef7d00eb83e128743ee6678fe505",
+                "reference": "21fcac6249c5ef7d00eb83e128743ee6678fe505",
+                "shasum": ""
+            },
+            "require": {
+                "ext-gd": "*",
+                "php": "^7.3 || ^8.0"
+            },
+            "replace": {
+                "matthecat/colorextractor": "*"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "~2",
+                "phpunit/phpunit": "^9.5"
+            },
+            "suggest": {
+                "ext-curl": "To download images from remote URLs if allow_url_fopen is disabled for security reasons"
+            },
+            "time": "2022-09-24T15:57:16+00:00",
+            "type": "library",
+            "installation-source": "dist",
+            "autoload": {
+                "psr-4": {
+                    "League\\ColorExtractor\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Mathieu Lechat",
+                    "email": "math.lechat@gmail.com",
+                    "homepage": "http://matthecat.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Extract colors from an image as a human would do.",
+            "homepage": "https://github.com/thephpleague/color-extractor",
+            "keywords": [
+                "color",
+                "extract",
+                "human",
+                "image",
+                "palette"
+            ],
+            "support": {
+                "issues": "https://github.com/thephpleague/color-extractor/issues",
+                "source": "https://github.com/thephpleague/color-extractor/tree/0.4.0"
+            },
+            "install-path": "../league/color-extractor"
+        },
+        {
             "name": "monolog/monolog",
             "version": "2.9.1",
             "version_normalized": "2.9.1.0",

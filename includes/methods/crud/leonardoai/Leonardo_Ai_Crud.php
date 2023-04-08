@@ -30,6 +30,11 @@ class Leonardo_Ai_Crud
                 'cookie' => get_option('growtype_ai_leonardo_cookie_4'),
                 'user_id' => get_option('growtype_ai_leonardo_user_id_4'),
                 'id_token' => get_option('growtype_ai_leonardo_id_token_4')
+            ],
+            '5' => [
+                'cookie' => get_option('growtype_ai_leonardo_cookie_5'),
+                'user_id' => get_option('growtype_ai_leonardo_user_id_5'),
+                'id_token' => get_option('growtype_ai_leonardo_id_token_5')
             ]
         ];
     }
@@ -52,6 +57,7 @@ class Leonardo_Ai_Crud
             'amount' => 1,
             'model_id' => $model_id,
             'generation_id' => $generation_details['generation_id'],
+            'image_prompt' => $generation_details['image_prompt'],
         ]), 30);
     }
 
@@ -62,7 +68,8 @@ class Leonardo_Ai_Crud
         $generation_id = null;
         foreach ($credentials as $user_nr => $credential) {
             $token = $this->retrieve_access_token($user_nr);
-            $generation_id = $this->init_image_generating($token, $model_id);
+            $image_generating = $this->init_image_generating($token, $model_id);
+            $generation_id = $image_generating['generation_id'];
 
             if (!empty($generation_id)) {
                 break;
@@ -76,6 +83,7 @@ class Leonardo_Ai_Crud
 
         return [
             'generation_id' => $generation_id,
+            'image_prompt' => isset($image_generating['image_prompt']) ? $image_generating['image_prompt'] : null,
             'user_nr' => $user_nr
         ];
     }
@@ -300,7 +308,10 @@ class Leonardo_Ai_Crud
 
         $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        return isset($responceData['data']['sdGenerationJob']['generationId']) ? $responceData['data']['sdGenerationJob']['generationId'] : null;
+        return [
+            'generation_id' => isset($responceData['data']['sdGenerationJob']['generationId']) ? $responceData['data']['sdGenerationJob']['generationId'] : null,
+            'image_prompt' => $image_prompt,
+        ];
     }
 
     function get_user_details($token, $userSub)
@@ -497,6 +508,7 @@ class Leonardo_Ai_Crud
                     $image['imageHeight'] = isset($generation['imageHeight']) ? $generation['imageHeight'] : null;
                     $image['folder'] = $image_folder;
                     $image['location'] = $image_location;
+                    $image['prompt'] = $generation['prompt'];
 
                     $saved_image = Growtype_Ai_Crud::save_image($image);
 

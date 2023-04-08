@@ -17,6 +17,17 @@ class Growtype_Ai_Crud
         require_once GROWTYPE_AI_PATH . 'includes/methods/crud/resmush/Resmush.php';
     }
 
+    public static function delete_image($image_id)
+    {
+        $image_path = growtype_ai_get_image_path($image_id);
+
+        if (file_exists($image_path)) {
+            unlink($image_path);
+        }
+
+        Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::IMAGES_TABLE, [$image_id]);
+    }
+
     public static function save_image($image)
     {
         /**
@@ -71,6 +82,17 @@ class Growtype_Ai_Crud
             'meta_key' => 'generated_image_id',
             'meta_value' => $image['id']
         ]);
+
+        /**
+         * Save prompt
+         */
+        if (isset($image['prompt'])) {
+            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                'image_id' => $image_id,
+                'meta_key' => 'prompt',
+                'meta_value' => $image['prompt']
+            ]);
+        }
 
         /**
          * Backup images to local drive if they are stored in cloudinary

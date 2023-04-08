@@ -3,7 +3,7 @@
         'name' => 'newcool/growtype-ai',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'df9594580445222183b221b8b80e1e14808386f9',
+        'reference' => 'b9db17c057fd2484aa7af9cd932b0b77549a6460',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -55,6 +55,21 @@
             'aliases' => array(),
             'dev_requirement' => false,
         ),
+        'league/color-extractor' => array(
+            'pretty_version' => '0.4.0',
+            'version' => '0.4.0.0',
+            'reference' => '21fcac6249c5ef7d00eb83e128743ee6678fe505',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../league/color-extractor',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'matthecat/colorextractor' => array(
+            'dev_requirement' => false,
+            'replaced' => array(
+                0 => '*',
+            ),
+        ),
         'monolog/monolog' => array(
             'pretty_version' => '2.9.1',
             'version' => '2.9.1.0',
@@ -67,7 +82,7 @@
         'newcool/growtype-ai' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'df9594580445222183b221b8b80e1e14808386f9',
+            'reference' => 'b9db17c057fd2484aa7af9cd932b0b77549a6460',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

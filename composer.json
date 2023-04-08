@@ -8,6 +8,7 @@
         "cloudinary/cloudinary_php": "^2.10",
         "rappasoft/laravel-helpers": "^2.0",
         "orhanerday/open-ai": "^4.0",
-        "tinify/tinify": "^1.6"
+        "tinify/tinify": "^1.6",
+        "league/color-extractor": "^0.4.0"
     }
 }

@@ -187,7 +187,7 @@ class Growtype_Ai_Database_Optimize
         $upload_dir = growtype_ai_get_upload_dir() . '/' . $generator;
         $folders = glob($upload_dir . '/*', GLOB_ONLYDIR);
 
-        $folders = array_slice($folders, 0, 150);
+//        $folders = array_slice($folders, 0, 500);
 
         foreach ($folders as $folder) {
 
@@ -201,12 +201,47 @@ class Growtype_Ai_Database_Optimize
             foreach ($folder_images as $folder_image) {
                 $size = getimagesize($folder_image);
 
-                if ($size[0] < 1280) {
+                $max_width = 650;
+
+                if ($size[0] < 650) {
                     growtype_ai_init_job('upscale-image-local', json_encode([
                         'path' => $folder_image,
-                    ]), $delay += 3);
+                        'max_width' => $max_width,
+                    ]), $delay += 1);
                 }
             }
+        }
+    }
+
+    public static function get_images_colors()
+    {
+        $images = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGES_TABLE);
+        $images = array_slice($images, 5000, 10000);
+
+//        $images = growtype_ai_get_model_images(356);
+
+        foreach ($images as $image) {
+
+//            $colors = Extract_Image_Colors_Job::get_image_colors_groups(22739);
+//////
+//            d($colors);
+
+//            Extract_Image_Colors_Job::update_image_colors_groups($image['id']);
+
+            growtype_ai_init_job('extract-image-colors', json_encode([
+                'image_id' => $image['id']
+            ]), 1);
+        }
+    }
+
+    public static function model_assign_categories()
+    {
+        $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
+
+        foreach ($models as $model) {
+            growtype_ai_init_job('model-assign-categories', json_encode([
+                'model_id' => $model['id']
+            ]), 1);
         }
     }
 }

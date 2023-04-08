@@ -60,8 +60,6 @@ class Growtype_Ai_Database_Crud
 
     public static function get_pivot_records($pivot_table, $records_table, $source, $params = null)
     {
-        global $wpdb;
-
         $records = self::get_records($pivot_table, $params);
 
         if (empty($records)) {

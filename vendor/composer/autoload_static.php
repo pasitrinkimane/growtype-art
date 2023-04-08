@@ -43,6 +43,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         array (
             'Monolog\\' => 8,
         ),
+        'L' => 
+        array (
+            'League\\ColorExtractor\\' => 22,
+        ),
         'G' => 
         array (
             'GuzzleHttp\\Psr7\\' => 16,
@@ -84,6 +88,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Monolog\\' => 
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
+        ),
+        'League\\ColorExtractor\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/league/color-extractor/src',
         ),
         'GuzzleHttp\\Psr7\\' => 
         array (

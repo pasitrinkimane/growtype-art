@@ -229,9 +229,9 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
 
         $actions = array (
             'edit' => sprintf('<a href="?page=%s&action=%s&model=%s">' . __('Edit', 'growtype-ai') . '</a>', $_REQUEST['page'], 'edit', $item['id']),
-            'generate' => sprintf('<a href="?page=%s&action=%s&model=%s">' . __('Generate image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'index-generate-images', $item['id']),
+            'generate' => sprintf('<a href="?page=%s&action=%s&model=%s&paged=%s">' . __('Generate image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'index-generate-images', $item['id'], $paged),
             'download-images' => sprintf('<a href="?page=%s&action=%s&model=%s&paged=%s">' . __('Pull external images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'index-download-model-images', $item['id'], $paged),
-            'delete' => sprintf('<a href="?page=%s&action=%s&model=%s&_wpnonce=%s">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete', $item['id'], wp_create_nonce(Growtype_Ai_Admin::DELETE_NONCE)),
+            'delete' => sprintf('<a href="?page=%s&action=%s&model=%s&_wpnonce=%s&paged=%s">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete', $item['id'], wp_create_nonce(Growtype_Ai_Admin::DELETE_NONCE), $paged),
         );
 
         return sprintf('%1$s %2$s', $item['id'], $this->row_actions($actions, true));

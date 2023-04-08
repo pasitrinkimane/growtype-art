@@ -184,6 +184,14 @@ class Growtype_Ai_Admin_Settings
                     Growtype_Ai_Database_Optimize::optimize_all_images();
                 }
 
+                if (isset($_POST['growtype_ai_optimization_get_images_colors'])) {
+                    Growtype_Ai_Database_Optimize::get_images_colors();
+                }
+
+                if (isset($_POST['growtype_ai_optimization_model_assign_categories'])) {
+                    Growtype_Ai_Database_Optimize::model_assign_categories();
+                }
+
                 wp_redirect(admin_url('admin.php?page=growtype-ai-settings&tab=optimization&updated=true'));
                 exit();
             }

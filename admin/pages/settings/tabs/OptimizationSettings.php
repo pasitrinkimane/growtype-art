@@ -126,6 +126,44 @@ class OptimizationSettings
                 'name' => 'growtype_ai_optimization_optimize_all_images'
             ]
         );
+
+        /**
+         *
+         */
+        register_setting(
+            'growtype_ai_settings_optimization',
+            'growtype_ai_optimization_get_images_colors'
+        );
+
+        add_settings_field(
+            'growtype_ai_optimization_get_images_colors',
+            'Get images colors',
+            array ($this, 'growtype_ai_optimization_input'),
+            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
+            'growtype_ai_optimization_settings',
+            [
+                'name' => 'growtype_ai_optimization_get_images_colors'
+            ]
+        );
+
+        /**
+         *
+         */
+        register_setting(
+            'growtype_ai_settings_optimization',
+            'growtype_ai_optimization_model_assign_categories'
+        );
+
+        add_settings_field(
+            'growtype_ai_optimization_model_assign_categories',
+            'Assign categories',
+            array ($this, 'growtype_ai_optimization_input'),
+            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
+            'growtype_ai_optimization_settings',
+            [
+                'name' => 'growtype_ai_optimization_model_assign_categories'
+            ]
+        );
     }
 
     /**

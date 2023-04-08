@@ -308,6 +308,8 @@ if (!function_exists('growtype_ai_get_model_single_setting')) {
                 return $setting;
             }
         }
+
+        return null;
     }
 }
 
@@ -388,4 +390,261 @@ if (!function_exists('growtype_ai_get_images_saving_location')) {
     {
         return get_option('growtype_ai_images_saving_location', 'locally');
     }
+}
+
+/**
+ * Public id
+ */
+if (!function_exists('growtype_ai_get_images_categories')) {
+    function growtype_ai_get_images_categories()
+    {
+        return array (
+            "Abstract" => array (
+                "Shapes",
+                "Expressionism",
+                "Landscapes",
+                "Portraits",
+                "Liquid"
+            ),
+            "Animals" => array (
+                "Wild",
+                "Domestic",
+                "Aquatic",
+                "Dogs",
+                "Cats"
+            ),
+            "Architecture" => array (
+                "Buildings",
+                "Cityscapes",
+                "Bridges",
+                "Skylines"
+            ),
+            "Black and White" => array (
+                "Landscapes",
+                "Portraits",
+                "Cityscapes",
+                "Abstract"
+            ),
+            "Botanical" => array (
+                "Flowers",
+                "Leaves",
+                "Trees",
+                "Cacti"
+            ),
+            "Blueprints" => array (
+                "Architectural",
+                "Engineering",
+                "Mechanical",
+                "Product Design"
+            ),
+            "Cars" => array (
+                "Vintage",
+                "Sports",
+                "Luxury",
+                "Concept"
+            ),
+            "Cartoons" => array (
+                "Classic Cartoons",
+                "Modern Cartoons",
+                "Anime",
+                "Animated Movies"
+            ),
+            "Cityscapes" => array (
+                "New York City",
+                "Paris",
+                "Tokyo",
+                "Venice"
+            ),
+            "Comics" => array (
+                "Superheroes",
+                "Manga",
+                "Graphic Novels",
+                "Comic Strips"
+            ),
+            "Contemporary" => array (
+                "Abstract",
+                "Landscapes",
+                "Portraits",
+                "Cityscapes"
+            ),
+            "Fantasy" => array (
+                "Dragons",
+                "Unicorns",
+                "Mythical Creatures",
+                "Fantasy Landscapes"
+            ),
+            "Floral" => array (
+                "Patterns",
+                "Portraits",
+                "Still Life",
+                "Abstract"
+            ),
+            "Food and drinks" => [
+                "Coffee",
+                "Wine",
+                "Beer",
+                "Cocktails",
+            ],
+            "Funny" => [
+                "Puns",
+                "Sarcasm",
+                "Satire"
+            ],
+            "Fashion" => [
+                "Shoes",
+                "Accessories",
+                "Haute Couture"
+            ],
+            "Gaming" => [
+                "Retro",
+                "Fantasy",
+                "FPS"
+            ],
+            "Graphical" => [
+                "Infographics",
+                "Charts and Graphs",
+                "Data Visualizations"
+            ],
+            "Inspirational" => [
+                "Motivational Quotes",
+                "Religious",
+                "Self-Help"
+            ],
+            "Illustrations" => [
+                "People",
+                "Nature",
+                "Graphic",
+                "Food",
+                "Animals"
+            ],
+            "Anime & Manga" => [
+                "Shonen",
+                "Shojo",
+                "Mecha"
+            ],
+            "Landscapes" => [
+                "Mountains",
+                "Beaches",
+                "Deserts",
+                "Fantasy"
+            ],
+            "Maps" => [
+                "Antique Maps",
+                "City Maps",
+                "Topographical Maps"
+            ],
+            "Military" => [
+                "Warplanes",
+                "Tanks",
+                "Naval"
+            ],
+            "Minimalistic" => [
+                "Abstract",
+                "Typography",
+                "Patterns"
+            ],
+            "Movies" => [
+                "Classic Films",
+                "Blockbusters",
+                "Foreign Films"
+            ],
+            "Music" => [
+                "Rock",
+                "Jazz",
+                "Classical"
+            ],
+            "Nature" => [
+                "Flowers",
+                "Trees",
+                "Wildlife"
+            ],
+            "Paintings" => [
+                "Impressionism",
+                "Surrealism",
+                "Realism"
+            ],
+            "People" => [
+                "Celebrity",
+                "Historical Figures",
+                "Fantasy"
+            ],
+            "Art Movements" => [
+                "Renaissance",
+                "Baroque",
+                "Rococo",
+                "Neoclassicism",
+                "Romanticism",
+                "Realism",
+                "Impressionism",
+                "Post-Impressionism",
+                "Expressionism",
+                "Cubism",
+                "Futurism",
+                "Dadaism",
+                "Surrealism",
+                "Pop Art"
+            ],
+            "Photography" => [
+                "Black and White",
+                "Color",
+                "Landscape",
+                "Portraits"
+            ],
+            "Space" => [
+                "Planets",
+                "Astronomy",
+                "Spacecraft"
+            ],
+            "Sports" => [
+                "Football",
+                "Basketball",
+                "Baseball"
+            ],
+            "Tv Shows" => [
+                "Drama",
+                "Comedy",
+                "Science Fiction"
+            ],
+            "Travel" => [
+                "Cities",
+                "Landmarks",
+                "Beaches"
+            ],
+            "Vintage" => [
+                "Victorian Era",
+                "Art Deco",
+                "Mid-Century Modern"
+            ]
+        );
+    }
+}
+
+function color_code_to_group($color_code)
+{
+    list($r, $g, $b) = sscanf($color_code, "#%02x%02x%02x");
+
+//    ddd([$r, $g, $b]);
+
+    $colors = array (
+        "black" => array ("r" => array (0, 30), "g" => array (0, 40), "b" => array (0, 60)),
+        "white" => array ("r" => array (190, 255), "g" => array (190, 255), "b" => array (190, 255)),
+        "red" => array ("r" => array (150, 255), "g" => array (0, 50), "b" => array (0, 100)),
+        "gray" => array ("r" => array (128, 192), "g" => array (128, 192), "b" => array (128, 192)),
+        "purple" => array ("r" => array (150, 255), "g" => array (0, 50), "b" => array (100, 255)),
+        "green" => array ("r" => array (0, 50), "g" => array (50, 255), "b" => array (0, 50)),
+        "blue" => array ("r" => array (0, 60), "g" => array (0, 150), "b" => array (200, 255)),
+        "yellow" => array ("r" => array (200, 255), "g" => array (160, 255), "b" => array (0, 150)),
+        "orange" => array ("r" => array (240, 255), "g" => array (130, 255), "b" => array (0, 30)),
+        "brown" => array ("r" => array (60, 255), "g" => array (30, 50), "b" => array (30, 60))
+    );
+
+    foreach ($colors as $color => $ranges) {
+        if ($r >= $ranges["r"][0] && $r <= $ranges["r"][1] &&
+            $g >= $ranges["g"][0] && $g <= $ranges["g"][1] &&
+            $b >= $ranges["b"][0] && $b <= $ranges["b"][1]) {
+            return $color;
+        }
+    }
+
+    return null;
 }
