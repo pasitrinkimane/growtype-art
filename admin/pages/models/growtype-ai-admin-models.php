@@ -30,7 +30,7 @@ class Growtype_Ai_Admin_Models
             __('Models', 'growtype-ai'),
             __('Models', 'growtype-ai'),
             'manage_options',
-            'growtype-ai',
+            'growtype-ai-models',
             array ($this, 'growtype_ai_result_callback'),
             1
         );
@@ -93,18 +93,14 @@ class Growtype_Ai_Admin_Models
         <?php
     }
 
-    function get_message()
+    function get_message($message = '')
     {
-        $message = '';
-
-        if ('delete' === $this->items_obj->current_action()) {
+        if ('delete' === $this->items_obj->current_action() && isset($_REQUEST['item'])) {
             $message = '<div class="updated below-h2" id="message"><p>' . sprintf(__('ID %d was deleted.', 'growtype-ai'), $_REQUEST['item']) . '</p></div>';
         } elseif ('bulk_delete' === $this->items_obj->current_action()) {
             $message = '<div class="updated below-h2" id="message"><p>' . sprintf(__('%d items were deleted.', 'growtype-ai'), count($_POST['items'])) . '</p></div>';
-        } elseif (filter_input(INPUT_GET, 'message') === 'generate-images') {
-            $message = '<div class="updated below-h2" id="message"><p>' . sprintf(__('%d image is generating.', 'growtype-ai'), 1) . '</p></div>';
-        } elseif (filter_input(INPUT_GET, 'message') === 'retrieve-images') {
-            $message = '<div class="updated below-h2" id="message"><p>' . sprintf(__('%d images are retrieving.', 'growtype-ai'), 5) . '</p></div>';
+        } elseif (filter_input(INPUT_GET, 'message_type') === 'custom') {
+            $message = '<div class="updated below-h2" id="message"><p>' . filter_input(INPUT_GET, 'message') . '</p></div>';
         }
 
         return $message;
@@ -122,15 +118,11 @@ class Growtype_Ai_Admin_Models
         /**
          * General table
          */
-
-//        d($_GET);
-
         $this->item_obj->process_delete_action();
         $this->item_obj->process_add_new_action();
         $this->item_obj->process_bundle_action();
-
-        $this->item_obj->process_download_action();
-
+        $this->item_obj->process_download_cloudinary_action();
+        $this->item_obj->process_download_zip_action();
         $this->item_obj->process_retrieve_action();
 
         /**
@@ -138,12 +130,11 @@ class Growtype_Ai_Admin_Models
          */
         $this->item_obj->process_update_action();
         $this->item_obj->process_sync_model_images_action();
-
         $this->item_obj->process_generate_image_action();
-
         $this->item_obj->process_generate_content_action();
         $this->item_obj->process_optimize_images_action();
         $this->item_obj->process_delete_image();
+        $this->item_obj->process_update_model_images_colors();
     }
 }
 

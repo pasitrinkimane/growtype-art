@@ -4,6 +4,10 @@ class Growtype_Ai_Database_Optimize
 {
     public static function clean_duplicate_settings()
     {
+        ini_set('memory_limit', '512M');
+        ini_set('max_execution_time', '200');
+        set_time_limit(200);
+
         global $wpdb;
 
         $records = $wpdb->get_results("SELECT * FROM wp_growtype_ai_model_settings", ARRAY_A);
@@ -27,6 +31,22 @@ class Growtype_Ai_Database_Optimize
                 $wpdb->delete('wp_growtype_ai_image_settings', array ('id' => $record['id']));
             }
         }
+
+        /**
+         * Clear nonexisting images
+         */
+
+//        $records = $wpdb->get_results("SELECT * FROM wp_growtype_ai_image_settings", ARRAY_A);
+
+        //            $image = growtype_ai_get_image_details($record['image_id']);
+//            $image_model = growtype_ai_get_image_model_details($record['image_id']);
+//
+//            if (empty($image) || empty($image_model)) {
+//                Growtype_Ai_Crud::delete_image($record['image_id']);
+//                continue;
+//            }
+
+//        dd('done');
     }
 
     public static function sync_models()
@@ -215,21 +235,22 @@ class Growtype_Ai_Database_Optimize
 
     public static function get_images_colors()
     {
-        $images = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGES_TABLE);
-        $images = array_slice($images, 5000, 10000);
+        global $wpdb;
 
-//        $images = growtype_ai_get_model_images(356);
+        $table = Growtype_Ai_Database::IMAGE_SETTINGS_TABLE;
+        $table = $wpdb->prefix . $table;
+        $results_with_colors = $wpdb->get_results("SELECT image_id from {$table} WHERE meta_key = 'main_colors' AND meta_value IS NOT NULL AND image_id IS NOT NULL group by image_id", ARRAY_A);
+        $results_with_colors = implode(',', array_pluck($results_with_colors, 'image_id'));
 
+        $results = $wpdb->get_results("SELECT image_id from {$table} WHERE image_id NOT IN ({$results_with_colors}) group by image_id", ARRAY_A);
+
+        $images = array_slice($results, 0, 2000);
+
+//        $images = growtype_ai_get_model_images(2639);
         foreach ($images as $image) {
-
-//            $colors = Extract_Image_Colors_Job::get_image_colors_groups(22739);
-//////
-//            d($colors);
-
-//            Extract_Image_Colors_Job::update_image_colors_groups($image['id']);
-
             growtype_ai_init_job('extract-image-colors', json_encode([
-                'image_id' => $image['id']
+                'image_id' => isset($image['image_id']) ? $image['image_id'] : $image['id'],
+                'update_colors' => false
             ]), 1);
         }
     }
@@ -239,9 +260,16 @@ class Growtype_Ai_Database_Optimize
         $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
 
         foreach ($models as $model) {
-            growtype_ai_init_job('model-assign-categories', json_encode([
+
+            $Model_Assign_Categories_Job = new Model_Assign_Categories_Job();
+
+            $Model_Assign_Categories_Job->run([
                 'model_id' => $model['id']
-            ]), 1);
+            ]);
+
+//            growtype_ai_init_job('model-assign-categories', json_encode([
+//                'model_id' => $model['id']
+//            ]), 1);
         }
     }
 }

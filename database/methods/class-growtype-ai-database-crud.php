@@ -42,6 +42,7 @@ class Growtype_Ai_Database_Crud
                 if (!empty($values) && !empty($key)) {
                     $placeholders = implode(', ', array_fill(0, count($values), '%s'));
                     $query = "SELECT * FROM " . $table . " WHERE " . $key . " IN($placeholders)";
+
                     $query = $wpdb->prepare($query, $values);
                 } elseif (!empty($search)) {
                     $query = "SELECT * from {$table} WHERE id Like '%{$search}%' OR prompt Like '%{$search}%' OR negative_prompt Like '%{$search}%' OR reference_id Like '%{$search}%' ORDER BY {$orderby} {$order} LIMIT {$limit} OFFSET {$offset}";
@@ -104,12 +105,22 @@ class Growtype_Ai_Database_Crud
             $record_key = $record[$record_params['reference_key']];
             if (isset($update_data[$record_key])) {
                 $update_value = $update_data[$record_key];
+
+                if (is_array($update_value)) {
+                    $update_value = json_encode($update_value);
+                }
+
                 self::update_record($table, [$record_params['update_value'] => $update_value], $record['id']);
             }
         }
 
         foreach ($update_data as $key => $value) {
             if (!in_array($key, array_pluck($records, $record_params['reference_key']))) {
+
+                if (is_array($value)) {
+                    $value = json_encode($value);
+                }
+
                 self::insert_record($table, [
                     $retrieve_data[0]['key'] => $retrieve_data[0]['values'][0],
                     $record_params['reference_key'] => $key,

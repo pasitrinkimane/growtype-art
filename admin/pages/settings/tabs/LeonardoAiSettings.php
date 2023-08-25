@@ -63,50 +63,35 @@ class LeonardoAiSettings
             [
                 [
                     'key' => 'growtype_ai_leonardo_user_id',
-                    'label' => 'Leonardo AI - User ID (newcool)'
+                    'label' => 'Leonardo AI - User ID (newcoolstudio@gmail.com)'
                 ],
                 [
                     'key' => 'growtype_ai_leonardo_cookie',
                     'label' => 'Leonardo AI - Access Token',
                     'type' => 'textarea'
                 ],
-//                [
-//                    'key' => 'growtype_ai_leonardo_id_token',
-//                    'label' => 'Leonardo AI - Id Token',
-//                    'type' => 'textarea'
-//                ]
             ],
             [
                 [
                     'key' => 'growtype_ai_leonardo_user_id_2',
-                    'label' => 'Leonardo AI - User ID 2 (hell)'
+                    'label' => 'Leonardo AI - User ID 2 (hellhoundas@gmail.com)'
                 ],
                 [
                     'key' => 'growtype_ai_leonardo_cookie_2',
                     'label' => 'Leonardo AI - Access Token 2',
                     'type' => 'textarea'
                 ],
-//                [
-//                    'key' => 'growtype_ai_leonardo_id_token_2',
-//                    'label' => 'Leonardo AI - Id Token 2',
-//                    'type' => 'textarea'
-//                ]
             ],
             [
                 [
                     'key' => 'growtype_ai_leonardo_user_id_3',
-                    'label' => 'Leonardo AI - User ID 3 (dev)'
+                    'label' => 'Leonardo AI - User ID 3 (dev@nuostabu.lt)'
                 ],
                 [
                     'key' => 'growtype_ai_leonardo_cookie_3',
                     'label' => 'Leonardo AI - Access Token 3',
                     'type' => 'textarea'
                 ],
-//                [
-//                    'key' => 'growtype_ai_leonardo_id_token_3',
-//                    'label' => 'Leonardo AI - Id Token 3',
-//                    'type' => 'textarea'
-//                ]
             ],
             [
                 [
@@ -127,6 +112,17 @@ class LeonardoAiSettings
                 [
                     'key' => 'growtype_ai_leonardo_cookie_5',
                     'label' => 'Leonardo AI - Access Token 5',
+                    'type' => 'textarea'
+                ]
+            ],
+            [
+                [
+                    'key' => 'growtype_ai_leonardo_user_id_6',
+                    'label' => 'Leonardo AI - User ID 6 (test@testcool.lt - sMBupkcoqv@#123)'
+                ],
+                [
+                    'key' => 'growtype_ai_leonardo_cookie_6',
+                    'label' => 'Leonardo AI - Access Token 6',
                     'type' => 'textarea'
                 ]
             ]

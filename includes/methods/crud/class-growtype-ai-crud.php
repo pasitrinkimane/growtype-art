@@ -21,7 +21,7 @@ class Growtype_Ai_Crud
     {
         $image_path = growtype_ai_get_image_path($image_id);
 
-        if (file_exists($image_path)) {
+        if (!empty($image_path) && file_exists($image_path)) {
             unlink($image_path);
         }
 

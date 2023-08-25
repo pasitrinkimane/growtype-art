@@ -8,7 +8,7 @@ class Growtype_Ai_Admin_Settings
 
         add_action('admin_menu', array ($this, 'admin_menu_pages'));
 
-        $this->process_posted_data();
+        add_action('wp_loaded', array ($this, 'process_posted_data'));
     }
 
     /**
@@ -133,12 +133,26 @@ class Growtype_Ai_Admin_Settings
                             echo '</table>';
 
                             break;
+                        case 'evaluation':
+                            settings_fields('growtype_ai_settings_evaluation');
+
+                            echo '<h3>Evaluate</h3>';
+
+                            echo '<table class="form-table">';
+                            do_settings_fields(Growtype_Ai_Admin::SETTINGS_PAGE_NAME, 'growtype_ai_evaluation_settings');
+                            echo '</table>';
+
+                            break;
                     }
 
                     if ($tab === 'optimization') {
                         echo '<input type="hidden" name="growtype_ai_optimization" value="true" />';
 
                         submit_button('Optimize');
+                    } elseif ($tab === 'evaluation') {
+                        echo '<input type="hidden" name="growtype_ai_evaluation" value="true" />';
+
+                        submit_button('Evaluate');
                     } else {
                         submit_button();
                     }
@@ -193,6 +207,17 @@ class Growtype_Ai_Admin_Settings
                 }
 
                 wp_redirect(admin_url('admin.php?page=growtype-ai-settings&tab=optimization&updated=true'));
+                exit();
+            }
+
+            if (isset($_POST['growtype_ai_evaluation'])) {
+                if (isset($_POST['growtype_ai_evaluation_image_colors'])) {
+                    $image_id = $_POST['growtype_ai_evaluation_image_colors'];
+                    echo Extract_Image_Colors_Job::get_image_details($image_id, true);
+                    die();
+                }
+
+                wp_redirect(admin_url('admin.php?page=growtype-ai-settings&tab=evaluation&updated=true'));
                 exit();
             }
         }
@@ -260,5 +285,11 @@ class Growtype_Ai_Admin_Settings
          */
         include_once GROWTYPE_AI_PATH . 'admin/pages/settings/tabs/OptimizationSettings.php';
         new OptimizationSettings();
+
+        /**
+         * EvaluationSettings
+         */
+        include_once GROWTYPE_AI_PATH . 'admin/pages/settings/tabs/EvaluationSettings.php';
+        new EvaluationSettings();
     }
 }

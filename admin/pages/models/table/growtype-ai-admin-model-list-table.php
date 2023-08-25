@@ -78,8 +78,8 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
     public function prepare_items()
     {
         $columns = $this->get_columns();
-
-        $hidden = array ();
+        $hidden = $this->get_hidden_columns();
+        $sortable = $this->get_sortable_columns();
 
         $search_value = isset($_REQUEST['s']) ? $_REQUEST['s'] : '';
 
@@ -120,9 +120,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
 
         $this->items_count = $total_items;
 
-        $sortable = $this->get_sortable_columns();
-
-        $this->_column_headers = array ($columns, $hidden, $sortable);
+        $this->_column_headers = $this->get_column_info();
 
         $this->set_pagination_args(array (
             'total_items' => $this->items_count,
@@ -155,6 +153,11 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
         ));
     }
 
+    public function get_hidden_columns()
+    {
+        return array ();
+    }
+
     /**
      * Specific bulk actions
      *
@@ -165,6 +168,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
         $actions = array (
             'add-to-bundle' => __('Add to bundle', 'growtype-ai'),
             'remove-from-bundle' => __('Remove from bundle', 'growtype-ai'),
+            'download-zip' => __('Download zip', 'growtype-ai'),
         );
 
         if (current_user_can('delete_users')) {
@@ -274,7 +278,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
             <?php foreach ($model_images as $image) {
                 $image_url = growtype_ai_get_image_url($image['id']);
                 ?>
-                <div style="max-width: 50px;">
+                <div style="max-width: 200px;">
                     <img src="<?php echo $image_url ?>" alt="" style="max-width: 100%;">
                 </div>
             <?php } ?>

@@ -35,6 +35,11 @@ class Leonardo_Ai_Crud
                 'cookie' => get_option('growtype_ai_leonardo_cookie_5'),
                 'user_id' => get_option('growtype_ai_leonardo_user_id_5'),
                 'id_token' => get_option('growtype_ai_leonardo_id_token_5')
+            ],
+            '6' => [
+                'cookie' => get_option('growtype_ai_leonardo_cookie_6'),
+                'user_id' => get_option('growtype_ai_leonardo_user_id_6'),
+                'id_token' => get_option('growtype_ai_leonardo_id_token_6')
             ]
         ];
     }
@@ -50,7 +55,21 @@ class Leonardo_Ai_Crud
 
     public function generate_model($model_id = null)
     {
-        $generation_details = $this->get_generation_details($model_id);
+        /**
+         * Check if there are already enough retrieve jobs in the queue
+         */
+        $existing_jobs = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
+            [
+                'key' => 'queue',
+                'values' => ['retrieve-model'],
+            ]
+        ]);
+
+        if (count($existing_jobs) > 20) {
+            return;
+        }
+
+        $generation_details = $this->generate_model_image($model_id);
 
         growtype_ai_init_job('retrieve-model', json_encode([
             'user_nr' => $generation_details['user_nr'],
@@ -59,16 +78,28 @@ class Leonardo_Ai_Crud
             'generation_id' => $generation_details['generation_id'],
             'image_prompt' => $generation_details['image_prompt'],
         ]), 30);
+
+        return $generation_details;
     }
 
-    public function get_generation_details($model_id)
+    public function generate_model_image($model_id)
     {
         $credentials = $this->user_credentials();
 
         $generation_id = null;
         foreach ($credentials as $user_nr => $credential) {
             $token = $this->retrieve_access_token($user_nr);
-            $image_generating = $this->init_image_generating($token, $model_id);
+
+            if (empty($token)) {
+                throw new Exception('Empty token. User nr: ' . $user_nr);
+            }
+
+            $credentials = [
+                'token' => $token,
+                'user_nr' => $user_nr
+            ];
+
+            $image_generating = $this->init_image_generating($credentials, $model_id);
             $generation_id = $image_generating['generation_id'];
 
             if (!empty($generation_id)) {
@@ -224,7 +255,7 @@ class Leonardo_Ai_Crud
         });
     }
 
-    public function init_image_generating($token, $model_id = null)
+    public function init_image_generating($credentials, $model_id = null, $custom_args = null)
     {
         $url = 'https://api.leonardo.ai/v1/graphql';
 
@@ -241,27 +272,57 @@ class Leonardo_Ai_Crud
                 $image_prompt = str_replace('{prompt_variable}', $prompt_variables[$rendom_promp_variable_key], $image_prompt);
             }
 
+            $leonardoMagic = isset($model_details['settings']['leonardo_magic']) && !$model_details['settings']['leonardo_magic'] ? false : true;
+            $alchemy = isset($model_details['settings']['alchemy']) && $model_details['settings']['alchemy'] ? true : false;
+
+            $default_args = [
+                'prompt' => $image_prompt,
+                'negative_prompt' => $model_details['negative_prompt'],
+                'nsfw' => true,
+                'num_images' => 1,
+                'width' => (int)$model_details['settings']['image_width'],
+                'height' => (int)$model_details['settings']['image_height'],
+                'num_inference_steps' => floatval($model_details['settings']['num_inference_steps']),
+                'guidance_scale' => floatval($model_details['settings']['guidance_scale']),
+                'init_strength' => floatval($model_details['settings']['init_strength']),
+                'sd_version' => $model_details['settings']['sd_version'],
+                'modelId' => $model_details['settings']['model_id'],
+                'presetStyle' => $model_details['settings']['preset_style'],
+                'scheduler' => $model_details['settings']['scheduler'],
+                'leonardoMagic' => $leonardoMagic,
+                'public' => true,
+                'tiling' => isset($model_details['settings']['tiling']) && !$model_details['settings']['tiling'] ? false : true,
+                'alchemy' => $alchemy,
+                'weighting' => 1,
+                'poseToImage' => isset($model_details['settings']['pose_to_image']) && $model_details['settings']['pose_to_image'] ? true : false,
+                'poseToImageType' => isset($model_details['settings']['pose_to_image_type']) && !empty($model_details['settings']['pose_to_image_type']) ? $model_details['settings']['pose_to_image_type'] : 'POSE',
+                'highResolution' => $leonardoMagic ? true : false,
+                'highContrast' => isset($model_details['settings']['high_contrast']) && $model_details['settings']['high_contrast'] ? true : false,
+                'expandedDomain' => true,
+                'contrastRatio' => 0.5,
+                'photoReal' => isset($model_details['settings']['photoReal']) && $model_details['settings']['photoReal'] ? true : false,
+            ];
+
+            if (isset($default_args['leonardoMagic']) && $default_args['leonardoMagic']) {
+                $default_args['leonardoMagicVersion'] = 'v2';
+            }
+
+            if (isset($model_details['settings']['image_prompts']) && !empty($model_details['settings']['image_prompts'])) {
+                $default_args['imagePrompts'] = explode(',', $model_details['settings']['image_prompts']);
+            }
+
+            if (isset($model_details['settings']['image_prompt_weight']) && !empty($model_details['settings']['image_prompt_weight'])) {
+                $default_args['imagePromptWeight'] = floatval($model_details['settings']['image_prompt_weight']);
+            }
+
+            if (isset($model_details['settings']['init_generation_image_id']) && !empty($model_details['settings']['init_generation_image_id'])) {
+                $default_args['init_generation_image_id'] = $model_details['settings']['init_generation_image_id'];
+            }
+
             $parameters = [
                 'operationName' => 'CreateSDGenerationJob',
                 'variables' => [
-                    'arg1' => [
-                        'prompt' => $image_prompt,
-                        'negative_prompt' => $model_details['negative_prompt'],
-                        'nsfw' => true,
-                        'num_images' => 1,
-                        'width' => (int)$model_details['settings']['image_width'],
-                        'height' => (int)$model_details['settings']['image_height'],
-                        'num_inference_steps' => (int)$model_details['settings']['num_inference_steps'],
-                        'guidance_scale' => (int)$model_details['settings']['guidance_scale'],
-                        'init_strength' => (int)$model_details['settings']['init_strength'],
-                        'sd_version' => $model_details['settings']['sd_version'],
-                        'modelId' => $model_details['settings']['model_id'],
-                        'presetStyle' => $model_details['settings']['preset_style'],
-                        'scheduler' => $model_details['settings']['scheduler'],
-                        'leonardoMagic' => false,
-                        'public' => false,
-                        'tiling' => false,
-                    ]
+                    'arg1' => empty($custom_args) ? $default_args : $custom_args
                 ],
                 'query' => 'mutation CreateSDGenerationJob($arg1: SDGenerationInput!) { sdGenerationJob(arg1: $arg1) { generationId __typename }}'
             ];
@@ -297,7 +358,7 @@ class Leonardo_Ai_Crud
         $response = wp_remote_post($url, array (
             'headers' => array (
                 'Content-Type' => 'application/json; charset=utf-8',
-                'Authorization' => 'Bearer ' . $token,
+                'Authorization' => 'Bearer ' . $credentials['token'],
             ),
             'body' => $parameters,
             'method' => 'POST',
@@ -308,8 +369,27 @@ class Leonardo_Ai_Crud
 
         $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
+        $generation_id = isset($responceData['data']['sdGenerationJob']['generationId']) ? $responceData['data']['sdGenerationJob']['generationId'] : null;
+
+        if (empty($generation_id)) {
+            $message = isset($responceData['errors'][0]['message']) ? $responceData['errors'][0]['message'] : '';
+
+            $ignored_messages = [
+                'not enough tokens',
+            ];
+
+            if ($message === 'maximum trial alchemy generations' || $message === 'FREE plan user NOT permitted to use Alchemy Generation') {
+                $default_args['alchemy'] = false;
+                return $this->init_image_generating($credentials, $model_id, $default_args);
+            }
+
+            if (!in_array($message, $ignored_messages)) {
+                throw new Exception(json_encode($responceData));
+            }
+        }
+
         return [
-            'generation_id' => isset($responceData['data']['sdGenerationJob']['generationId']) ? $responceData['data']['sdGenerationJob']['generationId'] : null,
+            'generation_id' => $generation_id,
             'image_prompt' => $image_prompt,
         ];
     }
@@ -467,7 +547,6 @@ class Leonardo_Ai_Crud
                     ]);
 
                     $model_settings = [
-                        'model_id' => $generation['modelId'],
                         'guidance_scale' => $generation['guidanceScale'],
                         'inference_steps' => $generation['inferenceSteps'],
                         'scheduler' => $generation['scheduler'],
@@ -480,7 +559,21 @@ class Leonardo_Ai_Crud
                         'num_inference_steps' => $generation['inferenceSteps'],
                         'preset_style' => $generation['presetStyle'],
                         'leonardo_magic' => isset($generation['leonardoMagic']) ? $generation['leonardoMagic'] : null,
+                        'alchemy' => isset($generation['alchemy']) ? $generation['alchemy'] : false,
+                        'image_prompts' => isset($generation['imagePrompts']) ? implode(',', $generation['imagePrompts']) : null,
+                        'image_prompt_weight' => isset($generation['imagePromptWeight']) ? $generation['imagePromptWeight'] : null,
+                        'pose_to_image' => isset($generation['poseToImage']) ? $generation['poseToImage'] : false,
+                        'pose_to_image_type' => isset($generation['poseToImageType']) ? $generation['poseToImageType'] : 'POSE',
+                        'photoReal' => isset($generation['photoReal']) ? $generation['photoReal'] : false,
                     ];
+
+                    if (isset($generation['modelId']) && !empty($generation['modelId'])) {
+                        $model_settings['model_id'] = $generation['modelId'];
+                    }
+
+                    if (isset($generation['initStrength']) && !empty($generation['initStrength'])) {
+                        $model_settings['init_strength'] = $generation['initStrength'];
+                    }
 
                     foreach ($model_settings as $key => $value) {
 
@@ -497,8 +590,8 @@ class Leonardo_Ai_Crud
                         ]);
                     }
 
-                    $openai_crud = new Openai_Crud();
-                    $openai_crud->format_models(null, false, $model_id);
+//                    $openai_crud = new Openai_Crud();
+//                    $openai_crud->format_models(null, false, $model_id);
                 } else {
                     $model_id = $existing_models[0]['id'];
                 }
@@ -527,8 +620,8 @@ class Leonardo_Ai_Crud
                     /**
                      * Generate image content
                      */
-                    $openai_crud = new Openai_Crud();
-                    $openai_crud->format_image($saved_image['id']);
+//                    $openai_crud = new Openai_Crud();
+//                    $openai_crud->format_image($saved_image['id']);
 
                     /**
                      * Update cloudinary image details
@@ -541,6 +634,11 @@ class Leonardo_Ai_Crud
 //                    growtype_ai_init_job('upscale-image', json_encode([
 //                        'image_id' => $saved_image['id'],
 //                    ]), 5);
+
+                    /**
+                     * Get image colors
+                     */
+                    Extract_Image_Colors_Job::update_image_colors_groups($saved_image['id']);
 
                     sleep(2);
                 }

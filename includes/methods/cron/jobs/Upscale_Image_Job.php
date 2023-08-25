@@ -20,6 +20,10 @@ class Upscale_Image_Job
 
         $image_path = growtype_ai_get_image_path($image_id);
 
+        if (empty($image_path)) {
+            return;
+        }
+
         $size = getimagesize($image_path);
 
         if ($size[0] < $max_width) {
@@ -42,7 +46,8 @@ class Upscale_Image_Job
             ], $image['id']);
 
             $resmush = new Resmush();
-            $img_url = $resmush->compress(growtype_ai_get_image_path($image['id']));
+            $img_path = growtype_ai_get_image_path($image['id']);
+            $img_url = !empty($img_path) ? $resmush->compress($img_path) : '';
 
             if (!isset($image['settings']['compressed'])) {
                 Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [

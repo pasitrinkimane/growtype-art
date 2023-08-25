@@ -10,7 +10,6 @@ mix
     .js('resources/scripts/growtype-ai.js', 'scripts');
 
 mix
-    .copyDirectory('resources/plugins', 'public/plugins')
     .copyDirectory('resources/images', 'public/images');
 
 mix

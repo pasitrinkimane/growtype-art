@@ -206,6 +206,12 @@ if (!function_exists('growtype_ai_get_image_details')) {
             ]
         ]);
 
+        if (empty($image)) {
+            return null;
+        }
+
+        $image['model_id'] = growtype_ai_get_image_model_details($image['id'])['id'];
+
         $models_settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
             [
                 'key' => 'image_id',
@@ -220,6 +226,7 @@ if (!function_exists('growtype_ai_get_image_details')) {
         }
 
         $image['settings'] = $settings_formatted;
+
 
         return $image;
     }
@@ -368,6 +375,10 @@ if (!function_exists('growtype_ai_get_image_path')) {
     {
         $image = growtype_ai_get_image_details($image_id);
 
+        if (empty($image)) {
+            return null;
+        }
+
         return growtype_ai_get_upload_dir() . '/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'];
     }
 }
@@ -395,8 +406,8 @@ if (!function_exists('growtype_ai_get_images_saving_location')) {
 /**
  * Public id
  */
-if (!function_exists('growtype_ai_get_images_categories')) {
-    function growtype_ai_get_images_categories()
+if (!function_exists('growtype_ai_get_art_categories')) {
+    function growtype_ai_get_art_categories()
     {
         return array (
             "Abstract" => array (
@@ -404,7 +415,9 @@ if (!function_exists('growtype_ai_get_images_categories')) {
                 "Expressionism",
                 "Landscapes",
                 "Portraits",
-                "Liquid"
+                "Liquid",
+                "Vibrant",
+                "Material",
             ),
             "Animals" => array (
                 "Wild",
@@ -418,6 +431,9 @@ if (!function_exists('growtype_ai_get_images_categories')) {
                 "Cityscapes",
                 "Bridges",
                 "Skylines"
+            ),
+            "Interior" => array (
+                "Home",
             ),
             "Black and White" => array (
                 "Landscapes",
@@ -460,6 +476,9 @@ if (!function_exists('growtype_ai_get_images_categories')) {
                 "Manga",
                 "Graphic Novels",
                 "Comic Strips"
+            ),
+            "Collage" => array (
+                "Abstract"
             ),
             "Contemporary" => array (
                 "Abstract",
@@ -515,7 +534,9 @@ if (!function_exists('growtype_ai_get_images_categories')) {
                 "Nature",
                 "Graphic",
                 "Food",
-                "Animals"
+                "Animals",
+                "Fruits",
+                "Vegetable"
             ],
             "Anime & Manga" => [
                 "Shonen",
@@ -614,37 +635,65 @@ if (!function_exists('growtype_ai_get_images_categories')) {
                 "Victorian Era",
                 "Art Deco",
                 "Mid-Century Modern"
+            ],
+            "Style" => [
+                "Watercolor",
             ]
         );
     }
 }
 
-function color_code_to_group($color_code)
-{
-    list($r, $g, $b) = sscanf($color_code, "#%02x%02x%02x");
+if (!function_exists('growtype_ai_colors_groups')) {
+    function growtype_ai_colors_groups()
+    {
+        $colors = array (
+            "black" => array ("r" => array (0, 30), "g" => array (0, 40), "b" => array (0, 60)),
+            "gray" => array ("r" => array (30, 80), "g" => array (40, 80), "b" => array (55, 80)),
+            "brown" => array ("r" => array (85, 155), "g" => array (30, 100), "b" => array (0, 70)),
+            "red" => array ("r" => array (150, 255), "g" => array (0, 85), "b" => array (0, 100)),
+            "pink" => array ("r" => array (220, 255), "g" => array (120, 210), "b" => array (150, 235)),
+            "purple" => array ("r" => array (110, 255), "g" => array (0, 130), "b" => array (100, 255)),
+            "green" => array ("r" => array (0, 100), "g" => array (100, 255), "b" => array (0, 100)),
+            "blue" => array ("r" => array (0, 60), "g" => array (0, 150), "b" => array (130, 255)),
+            "yellow" => array ("r" => array (200, 255), "g" => array (190, 255), "b" => array (0, 140)),
+            "orange" => array ("r" => array (240, 255), "g" => array (100, 255), "b" => array (0, 145)),
+            "lightgrey" => array ("r" => array (90, 192), "g" => array (100, 192), "b" => array (110, 192)),
+            "white" => array ("r" => array (190, 255), "g" => array (190, 255), "b" => array (190, 255)),
+        );
 
-//    ddd([$r, $g, $b]);
-
-    $colors = array (
-        "black" => array ("r" => array (0, 30), "g" => array (0, 40), "b" => array (0, 60)),
-        "white" => array ("r" => array (190, 255), "g" => array (190, 255), "b" => array (190, 255)),
-        "red" => array ("r" => array (150, 255), "g" => array (0, 50), "b" => array (0, 100)),
-        "gray" => array ("r" => array (128, 192), "g" => array (128, 192), "b" => array (128, 192)),
-        "purple" => array ("r" => array (150, 255), "g" => array (0, 50), "b" => array (100, 255)),
-        "green" => array ("r" => array (0, 50), "g" => array (50, 255), "b" => array (0, 50)),
-        "blue" => array ("r" => array (0, 60), "g" => array (0, 150), "b" => array (200, 255)),
-        "yellow" => array ("r" => array (200, 255), "g" => array (160, 255), "b" => array (0, 150)),
-        "orange" => array ("r" => array (240, 255), "g" => array (130, 255), "b" => array (0, 30)),
-        "brown" => array ("r" => array (60, 255), "g" => array (30, 50), "b" => array (30, 60))
-    );
-
-    foreach ($colors as $color => $ranges) {
-        if ($r >= $ranges["r"][0] && $r <= $ranges["r"][1] &&
-            $g >= $ranges["g"][0] && $g <= $ranges["g"][1] &&
-            $b >= $ranges["b"][0] && $b <= $ranges["b"][1]) {
-            return $color;
-        }
+        return $colors;
     }
+}
 
-    return null;
+if (!function_exists('growtype_ai_color_code_to_group')) {
+    function growtype_ai_color_code_to_group($color_code)
+    {
+        list($r, $g, $b) = sscanf($color_code, "#%02x%02x%02x");
+
+        $colors = growtype_ai_colors_groups();
+
+        foreach ($colors as $color => $ranges) {
+            if ($r >= $ranges["r"][0] && $r <= $ranges["r"][1] &&
+                $g >= $ranges["g"][0] && $g <= $ranges["g"][1] &&
+                $b >= $ranges["b"][0] && $b <= $ranges["b"][1]) {
+                return $color;
+            }
+        }
+
+        return null;
+    }
+}
+
+/**
+ * @param $hex
+ * @param $opacity
+ * @return string
+ */
+if (!function_exists('growtype_ai_hex_to_rgb')) {
+    function growtype_ai_hex_to_rgb($hex, $opacity = 1)
+    {
+        $rgb_values = list($r, $g, $b) = sscanf($hex, "#%02x%02x%02x");
+
+        return !empty($rgb_values) ? 'rgb(' . implode(' ', $rgb_values) . '/' . $opacity . ')' : '';
+    }
 }

@@ -2,3 +2,27 @@
  * All of the CSS for your admin-specific functionality should be
  * included in this file.
  */
+
+.wrap .image {
+    padding: 10px;
+}
+
+.wrap .image.is-featured {
+    background: rgb(18 255 0 / 38%);
+}
+
+.b-imgs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1300px) {
+    .b-imgs {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .b-imgs {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+}

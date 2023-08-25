@@ -36,6 +36,12 @@ class Growtype_Ai_Admin_Pages
         /**
          * Models
          */
+        require_once 'images/growtype-ai-admin-images.php';
+        new Growtype_Ai_Admin_Images();
+
+        /**
+         * Models
+         */
         require_once 'models/growtype-ai-admin-models.php';
         new Growtype_Ai_Admin_Models();
 

@@ -5,8 +5,8 @@ class Growtype_Ai_Cron
     const GROWTYPE_AI_JOBS_CRON = 'growtype_ai_jobs';
     const GROWTYPE_AI_BUNDLE_JOBS_CRON = 'growtype_ai_bundle_jobs';
 
-    const  RETRIEVE_JOBS_LIMIT = 2;
-    const  JOBS_ATTEMPTS_LIMIT = 3;
+    const RETRIEVE_JOBS_LIMIT = 2;
+    const JOBS_ATTEMPTS_LIMIT = 3;
 
     const TEST_CRON = false;
 
@@ -114,9 +114,7 @@ class Growtype_Ai_Cron
              * Check if new job is available
              */
             if (!$this->new_generate_job_is_available($job['queue'])) {
-
-                error_log("Job - not available - " . $job['id'], 0);
-
+//                error_log("Job - not available - " . $job['id'], 0);
                 continue;
             }
 
@@ -148,7 +146,7 @@ class Growtype_Ai_Cron
     function init_job($job)
     {
         try {
-            error_log('job started - ' . $job['id'], 0);
+//            error_log('job started - ' . $job['id'], 0);
 
             $jobs = [
                 'extract-image-colors' => new Extract_Image_Colors_Job(),
