@@ -27,6 +27,35 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
             'singular' => 'model',
             'screen' => get_current_screen()->id
         ));
+
+        add_action('admin_footer', array ($this, 'admin_enqueue_custom_scripts'), 100);
+    }
+
+    function admin_enqueue_custom_scripts($hook)
+    {
+        ?>
+        <script>
+            $ = jQuery;
+            $('.select-featured_in').on('change', function (option) {
+                let $this = $(this)
+                $.ajax({
+                    type: 'POST',
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    data: {
+                        action: 'growtype_ai_admin_update_model',
+                        model_id: $this.closest('tr').attr('data-id'),
+                        name: 'settings[featured_in]',
+                        value: $this.val(),
+                    },
+                    success: function (res) {
+                    },
+                    error: function (err) {
+                        console.error(err);
+                    }
+                })
+            });
+        </script>
+        <?php
     }
 
     function extra_tablenav($which)
@@ -59,7 +88,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
 
             <div style="display: inline-block;margin-left: 5px;">
                 <div class="actions-box" style="display: flex;gap: 10px;float:left;margin-right: 10px;">
-                    <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary">' . __('Retrieve models', 'growtype-ai') . '</a>', $_REQUEST['page'], 'retrieve-images-all') ?>
+                    <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary">' . __('Retrieve models', 'growtype-ai') . '</a>', $_REQUEST['page'], 'retrieve-models') ?>
                     <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary">' . __('Pull external images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'index-download-all-models-images') ?>
                 </div>
             </div>
@@ -145,8 +174,9 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
             'prompt' => __('Prompt', 'growtype-ai'),
             'negative_prompt' => __('Negative prompt', 'growtype-ai'),
             'reference_id' => __('Reference id', 'growtype-ai'),
-            'location' => __('Location', 'growtype-ai'),
-            'provider' => __('Provider', 'growtype-ai'),
+            'slug' => __('Slug', 'growtype-ai'),
+            'stats' => __('Stats', 'growtype-ai'),
+            'featured_in' => __('Featured in', 'growtype-ai'),
             'images' => __('Images', 'growtype-ai'),
             'created_at' => __('Created at', 'growtype-ai'),
             'updated_at' => __('Updated at', 'growtype-ai'),
@@ -221,7 +251,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
      */
     public function single_row($signup_object = null, $style = '', $role = '', $numposts = 0)
     {
-        echo '<tr' . $style . ' id="signup-' . esc_attr($signup_object['id']) . '">';
+        echo '<tr' . $style . ' id="model-' . esc_attr($signup_object['id']) . '" data-id="' . esc_attr($signup_object['id']) . '">';
         echo $this->single_row_columns($signup_object);
         echo '</tr>';
     }
@@ -234,6 +264,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
         $actions = array (
             'edit' => sprintf('<a href="?page=%s&action=%s&model=%s">' . __('Edit', 'growtype-ai') . '</a>', $_REQUEST['page'], 'edit', $item['id']),
             'generate' => sprintf('<a href="?page=%s&action=%s&model=%s&paged=%s">' . __('Generate image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'index-generate-images', $item['id'], $paged),
+            'duplicate-model' => sprintf('<a href="?page=%s&action=%s&model=%s&paged=%s">' . __('Duplicate model', 'growtype-ai') . '</a>', $_REQUEST['page'], 'index-duplicate-model', $item['id'], $paged),
             'download-images' => sprintf('<a href="?page=%s&action=%s&model=%s&paged=%s">' . __('Pull external images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'index-download-model-images', $item['id'], $paged),
             'delete' => sprintf('<a href="?page=%s&action=%s&model=%s&_wpnonce=%s&paged=%s">' . __('Delete', 'growtype-ai') . '</a>', $_REQUEST['page'], 'delete', $item['id'], wp_create_nonce(Growtype_Ai_Admin::DELETE_NONCE), $paged),
         );
@@ -269,6 +300,19 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
      * @param $row
      * @return void
      */
+    public function column_featured_in($row = null)
+    {
+        $setting = growtype_ai_get_model_single_setting($row['id'], 'featured_in');
+        $meta_value = isset($setting['meta_value']) ? json_decode($setting['meta_value'], true) : [];
+
+        echo Growtype_Ai_Admin_Model_List_Table_Record::render_feaatured_in_select($meta_value);
+    }
+
+
+    /**
+     * @param $row
+     * @return void
+     */
     public function column_images($row = null)
     {
         $model_images = growtype_ai_get_model_images($row['id']);
@@ -295,6 +339,51 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
         $model_images = growtype_ai_get_model_images($row['id']);
 
         echo implode(',', array_unique(array_pluck($model_images, 'location')));
+    }
+
+    /**
+     * @param $row
+     * @return void
+     */
+    public function column_slug($row = null)
+    {
+        $model = growtype_ai_get_model_details($row['id']);
+
+        echo isset($model['settings']['slug']) ? $model['settings']['slug'] : '';
+    }
+
+    /**
+     * @param $row
+     * @return void
+     */
+    public function column_stats($row = null)
+    {
+        $model = growtype_ai_get_model_details($row['id']);
+
+        $images = growtype_ai_get_model_images($row['id']);
+
+        $nsfw = 0;
+        $is_featured = 0;
+        $is_cover = 0;
+        foreach ($images as $image) {
+            if (isset($image['settings']['nsfw']) && $image['settings']['nsfw']) {
+                $nsfw++;
+            }
+            if (isset($image['settings']['is_featured']) && $image['settings']['is_featured']) {
+                $is_featured++;
+            }
+            if (isset($image['settings']['is_cover']) && $image['settings']['is_cover']) {
+                $is_cover++;
+            }
+        }
+
+        echo 'Total: ' . count($images);
+        echo '<br>';
+        echo 'Nsfw: ' . $nsfw;
+        echo '<br>';
+        echo 'Is featured: ' . $is_featured;
+        echo '<br>';
+        echo 'Is cover: ' . $is_cover;
     }
 
     /**

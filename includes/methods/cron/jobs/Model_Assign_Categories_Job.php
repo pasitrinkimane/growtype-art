@@ -2,8 +2,10 @@
 
 class Model_Assign_Categories_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $model_id = $job_payload['model_id'];
         $model = growtype_ai_get_model_details($model_id);
 

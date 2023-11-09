@@ -2,8 +2,10 @@
 
 class Retrieve_Upscale_Image_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         /**
          * Try to retrieve the image
          */

@@ -94,6 +94,8 @@ class Growtype_Ai_Database_Crud
 
         $table = $wpdb->prefix . $table;
 
+        $data['updated_at'] = current_time('mysql');
+
         $wpdb->update($table, $data, array ('id' => $id));
     }
 
@@ -105,22 +107,12 @@ class Growtype_Ai_Database_Crud
             $record_key = $record[$record_params['reference_key']];
             if (isset($update_data[$record_key])) {
                 $update_value = $update_data[$record_key];
-
-                if (is_array($update_value)) {
-                    $update_value = json_encode($update_value);
-                }
-
                 self::update_record($table, [$record_params['update_value'] => $update_value], $record['id']);
             }
         }
 
         foreach ($update_data as $key => $value) {
             if (!in_array($key, array_pluck($records, $record_params['reference_key']))) {
-
-                if (is_array($value)) {
-                    $value = json_encode($value);
-                }
-
                 self::insert_record($table, [
                     $retrieve_data[0]['key'] => $retrieve_data[0]['values'][0],
                     $record_params['reference_key'] => $key,

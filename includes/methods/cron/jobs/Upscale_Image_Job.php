@@ -2,8 +2,10 @@
 
 class Upscale_Image_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $image_id = isset($job_payload['image_id']) ? $job_payload['image_id'] : null;
 
         if (empty($image_id)) {

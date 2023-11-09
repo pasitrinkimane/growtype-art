@@ -3,7 +3,7 @@
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
 
-class Growtype_Ai_Admin_Result_List_Table_Record
+class Growtype_Ai_Admin_Model_List_Table_Record
 {
     public function __construct()
     {
@@ -40,6 +40,8 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                     }
                 }
             }
+
+            do_action('growtype_ai_model_delete', $model_id);
 
             $this->redirect_index();
         }
@@ -91,15 +93,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
             update_option('growtype_ai_bundle_ids', implode(',', array_filter($bundle_ids)));
 
-            $redirect = add_query_arg(
-                'action',
-                $_GET['action'],
-                get_admin_url() . 'admin.php?' . sprintf('page=%s&paged=%s', $_REQUEST['page'], $_REQUEST['paged'])
-            );
-
-            wp_redirect($redirect);
-
-            exit();
+            $this->redirect_index();
         }
     }
 
@@ -110,16 +104,9 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     {
         if (isset($_GET['action']) && ($_GET['action'] === 'index-download-model-images' || $_GET['action'] === 'index-download-all-models-images')) {
             if ($_GET['action'] === 'index-download-model-images') {
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                    'queue' => 'download-cloudinary-folder',
-                    'payload' => json_encode([
-                        'model_id' => $_GET['item']
-                    ]),
-                    'attempts' => 0,
-                    'reserved_at' => wp_date('Y-m-d H:i:s'),
-                    'available_at' => date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + 5),
-                    'reserved' => 0
-                ]);
+                growtype_ai_init_job('download-cloudinary-folder', json_encode([
+                    'model_id' => $_GET['item']
+                ]), 30);
             } elseif ($_GET['action'] === 'index-download-all-models-images') {
                 $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE, [
                     [
@@ -137,16 +124,9 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                         continue;
                     }
 
-                    Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                        'queue' => 'download-cloudinary-folder',
-                        'payload' => json_encode([
-                            'model_id' => $model['id']
-                        ]),
-                        'attempts' => 0,
-                        'reserved_at' => wp_date('Y-m-d H:i:s'),
-                        'available_at' => date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + $seconds),
-                        'reserved' => 0
-                    ]);
+                    growtype_ai_init_job('download-cloudinary-folder', json_encode([
+                        'model_id' => $model['id']
+                    ]), 30);
 
                     $seconds = $seconds + 10;
                 }
@@ -176,7 +156,7 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 echo '<iframe src="https://growtype.com/wp/wp-admin/admin.php?page=growtype-ai-models&action=download-ziped-model&model_id=' . $model_id . '"></iframe>';
             }
 
-            echo '<script>setTimeout(function (){window.location.href = "https://growtype.com/wp/wp-admin/admin.php?page=growtype-ai-models&paged='.$_POST['paged'].'";},3000)</script>';
+            echo '<script>setTimeout(function (){window.location.href = "https://growtype.com/wp/wp-admin/admin.php?page=growtype-ai-models&paged=' . $_POST['paged'] . '";},3000)</script>';
 
             exit();
         }
@@ -226,11 +206,34 @@ class Growtype_Ai_Admin_Result_List_Table_Record
     public function process_update_action()
     {
         if (isset($_POST['update_item_id']) && !empty($_POST['update_item_id'])) {
+            $_POST = stripslashes_deep($_POST);
+
             $model = $_POST['model'];
             $settings = $_POST['settings'];
 
+            foreach ($settings as $key => $setting) {
+                if (is_array($setting)) {
+                    $settings[$key] = json_encode($setting);
+                }
+            }
+
             if (isset($settings['tags']) && !empty($settings['tags'])) {
                 $settings['tags'] = json_encode(explode(',', $settings['tags']));
+            }
+
+            if (isset($settings['slug']) && !empty($settings['slug'])) {
+                $settings['slug'] = strtolower(str_replace(' ', '-', $settings['slug']));
+
+                $existing_settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+                    [
+                        'key' => 'meta_value',
+                        'values' => [$settings['slug']],
+                    ]
+                ]);
+
+                if (isset($existing_settings[0]['model_id']) && $existing_settings[0]['model_id'] !== $_POST['update_item_id']) {
+                    $settings['slug'] = $settings['slug'] . '-' . strtolower(wp_generate_password(2, false, false));
+                }
             }
 
             Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODELS_TABLE, $model, $_POST['update_item_id']);
@@ -248,6 +251,55 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                 ],
                 $settings
             );
+
+            do_action('growtype_ai_model_update', $_POST['update_item_id']);
+        }
+    }
+
+    /**
+     * @return void
+     */
+    public function process_duplicate_model_action()
+    {
+        if (isset($_GET['action']) && $_GET['action'] === 'index-duplicate-model') {
+            $model_details = growtype_ai_get_model_details($_GET['model']);
+
+            $reference_id = growtype_ai_generate_reference_id();
+
+            $model_id = Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODELS_TABLE, [
+                'prompt' => $model_details['prompt'],
+                'negative_prompt' => $model_details['negative_prompt'],
+                'reference_id' => $reference_id,
+                'provider' => $model_details['provider'],
+                'image_folder' => Growtype_Ai_Crud::IMAGES_FOLDER_NAME . '/' . $reference_id
+            ]);
+
+            $model_settings = $model_details['settings'];
+
+            foreach ($model_settings as $key => $value) {
+
+                $existing_content = growtype_ai_get_model_single_setting($model_id, $key);
+
+                if (!empty($existing_content)) {
+                    continue;
+                }
+
+                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+                    'model_id' => $model_id,
+                    'meta_key' => $key,
+                    'meta_value' => $value
+                ]);
+            }
+
+            /**
+             * Redirect
+             */
+            $redirect_args = [
+                'message_type' => 'custom',
+                'message' => __('Model duplicated', 'growtype-ai'),
+            ];
+
+            $this->redirect_index($redirect_args);
         }
     }
 
@@ -271,11 +323,13 @@ class Growtype_Ai_Admin_Result_List_Table_Record
      */
     public function process_generate_image_action()
     {
-        if (isset($_GET['action']) && ($_GET['action'] === 'generate-images' || $_GET['action'] === 'index-generate-images')) {
-            $model_id = isset($_GET['model']) ? $_GET['model'] : null;
+        $action = isset($_GET['action']) ? $_GET['action'] : null;
+        $model_id = isset($_GET['model']) ? $_GET['model'] : null;
 
-            if (!empty($model_id)) {
-                if ($_GET['action'] === 'generate-images' || $_GET['action'] === 'index-generate-images') {
+        if (!empty($action)) {
+            switch ($action) {
+                case 'generate-images':
+                    error_log('process_generate_image_action -> generate-images');
                     $crud = new Leonardo_Ai_Crud();
                     $generate_details = $crud->generate_model($model_id);
 
@@ -283,15 +337,21 @@ class Growtype_Ai_Admin_Result_List_Table_Record
                         'message_type' => 'custom',
                         'message' => sprintf(__('%d image is generating. User nr: %s. Image prompt: %s', 'growtype-ai'), 1, $generate_details['user_nr'], $generate_details['image_prompt']),
                     ];
-                }
-            }
 
-            if ($_GET['action'] === 'generate-images') {
-                $this->redirect_single($redirect_args ?? []);
-            }
+                    $this->redirect_single($redirect_args);
+                    break;
+                case 'index-generate-images':
+                    error_log('index-generate-images');
+                    $crud = new Leonardo_Ai_Crud();
+                    $generate_details = $crud->generate_model($model_id);
 
-            if ($_GET['action'] === 'index-generate-images') {
-                $this->redirect_index();
+                    $redirect_args = [
+                        'message_type' => 'custom',
+                        'message' => sprintf(__('%d image is generating. User nr: %s. Image prompt: %s', 'growtype-ai'), 1, $generate_details['user_nr'], $generate_details['image_prompt']),
+                    ];
+
+                    $this->redirect_index($redirect_args);
+                    break;
             }
         }
     }
@@ -321,6 +381,18 @@ class Growtype_Ai_Admin_Result_List_Table_Record
 
             $this->redirect_single();
         }
+
+        if (isset($_GET['action']) && ($_GET['action'] === 'generate-model-character-content')) {
+            $openai_crud = new Openai_Crud();
+
+            $model_id = isset($_GET['model']) ? $_GET['model'] : null;
+
+            if (!empty($model_id)) {
+                $openai_crud->format_model_character($model_id);
+            }
+
+            $this->redirect_single();
+        }
     }
 
     /**
@@ -328,35 +400,76 @@ class Growtype_Ai_Admin_Result_List_Table_Record
      */
     public function process_retrieve_action()
     {
-        if (isset($_GET['action']) && ($_GET['action'] === 'retrieve-images' || $_GET['action'] === 'retrieve-images-all')) {
-            $crud = new Leonardo_Ai_Crud();
+        $action = isset($_GET['action']) ? $_GET['action'] : null;
+        $model_id = isset($_GET['model']) ? $_GET['model'] : null;
 
-            $amount = 15;
+        if (!empty($action)) {
+            switch ($action) {
+                case 'retrieve-model-images':
+                    $crud = new Leonardo_Ai_Crud();
+                    $amount = 100;
 
-            $model_id = isset($_GET['item']) ? $_GET['item'] : null;
+                    if (empty($model_id)) {
+                        $this->redirect_single([
+                            'message_type' => 'custom',
+                            'message' => __('Model is misssing.', 'growtype-ai'),
+                        ]);
+                    }
 
-            $users_credentials = Leonardo_Ai_Crud::user_credentials();
+                    $users_credentials = Leonardo_Ai_Crud::user_credentials();
 
-            foreach ($users_credentials as $user_nr => $user_credentials) {
+                    foreach ($users_credentials as $user_nr => $user_credentials) {
 
-                if (empty($user_credentials['user_id'])) {
-                    continue;
-                }
+                        if (empty($user_credentials['user_id'])) {
+                            continue;
+                        }
 
-                $generations = $crud->retrieve_models($amount, $model_id, $user_nr);
+                        $generations = $crud->retrieve_models($amount, $model_id, $user_nr);
 
-                if (empty($generations)) {
-                    continue;
-                }
-            }
+                        if (empty($generations)) {
+                            continue;
+                        }
+                    }
 
-            if ($_GET['action'] === 'retrieve-images') {
-                $this->redirect_single([
-                    'message_type' => 'custom',
-                    'message' => sprintf(__('%d images are retrieving.', 'growtype-ai'), $amount),
-                ]);
-            } else {
-                $this->redirect_index();
+                    $this->redirect_single([
+                        'message_type' => 'custom',
+                        'message' => sprintf(__('%d images are retrieving.', 'growtype-ai'), $amount),
+                    ]);
+                    break;
+                case 'retrieve-models':
+                    $crud = new Leonardo_Ai_Crud();
+                    $amount = 15;
+                    $users_credentials = Leonardo_Ai_Crud::user_credentials();
+
+                    $retrieved_users = [];
+                    foreach ($users_credentials as $user_nr => $user_credentials) {
+                        if (empty($user_credentials['user_id'])) {
+                            continue;
+                        }
+
+                        array_push($retrieved_users, $user_credentials['user_id']);
+
+                        $generations = $crud->retrieve_models($amount, null, $user_nr);
+
+                        if (empty($generations)) {
+                            continue;
+                        }
+                    }
+
+                    if (empty($retrieved_users)) {
+                        $this->redirect_index([
+                            'message_type' => 'custom',
+                            'message' => __('No users retrieved. Please enter users credentials in settings.', 'growtype-ai'),
+                            'status' => 'error',
+                        ]);
+                    } else {
+                        $this->redirect_index([
+                            'message_type' => 'custom',
+                            'message' => sprintf(__('Users amount retrieved: %d', 'growtype-ai'), count($retrieved_users)),
+                        ]);
+                    }
+
+                    break;
             }
         }
     }
@@ -474,13 +587,14 @@ class Growtype_Ai_Admin_Result_List_Table_Record
         exit();
     }
 
-    public function redirect_index()
+    public function redirect_index($args = [])
     {
         $paged = isset($_GET['paged']) ? $_GET['paged'] : 1;
 
         $redirect_url = get_admin_url() . 'admin.php?' . sprintf('?page=%s&paged=%s', $_REQUEST['page'], $paged);
 
-        $redirect = add_query_arg([],
+        $redirect = add_query_arg(
+            $args,
             $redirect_url
         );
 
@@ -501,8 +615,6 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             if (!empty($image_id)) {
                 Growtype_Ai_Crud::delete_image($image_id);
             }
-
-            d('test');
 
             $this->redirect_single();
         }
@@ -543,145 +655,228 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             return;
         }
 
-        $models_settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+        $models_all_settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
             [
                 'key' => 'model_id',
                 'values' => [$model['id']],
             ]
         ]);
 
+        $models_settings = [];
+        foreach ($models_all_settings as $key => $model_setting) {
+            if (strpos($model_setting['meta_key'], 'character_') !== false) {
+                continue;
+            }
+            $models_settings[$key] = $model_setting;
+        }
+
         ?>
 
-        <h2>Model settings</h2>
-
-        <table class="form-table">
-            <tbody>
-            <?php foreach ($model as $key => $item) {
-                if (in_array($key, ['id', 'created_at', 'updated_at'])) {
-                    continue;
-                }
-                ?>
-                <tr>
-                    <th scope="row">
-                        <label for=""><?php echo $key ?></label>
-                        <?php
-                        if ($key === 'prompt') {
-                            echo '<p class="text">Use <code>{prompt_variable}</code> to insert random prompt variable</p>';
+        <div class="tab">
+            <div class="tab-header">
+                <h2>Model</h2>
+            </div>
+            <div class="tab-content">
+                <table class="form-table">
+                    <tbody>
+                    <?php foreach ($model as $key => $item) {
+                        if (in_array($key, ['id', 'created_at', 'updated_at'])) {
+                            continue;
                         }
                         ?>
-                    </th>
-                    <td>
-                        <?php if (in_array($key, ['prompt', 'negative_prompt'])) { ?>
-                            <textarea class="large-text code" rows="5" name="model[<?php echo $key ?>]"><?php echo $item ?></textarea>
-                        <?php } else { ?>
-                            <input class="regular-text code" type="text" name="model[<?php echo $key ?>]" value="<?php echo $item ?>"/>
-                        <?php } ?>
-                    </td>
-                </tr>
-            <?php } ?>
-            </tbody>
-        </table>
-
-        <h2>Model parameters</h2>
-
-        <table class="form-table">
-            <tbody>
-            <?php
-
-            $required_keys = [
-                'featured_in',
-                'model_id',
-                'title',
-                'description',
-                'tags',
-                'prompt_variables',
-                'init_generation_image_id',
-                'categories',
-                'high_contrast'
-            ];
-
-            $existing_keys = array_pluck($models_settings, 'meta_key');
-
-            foreach ($required_keys as $required_key) {
-                if (!in_array($required_key, $existing_keys)) {
-                    array_push($models_settings, [
-                        'meta_key' => $required_key,
-                        'meta_value' => '',
-                    ]);
-                }
-            }
-
-            /**
-             * Reorder settings to some values be on top
-             */
-            $models_settings_reordered = [];
-
-            foreach ($models_settings as $item) {
-                if (in_array($item['meta_key'], ['featured_in'])) {
-                    array_unshift($models_settings_reordered, $item);
-                } else {
-                    array_push($models_settings_reordered, $item);
-                }
-            }
-
-            foreach ($models_settings_reordered as $item) {
-                if (in_array($item['meta_key'], ['id', 'created_at', 'updated_at'])) {
-                    continue;
-                }
-
-                $meta_value = $item['meta_value'];
-
-                if ($item['meta_key'] === 'tags' && !empty(json_decode($item['meta_value']))) {
-                    $meta_value = implode(',', json_decode($item['meta_value']));
-                    $meta_value = strtolower($meta_value);
-                }
-
-                if ($item['meta_key'] === 'prompt_variables' && empty($item['meta_value'])) {
-                    $meta_value = 'white, black, and little bit gold | red, blue, white, gray | rose gold  blue | red, orange, yellow, green, blue, purple, pink | Red and Yellow|Pink and Purple|Blue and White|Orange and Yellow|Red and White|Pink and White|Purple and White|Yellow and White|Blue and Yellow|Pink and Red|Orange and Red|Red and Purple|Yellow and Orange|Pink and Yellow|Purple and Pink|Blue and Purple|Red and Orange|Yellow and Green|Purple and Blue|Pink and Orange|Green and White';
-                }
-
-                ?>
-                <tr>
-                    <th scope="row">
-                        <label for=""><?php echo $item['meta_key'] ?></label>
-                    </th>
-                    <td>
-                        <?php if (in_array($item['meta_key'], ['prompt', 'negative_prompt', 'description', 'tags', 'prompt_variables', 'image_prompts'])) { ?>
-                            <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $meta_value ?></textarea>
-                        <?php } elseif ($item['meta_key'] === 'featured_in') {
-                            $meta_value = !empty($meta_value) ? json_decode($meta_value, true) : [];
-                            ?>
-                            <select name="settings[<?php echo $item['meta_key'] ?>][]" multiple>
-                                <option value="">nowhere</option>
-                                <option value="artdecorio" <?= in_array('artdecorio', $meta_value) ? 'selected' : '' ?>>artdecorio.com</option>
-                                <option value="sexy" <?= in_array('sexy', $meta_value) ? 'selected' : '' ?>>sexy</option>
-                            </select>
-                        <?php } elseif ($item['meta_key'] === 'categories') { ?>
-                            <ul class="category-select">
+                        <tr>
+                            <th scope="row">
+                                <label for=""><?php echo $key ?></label>
                                 <?php
-                                $art_categories = growtype_ai_get_art_categories();
-                                foreach ($art_categories as $category => $values) { ?>
-                                    <li>
-                                        <label><input type="checkbox" class="category" data-value="<?php echo $category ?>"><?php echo $category ?></label>
-                                        <ul style="margin-left: 30px;margin-top: 10px;margin-bottom: 10px;">
-                                            <?php foreach ($values as $value) { ?>
-                                                <li><label><input type="checkbox" class="category-child" data-value="<?php echo $category ?>_<?php echo $value ?>"><?php echo $value ?></label></li>
-                                            <?php } ?>
-                                        </ul>
-                                    </li>
+                                if ($key === 'prompt') {
+                                    echo '<p class="text">Use <code>{prompt_variable}</code> to insert random prompt variable</p>';
+                                }
+                                ?>
+                            </th>
+                            <td>
+                                <?php if (in_array($key, ['prompt', 'negative_prompt'])) { ?>
+                                    <textarea class="large-text code" rows="5" name="model[<?php echo $key ?>]"><?php echo $item ?></textarea>
+                                <?php } else { ?>
+                                    <input class="regular-text code" type="text" name="model[<?php echo $key ?>]" value="<?php echo $item ?>"/>
                                 <?php } ?>
-                            </ul>
+                            </td>
+                        </tr>
+                    <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-                            <input type="hidden" name="settings[categories]" value=""/>
+        <div class="tab">
+            <div class="tab-header">
+                <h2>Model settings</h2>
+            </div>
+            <div class="tab-content">
+                <table class="form-table">
+                    <tbody>
+                    <?php
 
-                        <?php } else { ?>
-                            <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $meta_value ?>"/>
-                        <?php } ?>
-                    </td>
-                </tr>
-            <?php } ?>
-            </tbody>
-        </table>
+                    $required_keys = [
+                        'slug',
+                        'featured_in',
+                        'model_id',
+                        'title',
+                        'description',
+                        'tags',
+                        'prompt_variables',
+                        'init_generation_image_id',
+                        'categories',
+                        'high_contrast'
+                    ];
+
+                    $existing_keys = array_pluck($models_settings, 'meta_key');
+
+                    foreach ($required_keys as $required_key) {
+                        if (!in_array($required_key, $existing_keys)) {
+                            array_push($models_settings, [
+                                'meta_key' => $required_key,
+                                'meta_value' => '',
+                            ]);
+                        }
+                    }
+
+                    /**
+                     * Reorder settings to some values be on top
+                     */
+                    $models_settings_reordered = [];
+
+                    foreach ($models_settings as $item) {
+                        if (in_array($item['meta_key'], ['featured_in'])) {
+                            array_unshift($models_settings_reordered, $item);
+                        } else {
+                            array_push($models_settings_reordered, $item);
+                        }
+                    }
+
+                    foreach ($models_settings_reordered as $item) {
+                        if (in_array($item['meta_key'], ['id', 'created_at', 'updated_at'])) {
+                            continue;
+                        }
+
+                        $meta_value = $item['meta_value'];
+
+                        if ($item['meta_key'] === 'tags' && !empty(json_decode($item['meta_value']))) {
+                            $meta_value = implode(',', json_decode($item['meta_value']));
+                            $meta_value = strtolower($meta_value);
+                        }
+
+                        if ($item['meta_key'] === 'prompt_variables' && empty($item['meta_value'])) {
+                            $meta_value = 'white, black, and little bit gold | red, blue, white, gray | rose gold  blue | red, orange, yellow, green, blue, purple, pink | Red and Yellow|Pink and Purple|Blue and White|Orange and Yellow|Red and White|Pink and White|Purple and White|Yellow and White|Blue and Yellow|Pink and Red|Orange and Red|Red and Purple|Yellow and Orange|Pink and Yellow|Purple and Pink|Blue and Purple|Red and Orange|Yellow and Green|Purple and Blue|Pink and Orange|Green and White';
+                        }
+
+                        if ($item['meta_key'] === 'slug' && empty($item['meta_value'])) {
+                            $meta_value = strtolower(wp_generate_password(12, false));
+                        }
+
+                        ?>
+                        <tr>
+                            <th scope="row">
+                                <label for=""><?php echo $item['meta_key'] ?></label>
+                            </th>
+                            <td>
+                                <?php if (in_array($item['meta_key'], ['prompt', 'negative_prompt', 'description', 'tags', 'prompt_variables', 'image_prompts'])) { ?>
+                                    <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $meta_value ?></textarea>
+                                <?php } elseif ($item['meta_key'] === 'featured_in') {
+                                    $meta_value = !empty($meta_value) ? json_decode($meta_value, true) : [];
+                                    echo self::render_feaatured_in_select($meta_value);
+                                } elseif ($item['meta_key'] === 'categories') { ?>
+                                    <ul class="category-select">
+                                        <?php
+                                        $art_categories = growtype_ai_get_art_categories();
+                                        foreach ($art_categories as $category => $values) { ?>
+                                            <li>
+                                                <label><input type="checkbox" class="category" data-value="<?php echo $category ?>"><?php echo $category ?></label>
+                                                <ul style="margin-left: 30px;margin-top: 10px;margin-bottom: 10px;">
+                                                    <?php foreach ($values as $value) { ?>
+                                                        <li><label><input type="checkbox" class="category-child" data-value="<?php echo $category ?>_<?php echo $value ?>"><?php echo $value ?></label></li>
+                                                    <?php } ?>
+                                                </ul>
+                                            </li>
+                                        <?php } ?>
+                                    </ul>
+
+                                    <input type="hidden" name="settings[categories]" value=""/>
+
+                                <?php } else { ?>
+                                    <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $meta_value ?>"/>
+                                <?php } ?>
+                            </td>
+                        </tr>
+                    <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab">
+            <div class="tab-header">
+                <h2>Model character</h2>
+            </div>
+            <div class="tab-content">
+                <table class="form-table">
+                    <tbody>
+                    <?php
+
+                    $model_character_details = growtype_ai_get_model_character_details($id);
+
+                    $required_data = growtype_ai_get_model_character_default_data();
+
+                    $existing_keys = array_pluck($model_character_details, 'meta_key');
+
+                    foreach ($required_data as $required_key => $required_value) {
+                        if (!in_array($required_key, $existing_keys)) {
+                            array_push($model_character_details, [
+                                'meta_key' => $required_key,
+                                'meta_value' => $required_value,
+                            ]);
+                        }
+                    }
+
+                    /**
+                     * Reorder settings to some values be on top
+                     */
+                    $model_character_details_reordered = [];
+
+                    foreach ($model_character_details as $item) {
+                        if (in_array($item['meta_key'], [''])) {
+                            array_unshift($model_character_details_reordered, $item);
+                        } else {
+                            array_push($model_character_details_reordered, $item);
+                        }
+                    }
+
+                    foreach ($model_character_details_reordered as $item) {
+                        if (in_array($item['meta_key'], ['id', 'created_at', 'updated_at'])) {
+                            continue;
+                        }
+
+                        $meta_value = $item['meta_value'];
+
+                        ?>
+                        <tr>
+                            <th scope="row">
+                                <label for=""><?php echo $item['meta_key'] ?></label>
+                            </th>
+                            <td>
+                                <?php if (in_array($item['meta_key'], ['character_description', 'character_introduction'])) { ?>
+                                    <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $meta_value ?></textarea>
+                                <?php } else { ?>
+                                    <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $meta_value ?>"/>
+                                <?php } ?>
+                            </td>
+                        </tr>
+                    <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!--        ---------->
 
         <input type="hidden" name="update_item_id" value="<?php echo $id ?>">
 
@@ -689,35 +884,34 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             <input type="submit" name="submit" id="submit" class="button button-primary" value="Save Changes">
         </p>
 
-        <br>
         <hr>
-        <br>
-        <br>
+        <hr>
 
         <div style="display:flex;justify-content: flex-end;margin-bottom: 40px;">
-            <div style="display: flex;flex-wrap: wrap;gap:10px;">
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Generate model details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-model-content', $id) ?>
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Generate images details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-image-content', $id) ?>
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Re-Generate images details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'regenerate-image-content', $id) ?>
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Upscale images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'upscale-images', $id) ?>
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Generate image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-images', $id) ?>
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Retrieve image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'retrieve-images', $id) ?>
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Pull images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'pull-model-images', $id) ?>
-                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-primary">' . __('Update colors', 'growtype-ai') . '</a>', $_REQUEST['page'], 'update-model-images-colors', $id) ?>
+            <div style="display: flex;flex-wrap: wrap;gap:10px;flex-direction: column;width: 100%;">
+                <div>
+                    <p>Content</p>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate model details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-model-content', $id) ?>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate character details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-model-character-content', $id) ?>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate images details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-image-content', $id) ?>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Re-Generate images details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'regenerate-image-content', $id) ?>
+                </div>
+                <div>
+                    <p>Generating</p>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-images', $id) ?>
+                </div>
+                <div>
+                    <p>Retrieving</p>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Pull images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'pull-model-images', $id) ?>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Retrieve images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'retrieve-model-images', $id) ?>
+                </div>
+                <div>
+                    <p>Images Modification</p>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Update colors', 'growtype-ai') . '</a>', $_REQUEST['page'], 'update-model-images-colors', $id) ?>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Upscale images', 'growtype-ai') . '</a>', $_REQUEST['page'], 'upscale-images', $id) ?>
+                </div>
             </div>
         </div>
-
-        <?php
-        $model_images = growtype_ai_get_model_images($id);
-        ?>
-
-        <div class="b-imgs" style="gap: 10px;display: grid;">
-            <?php foreach (array_reverse($model_images) as $image) { ?>
-                <?= Growtype_Ai_Admin_Images::preview_image($image) ?>
-            <?php } ?>
-        </div>
-
-        <?= Growtype_Ai_Admin_Images::image_delete_ajax() ?>
 
         <script>
             $ = jQuery;
@@ -763,6 +957,20 @@ class Growtype_Ai_Admin_Result_List_Table_Record
             });
         </script>
 
+        <?php
+    }
+
+    public static function render_feaatured_in_select($value)
+    {
+        $value = is_array($value) ? $value : [$value];
+        $options = growtype_ai_get_model_featured_in_options();
+        ?>
+        <select class="select-featured_in" name="settings[featured_in][]" multiple>
+            <option value="">-</option>
+            <?php foreach ($options as $key => $option) { ?>
+                <option value="<?php echo $key ?>" <?= selected(in_array($key, $value)) ?>><?php echo $option ?></option>
+            <?php } ?>
+        </select>
         <?php
     }
 }

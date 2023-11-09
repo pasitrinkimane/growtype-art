@@ -6,7 +6,6 @@ class Growtype_Ai_Database
     const MODEL_SETTINGS_TABLE = 'growtype_ai_model_settings';
     const IMAGES_TABLE = 'growtype_ai_images';
     const MODEL_IMAGE_TABLE = 'growtype_ai_model_image';
-    const MODEL_JOBS_TABLE = 'growtype_ai_jobs';
     const IMAGE_SETTINGS_TABLE = 'growtype_ai_image_settings';
 
     const REBUILD_TABLE = false; // IMPORTANT: Set to true to rebuild the database tables
@@ -127,44 +126,9 @@ class Growtype_Ai_Database
                         'data_type' => 'INTEGER',
                     )
                 ]
-            ],
-            [
-                'name' => $wpdb->prefix . self::MODEL_JOBS_TABLE,
-                'fields' => [
-                    array (
-                        'data_field' => 'queue',
-                        'data_type' => 'TEXT DEFAULT NULL',
-                    ),
-                    array (
-                        'data_field' => 'payload',
-                        'data_type' => 'TEXT DEFAULT NULL',
-                    ),
-                    array (
-                        'data_field' => 'exception',
-                        'data_type' => 'TEXT DEFAULT NULL',
-                    ),
-                    array (
-                        'data_field' => 'attempts',
-                        'data_type' => 'INTEGER',
-                    ),
-                    array (
-                        'data_field' => 'reserved',
-                        'data_type' => 'INTEGER',
-                    ),
-                    array (
-                        'data_field' => 'reserved_at',
-                        'data_type' => 'DATETIME',
-                    ),
-                    array (
-                        'data_field' => 'available_at',
-                        'data_type' => 'DATETIME',
-                    )
-                ]
             ]
         ];
     }
-
-    // genre, style, composition, color scheme, subject, mood, technique.
 
     /**
      * Create required table

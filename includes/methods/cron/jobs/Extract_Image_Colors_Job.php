@@ -6,8 +6,10 @@ use League\ColorExtractor\Palette;
 
 class Extract_Image_Colors_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $image_id = isset($job_payload['image_id']) ? $job_payload['image_id'] : null;
         $update_colors = isset($job_payload['update_colors']) ? $job_payload['update_colors'] : false;
         $image = growtype_ai_get_image_details($image_id);

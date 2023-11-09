@@ -71,8 +71,8 @@ class GeneralSettings
         $value = get_option('growtype_ai_images_saving_location');
 
         $options = [
-            'cloudinary' => 'cloudinary',
             'locally' => 'locally',
+            'cloudinary' => 'cloudinary',
         ];
         ?>
         <select name="growtype_ai_images_saving_location">

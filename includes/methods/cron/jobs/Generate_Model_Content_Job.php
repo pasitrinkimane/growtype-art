@@ -2,8 +2,10 @@
 
 class Generate_Model_Content_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $existing_content = growtype_ai_get_model_single_setting($job_payload['model_id'], $job_payload['meta_key']);
 
         $openai_crud = new Openai_Crud();

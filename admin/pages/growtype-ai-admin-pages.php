@@ -34,10 +34,16 @@ class Growtype_Ai_Admin_Pages
     public function load_pages()
     {
         /**
-         * Models
+         * Images
          */
         require_once 'images/growtype-ai-admin-images.php';
         new Growtype_Ai_Admin_Images();
+
+        /**
+         * Feed
+         */
+        require_once 'feed/growtype-ai-admin-feed.php';
+        new Growtype_Ai_Admin_Feed();
 
         /**
          * Models

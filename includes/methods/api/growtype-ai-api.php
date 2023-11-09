@@ -2,6 +2,8 @@
 
 class Growtype_Ai_Api
 {
+    const TRANSIENT_KEY = 'growtype_ai_api_models';
+
     public function __construct()
     {
         $this->load_methods();
@@ -10,6 +12,11 @@ class Growtype_Ai_Api
             $this,
             'register_routes'
         ));
+
+        add_action('growtype_ai_model_update', array ($this, 'growtype_ai_model_delete_transient'));
+        add_action('growtype_ai_model_delete', array ($this, 'growtype_ai_model_delete_transient'));
+        add_action('growtype_ai_model_image_delete', array ($this, 'growtype_ai_model_delete_transient'));
+        add_action('growtype_ai_model_image_update', array ($this, 'growtype_ai_model_delete_transient'));
     }
 
     function load_methods()
@@ -20,14 +27,14 @@ class Growtype_Ai_Api
 //        $this->leonardo_ai_crud = new Leonardo_Ai_Crud();
     }
 
-    function generate_images_callback($data)
-    {
-        $service = isset($data['service']) ? $data['service'] : null;
-
-        if ($service === 'leonardoai') {
-            $this->leonardo_ai_crud->generate_model();
-        }
-    }
+//    function generate_images_callback($data)
+//    {
+//        $service = isset($data['service']) ? $data['service'] : null;
+//
+//        if ($service === 'leonardoai') {
+//            $this->leonardo_ai_crud->generate_model();
+//        }
+//    }
 
     function register_routes()
     {
@@ -44,38 +51,49 @@ class Growtype_Ai_Api
 //            }
 //        ));
 
-        register_rest_route('growtype-ai/v1', 'retrieve/model/(?P<id>\d+)', array (
+//        register_rest_route('growtype-ai/v1', 'retrieve/model/(?P<id>\d+)', array (
+//            'methods' => 'GET',
+//            'callback' => array (
+//                $this,
+//                'retrieve_model_callback'
+//            ),
+//            'permission_callback' => function ($user) use ($permission) {
+//                return true;
+//            }
+//        ));
+
+        register_rest_route('growtype-ai/v1', 'retrieve/characters/(?P<featured_in>\w+)', array (
             'methods' => 'GET',
             'callback' => array (
                 $this,
-                'retrieve_model_callback'
+                'retrieve_characters_callback'
             ),
             'permission_callback' => function ($user) use ($permission) {
                 return true;
             }
         ));
 
-        register_rest_route('growtype-ai/v1', 'retrieve/image/(?P<id>\d+)', array (
-            'methods' => 'GET',
-            'callback' => array (
-                $this,
-                'retrieve_image_callback'
-            ),
-            'permission_callback' => function ($user) use ($permission) {
-                return true;
-            }
-        ));
+//        register_rest_route('growtype-ai/v1', 'retrieve/image/(?P<id>\d+)', array (
+//            'methods' => 'GET',
+//            'callback' => array (
+//                $this,
+//                'retrieve_image_callback'
+//            ),
+//            'permission_callback' => function ($user) use ($permission) {
+//                return true;
+//            }
+//        ));
 
-        register_rest_route('growtype-ai/v1', 'retrieve/images', array (
-            'methods' => 'GET',
-            'callback' => array (
-                $this,
-                'retrieve_random_images_callback'
-            ),
-            'permission_callback' => function ($user) use ($permission) {
-                return true;
-            }
-        ));
+//        register_rest_route('growtype-ai/v1', 'retrieve/images', array (
+//            'methods' => 'GET',
+//            'callback' => array (
+//                $this,
+//                'retrieve_random_images_callback'
+//            ),
+//            'permission_callback' => function ($user) use ($permission) {
+//                return true;
+//            }
+//        ));
 
         register_rest_route('growtype-ai/v1', 'retrieve/colors', array (
             'methods' => 'GET',
@@ -89,6 +107,40 @@ class Growtype_Ai_Api
         ));
     }
 
+    function retrieve_characters_callback($data)
+    {
+        $featured_in_groups = isset($data['featured_in']) ? explode(',', $data['featured_in']) : [];
+
+        foreach ($featured_in_groups as $featured_in_group) {
+            $options = growtype_ai_get_model_featured_in_options();
+
+            if (!in_array($featured_in_group, array_keys($options))) {
+                return wp_send_json([
+                    'data' => 'Invalid featured_in',
+                ], 400);
+            }
+        }
+
+        $response = get_transient(self::TRANSIENT_KEY);
+
+        if (empty($response)) {
+            $return_data = growtype_ai_get_featured_in_group_images($featured_in_groups);
+
+            $response = [];
+            foreach ($return_data as $return_data_single) {
+                if ($return_data_single['public_images_count'] < 5 || $return_data_single['featured_images_count'] < 2) {
+                    continue;
+                }
+
+                array_push($response, $return_data_single);
+            }
+
+            set_transient(self::TRANSIENT_KEY, $response, 60 * 60 * 24);
+        }
+
+        return wp_send_json($response, 200);
+    }
+
     function retrieve_model_callback($data)
     {
         $model_id = isset($data['id']) ? $data['id'] : null;
@@ -97,16 +149,19 @@ class Growtype_Ai_Api
             return;
         }
 
+        $return_data = [];
+
         $model = growtype_ai_get_model_details($model_id);
         $images = growtype_ai_get_model_images($model_id);
 
-        $return_data = [];
+        $return_data['prompt'] = $model['prompt'];
+
         foreach ($images as $image) {
-
-            $image['url'] = growtype_ai_get_image_url($image['id']);
-            $image['categories'] = isset($model['settings']['categories']) ? $model['settings']['categories'] : [];
-
-            array_push($return_data, $image);
+            $return_data['images'][] = [
+//                'id' => $image['id'],
+                'url' => growtype_ai_get_image_url($image['id']),
+                'categories' => isset($model['settings']['categories']) ? $model['settings']['categories'] : [],
+            ];
         };
 
         return wp_send_json([
@@ -243,5 +298,10 @@ class Growtype_Ai_Api
         return wp_send_json([
             'colors' => $return_data,
         ], 200);
+    }
+
+    function growtype_ai_model_delete_transient()
+    {
+        delete_transient(self::TRANSIENT_KEY);
     }
 }

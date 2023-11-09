@@ -125,6 +125,17 @@ class LeonardoAiSettings
                     'label' => 'Leonardo AI - Access Token 6',
                     'type' => 'textarea'
                 ]
+            ],
+            [
+                [
+                    'key' => 'growtype_ai_leonardo_user_id_7',
+                    'label' => 'Leonardo AI - User ID 7 (merbid@talkiemate.com - 1231231234Bb)'
+                ],
+                [
+                    'key' => 'growtype_ai_leonardo_cookie_7',
+                    'label' => 'Leonardo AI - Access Token 7',
+                    'type' => 'textarea'
+                ]
             ]
         ];
     }

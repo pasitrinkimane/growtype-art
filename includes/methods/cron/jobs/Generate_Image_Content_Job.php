@@ -2,8 +2,10 @@
 
 class Generate_Image_Content_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $image_id = $job_payload['image_id'];
         $regenerate_content = isset($job_payload['regenerate_content']) ? $job_payload['regenerate_content'] : false;
 

@@ -36,13 +36,13 @@ class Growtype_Ai_Deactivator
         $wp_rewrite->flush_rules();
 
         /**
-         * Cron
+         * Cron jobs
          */
-        $timestamp = wp_next_scheduled(Growtype_Ai_Cron::GROWTYPE_AI_JOBS_CRON);
-        wp_unschedule_event($timestamp, Growtype_Ai_Cron::GROWTYPE_AI_JOBS_CRON);
-
         $timestamp = wp_next_scheduled(Growtype_Ai_Cron::GROWTYPE_AI_BUNDLE_JOBS_CRON);
         wp_unschedule_event($timestamp, Growtype_Ai_Cron::GROWTYPE_AI_BUNDLE_JOBS_CRON);
+
+        $timestamp = wp_next_scheduled(Growtype_Ai_Cron::GROWTYPE_AI_COMPRESS_IMAGES_JOB_CRON);
+        wp_unschedule_event($timestamp, Growtype_Ai_Cron::GROWTYPE_AI_COMPRESS_IMAGES_JOB_CRON);
     }
 
 }

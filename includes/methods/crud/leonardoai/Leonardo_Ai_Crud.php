@@ -6,7 +6,7 @@ use React\EventLoop\Loop;
 
 class Leonardo_Ai_Crud
 {
-    const PROVIDER = 'leonardoai';
+    const MODELS_FOLDER_NAME = 'models';
 
     public static function user_credentials()
     {
@@ -40,6 +40,11 @@ class Leonardo_Ai_Crud
                 'cookie' => get_option('growtype_ai_leonardo_cookie_6'),
                 'user_id' => get_option('growtype_ai_leonardo_user_id_6'),
                 'id_token' => get_option('growtype_ai_leonardo_id_token_6')
+            ],
+            '7' => [
+                'cookie' => get_option('growtype_ai_leonardo_cookie_7'),
+                'user_id' => get_option('growtype_ai_leonardo_user_id_7'),
+                'id_token' => get_option('growtype_ai_leonardo_id_token_7')
             ]
         ];
     }
@@ -55,20 +60,6 @@ class Leonardo_Ai_Crud
 
     public function generate_model($model_id = null)
     {
-        /**
-         * Check if there are already enough retrieve jobs in the queue
-         */
-        $existing_jobs = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-            [
-                'key' => 'queue',
-                'values' => ['retrieve-model'],
-            ]
-        ]);
-
-        if (count($existing_jobs) > 20) {
-            return;
-        }
-
         $generation_details = $this->generate_model_image($model_id);
 
         growtype_ai_init_job('retrieve-model', json_encode([
@@ -77,7 +68,7 @@ class Leonardo_Ai_Crud
             'model_id' => $model_id,
             'generation_id' => $generation_details['generation_id'],
             'image_prompt' => $generation_details['image_prompt'],
-        ]), 30);
+        ]), 60);
 
         return $generation_details;
     }
@@ -86,8 +77,12 @@ class Leonardo_Ai_Crud
     {
         $credentials = $this->user_credentials();
 
+        $users = array_keys($credentials);
+
+        shuffle($users);
+
         $generation_id = null;
-        foreach ($credentials as $user_nr => $credential) {
+        foreach ($users as $user_nr) {
             $token = $this->retrieve_access_token($user_nr);
 
             if (empty($token)) {
@@ -99,8 +94,14 @@ class Leonardo_Ai_Crud
                 'user_nr' => $user_nr
             ];
 
-            $image_generating = $this->init_image_generating($credentials, $model_id);
-            $generation_id = $image_generating['generation_id'];
+            try {
+                $image_generating = $this->init_image_generating($credentials, $model_id);
+                $generation_id = $image_generating['generation_id'];
+            } catch (Exception $e) {
+                if (strpos($e->getMessage(), 'not enough tokens') !== false) {
+                    continue;
+                }
+            }
 
             if (!empty($generation_id)) {
                 break;
@@ -158,22 +159,28 @@ class Leonardo_Ai_Crud
             throw new Exception('No generation');
         }
 
+        if (isset($single_generation['status']) && $single_generation['status'] === 'PENDING') {
+            throw new Exception('PENDING generation');
+        }
+
         $generations = [$single_generation];
 
-        /**
-         * Save generation
-         */
-        $this->save_generations($generations, $model_id);
+//        error_log(print_r($generations, true));
 
-        /**
-         * Delete generation from Leonardo.ai
-         */
-        $this->delete_external_generations($token, $generations);
+        if (!empty($generations)) {
+            /**
+             * Save generation
+             */
+            $this->save_generations($generations, $model_id);
+
+            /**
+             * Delete generation from Leonardo.ai
+             */
+            $this->delete_external_generations($token, $generations);
+        }
 
         return $generations;
     }
-
-//    ------
 
     public function get_access_token($user_nr = null)
     {
@@ -429,21 +436,39 @@ class Leonardo_Ai_Crud
 
         $user_id = $this->get_user_credentials($user_nr)['user_id'];
 
+//        $parameters = '{
+//    "operationName": "GetAIGenerationFeed",
+//    "variables": {
+//        "where": {
+//            "userId": {
+//                "_eq": "' . $user_id . '"
+//            },
+//            "canvasRequest": {
+//                "_eq": false
+//            }
+//        },
+//        "userId": "' . $user_id . '"
+//    },
+//    "query": "query GetAIGenerationFeed($where: generations_bool_exp = {}, $userId: uuid!) {\n  generations(limit: ' . $amount . ', order_by: [{createdAt: desc}], where: $where) {\n    guidanceScale\n    inferenceSteps\n    modelId\n    scheduler\n    coreModel\n    sdVersion\n    prompt\n    negativePrompt\n    id\n    status\n    quantity\n    createdAt\n    imageHeight\n    imageWidth\n    presetStyle\n    sdVersion\n    seed\n    tiling\n    initStrength\n    user {\n      username\n      id\n      __typename\n    }\n    custom_model {\n      id\n      userId\n      name\n      modelHeight\n      modelWidth\n      __typename\n    }\n    init_image {\n      id\n      url\n      __typename\n    }\n    generated_images(order_by: [{url: desc}]) {\n      id\n      url\n      likeCount\n      generated_image_variation_generics(order_by: [{createdAt: desc}]) {\n        url\n        status\n        createdAt\n        id\n        transformType\n        __typename\n      }\n      user_liked_generated_images(limit: 1, where: {userId: {_eq: $userId}}) {\n        generatedImageId\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"
+//}';
+
         $parameters = '{
-    "operationName": "GetAIGenerationFeed",
-    "variables": {
-        "where": {
-            "userId": {
-                "_eq": "' . $user_id . '"
-            },
-            "canvasRequest": {
-                "_eq": false
-            }
-        },
-        "userId": "' . $user_id . '"
-    },
-    "query": "query GetAIGenerationFeed($where: generations_bool_exp = {}, $userId: uuid!) {\n  generations(limit: ' . $amount . ', order_by: [{createdAt: desc}], where: $where) {\n    guidanceScale\n    inferenceSteps\n    modelId\n    scheduler\n    coreModel\n    sdVersion\n    prompt\n    negativePrompt\n    id\n    status\n    quantity\n    createdAt\n    imageHeight\n    imageWidth\n    presetStyle\n    sdVersion\n    seed\n    tiling\n    initStrength\n    user {\n      username\n      id\n      __typename\n    }\n    custom_model {\n      id\n      userId\n      name\n      modelHeight\n      modelWidth\n      __typename\n    }\n    init_image {\n      id\n      url\n      __typename\n    }\n    generated_images(order_by: [{url: desc}]) {\n      id\n      url\n      likeCount\n      generated_image_variation_generics(order_by: [{createdAt: desc}]) {\n        url\n        status\n        createdAt\n        id\n        transformType\n        __typename\n      }\n      user_liked_generated_images(limit: 1, where: {userId: {_eq: $userId}}) {\n        generatedImageId\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"
+   "operationName":"GetAIGenerationFeed",
+   "variables":{
+      "where":{
+         "userId":{
+            "_eq": "' . $user_id . '"
+         },
+         "canvasRequest":{
+            "_eq":false
+         }
+      },
+      "offset":0,
+      "limit":' . $amount . '
+   },
+   "query":"query GetAIGenerationFeed($where: generations_bool_exp = {}, $userId: uuid, $limit: Int, $offset: Int = 0) {\n  generations(\n    limit: $limit\n    offset: $offset\n    order_by: [{createdAt: desc}]\n    where: $where\n  ) {\n    alchemy\n    contrastRatio\n    highResolution\n    guidanceScale\n    inferenceSteps\n    modelId\n    scheduler\n    coreModel\n    sdVersion\n    prompt\n    negativePrompt\n    id\n    status\n    quantity\n    createdAt\n    imageHeight\n    imageWidth\n    presetStyle\n    sdVersion\n    public\n    seed\n    tiling\n    initStrength\n    highContrast\n    promptMagic\n    promptMagicVersion\n    promptMagicStrength\n    imagePromptStrength\n    expandedDomain\n    photoReal\n    photoRealStrength\n    nsfw\n    user {\n      username\n      id\n      __typename\n    }\n    custom_model {\n      id\n      userId\n      name\n      modelHeight\n      modelWidth\n      __typename\n    }\n    init_image {\n      id\n      url\n      __typename\n    }\n    generated_images(order_by: [{url: desc}]) {\n      id\n      url\n      likeCount\n      nsfw\n      generated_image_variation_generics(order_by: [{createdAt: desc}]) {\n        url\n        status\n        createdAt\n        id\n        transformType\n        upscale_details {\n          oneClicktype\n          isOneClick\n          id\n          variationId\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    generation_elements {\n      id\n      lora {\n        akUUID\n        name\n        description\n        urlImage\n        baseModel\n        weightDefault\n        weightMin\n        weightMax\n        __typename\n      }\n      weightApplied\n      __typename\n    }\n    __typename\n  }\n}"
 }';
+
 
         $response = wp_remote_post($url, array (
             'headers' => array (
@@ -460,6 +485,108 @@ class Leonardo_Ai_Crud
         $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
         return isset($responceData['data']['generations']) ? $responceData['data']['generations'] : null;
+    }
+
+    function get_user_feed($user_nr, $args)
+    {
+        $token = $this->retrieve_access_token($user_nr);
+
+        return $this->get_feed_images($token, $args);
+    }
+
+    /**
+     * @param $token
+     * @param $amount
+     * @param $user_nr
+     * @return mixed|null
+     */
+    function get_feed_images($token, $args)
+    {
+        $url = 'https://api.leonardo.ai/v1/graphql';
+
+        $parameters = '{
+  "operationName": "GetFeedImages",
+  "variables": {
+    "order_by": [
+      {
+        "trendingScore": "desc"
+      },
+      {
+        "createdAt": "desc"
+      }
+    ],
+    "where": {
+      "createdAt": {
+        "_lt": "2023-10-17T06:54:35.171Z"
+      },
+      "generation": {
+        "status": {
+          "_eq": "COMPLETE"
+        },
+        "prompt": {
+          "_ilike": "%' . $args['search'] . '%"
+        },
+        "public": {
+          "_eq": true
+        },
+        "canvasRequest": {
+          "_eq": false
+        },
+        "category": {},
+        "_or": [
+          {
+            "promptMagic": {
+              "_eq": false
+            }
+          },
+          {
+            "initStrength": {
+              "_is_null": true
+            }
+          },
+          {
+            "photoReal": {
+              "_eq": false
+            }
+          }
+        ]
+      },
+      "nsfw": {
+        "_eq": true
+      }
+    },
+    "limit": 50,
+    "offset": ' . $args['offset'] . ',
+    "userId": "e5e50ec2-0190-4a75-9241-8c464261347c"
+  },
+  "query": "query GetFeedImages($where: generated_images_bool_exp, $limit: Int, $userId: uuid!, $order_by: [generated_images_order_by!] = [{createdAt: desc}], $offset: Int) {\n  generated_images(\n    where: $where\n    limit: $limit\n    order_by: $order_by\n    offset: $offset\n  ) {\n    ...FeedParts\n    __typename\n  }\n}\n\nfragment FeedParts on generated_images {\n  createdAt\n  id\n  url\n  user_liked_generated_images(limit: 1, where: {userId: {_eq: $userId}}) {\n    generatedImageId\n    __typename\n  }\n  user {\n    username\n    id\n    __typename\n  }\n  generation {\n    id\n    alchemy\n    contrastRatio\n    highResolution\n    prompt\n    negativePrompt\n    imageWidth\n    imageHeight\n    sdVersion\n    modelId\n    coreModel\n    guidanceScale\n    inferenceSteps\n    seed\n    scheduler\n    tiling\n    highContrast\n    promptMagic\n    promptMagicVersion\n    imagePromptStrength\n    custom_model {\n      id\n      name\n      userId\n      modelHeight\n      modelWidth\n      __typename\n    }\n    generation_elements {\n      id\n      lora {\n        akUUID\n        name\n        description\n        urlImage\n        baseModel\n        weightDefault\n        weightMin\n        weightMax\n        __typename\n      }\n      weightApplied\n      __typename\n    }\n    initStrength\n    category\n    public\n    nsfw\n    photoReal\n    __typename\n  }\n  generated_image_variation_generics(order_by: [{createdAt: desc}]) {\n    url\n    id\n    status\n    transformType\n    upscale_details {\n      oneClicktype\n      __typename\n    }\n    __typename\n  }\n  likeCount\n  __typename\n}"
+}';
+
+        $parameters = json_decode($parameters);
+
+        if (isset($args['model_id']) && !empty($args['model_id'])) {
+            $parameters->variables->where->generation->modelId = [
+                '_eq' => $args['model_id']
+            ];
+        }
+
+        $parameters = json_encode($parameters);
+
+        $response = wp_remote_post($url, array (
+            'headers' => array (
+                'Content-Type' => 'application/json; charset=utf-8',
+                'Authorization' => 'Bearer ' . $token,
+            ),
+            'body' => $parameters,
+            'method' => 'POST',
+            'data_format' => 'body',
+        ));
+
+        $body = wp_remote_retrieve_body($response);
+
+        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+
+        return isset($responceData['data']['generated_images']) ? $responceData['data']['generated_images'] : null;
     }
 
     function delete_generation($token, $id)
@@ -527,7 +654,7 @@ class Leonardo_Ai_Crud
             }
 
             foreach ($generations_group as $generation) {
-                $image_folder = self::PROVIDER . '/' . $reference_id;
+                $image_folder = isset($model['image_folder']) ? $model['image_folder'] : self::MODELS_FOLDER_NAME . '/' . $reference_id;
                 $image_location = growtype_ai_get_images_saving_location();
 
                 $existing_models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE, [
@@ -542,7 +669,7 @@ class Leonardo_Ai_Crud
                         'prompt' => $generation['prompt'],
                         'negative_prompt' => !empty($generation['negativePrompt']) ? $generation['negativePrompt'] : 'watermark, watermarked, disfigured, ugly, grain, low resolution, deformed, blurred, bad anatomy, badly drawn face, extra limb, ugly, badly drawn arms, missing limb, floating limbs, detached limbs, deformed arms, out of focus, disgusting, badly drawn, disfigured, tile, badly drawn arms, badly drawn legs, badly drawn face, out of frame, extra limbs, deformed, body out of frame, grainy, clipped, bad proportion, cropped image, blur haze',
                         'reference_id' => $reference_id,
-                        'provider' => self::PROVIDER,
+                        'provider' => self::MODELS_FOLDER_NAME,
                         'image_folder' => $image_folder
                     ]);
 
@@ -559,7 +686,7 @@ class Leonardo_Ai_Crud
                         'num_inference_steps' => $generation['inferenceSteps'],
                         'preset_style' => $generation['presetStyle'],
                         'leonardo_magic' => isset($generation['leonardoMagic']) ? $generation['leonardoMagic'] : null,
-                        'alchemy' => isset($generation['alchemy']) ? $generation['alchemy'] : false,
+                        'alchemy' => isset($generation['alchemy']) ? $generation['alchemy'] : true,
                         'image_prompts' => isset($generation['imagePrompts']) ? implode(',', $generation['imagePrompts']) : null,
                         'image_prompt_weight' => isset($generation['imagePromptWeight']) ? $generation['imagePromptWeight'] : null,
                         'pose_to_image' => isset($generation['poseToImage']) ? $generation['poseToImage'] : false,
@@ -567,7 +694,7 @@ class Leonardo_Ai_Crud
                         'photoReal' => isset($generation['photoReal']) ? $generation['photoReal'] : false,
                     ];
 
-                    if (isset($generation['modelId']) && !empty($generation['modelId'])) {
+                    if (isset($generation['modelId']) && !empty($generation['modelId']) && !$model_settings['photoReal']) {
                         $model_settings['model_id'] = $generation['modelId'];
                     }
 
@@ -601,7 +728,16 @@ class Leonardo_Ai_Crud
                     $image['imageHeight'] = isset($generation['imageHeight']) ? $generation['imageHeight'] : null;
                     $image['folder'] = $image_folder;
                     $image['location'] = $image_location;
-                    $image['prompt'] = $generation['prompt'];
+
+                    $image['meta_details'] = [];
+                    foreach ($generation as $key => $value) {
+                        if (!in_array($key, ['imageHeight', 'imageWidth', 'public', 'status', 'expandedDomain', '__typename'])) {
+                            array_push($image['meta_details'], [
+                                'key' => $key,
+                                'value' => is_array($value) ? json_encode($value) : (!empty($value) ? $value : '0')
+                            ]);
+                        }
+                    }
 
                     $saved_image = Growtype_Ai_Crud::save_image($image);
 
@@ -639,6 +775,11 @@ class Leonardo_Ai_Crud
                      * Get image colors
                      */
                     Extract_Image_Colors_Job::update_image_colors_groups($saved_image['id']);
+
+                    /**
+                     * Compress image
+                     */
+                    growtype_ai_compress_existing_image($saved_image['id']);
 
                     sleep(2);
                 }

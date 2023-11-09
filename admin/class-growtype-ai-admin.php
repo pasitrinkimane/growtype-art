@@ -26,7 +26,7 @@ class Growtype_Ai_Admin
     const SETTINGS_PAGE_NAME = 'growtype-ai-settings';
     const MODELS_PAGE_NAME = 'growtype-ai-models';
     const POST_TYPE = 'growtype_ai_models';
-    const GROWTYPE_AI_SETTINGS_DEFAULT_TAB = 'general';
+    const SETTINGS_DEFAULT_TAB = 'general';
 
     /**
      * The ID of this plugin.
@@ -68,56 +68,6 @@ class Growtype_Ai_Admin
              */
             add_action('init', array ($this, 'add_pages'));
         }
-
-        /**
-         * Ajax
-         */
-        add_action('wp_ajax_remove_image', array ($this, 'remove_image_callback'));
-        add_action('wp_ajax_featured_image', array ($this, 'featured_image_callback'));
-    }
-
-    function remove_image_callback()
-    {
-        $image_id = $_POST['image_id'];
-
-        Growtype_Ai_Crud::delete_image($image_id);
-
-        return wp_send_json(
-            [
-                'message' => __('Success', 'growtype')
-            ], 200);
-    }
-
-
-    function featured_image_callback()
-    {
-        $image_id = $_POST['image_id'];
-
-        $image_details = growtype_ai_get_image_details($image_id);
-
-        $is_featured = !(isset($image_details['settings']['is_featured']) ? $image_details['settings']['is_featured'] : false);
-
-        Growtype_Ai_Database_Crud::update_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE,
-            [
-                [
-                    'key' => 'image_id',
-                    'values' => [$image_id]
-                ]
-            ],
-            [
-                'reference_key' => 'meta_key',
-                'update_value' => 'meta_value'
-            ],
-            [
-                'is_featured' => $is_featured
-            ]
-        );
-
-        return wp_send_json(
-            [
-                'is_featured' => $is_featured,
-                'message' => __('Success', 'growtype')
-            ], 200);
     }
 
     /**

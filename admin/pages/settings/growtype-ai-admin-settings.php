@@ -39,7 +39,7 @@ class Growtype_Ai_Admin_Settings
 
             <div class="wrap">
 
-                <h1>Growtype - AI settings</h1>
+                <h1>Growtype AI - settings</h1>
 
                 <?php
                 if (isset($_GET['updated']) && 'true' == esc_attr($_GET['updated'])) {
@@ -59,7 +59,7 @@ class Growtype_Ai_Admin_Settings
                     if (isset ($_GET['tab'])) {
                         $tab = $_GET['tab'];
                     } else {
-                        $tab = Growtype_Ai_Admin::GROWTYPE_AI_SETTINGS_DEFAULT_TAB;
+                        $tab = Growtype_Ai_Admin::SETTINGS_DEFAULT_TAB;
                     }
 
                     switch ($tab) {
@@ -178,16 +178,9 @@ class Growtype_Ai_Admin_Settings
                 }
 
                 if (isset($_POST['growtype_ai_optimization_sync_local_images'])) {
-                    Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_JOBS_TABLE, [
-                        'queue' => 'optimize-database',
-                        'payload' => json_encode([
-                            'action' => 'sync-local-images'
-                        ]),
-                        'attempts' => 0,
-                        'reserved_at' => wp_date('Y-m-d H:i:s'),
-                        'available_at' => date('Y-m-d H:i:s', strtotime(wp_date('Y-m-d H:i:s')) + 5),
-                        'reserved' => 0
-                    ]);
+                    growtype_ai_init_job('generate-model-content', json_encode([
+                        'action' => 'sync-local-images'
+                    ]), 30);
                 }
 
                 if (isset($_POST['growtype_ai_optimization_sync_models'])) {
@@ -228,7 +221,7 @@ class Growtype_Ai_Admin_Settings
         return apply_filters('growtype_ai_admin_settings_tabs', []);
     }
 
-    function render_settings_tab_render($current = Growtype_Ai_Admin::GROWTYPE_AI_SETTINGS_DEFAULT_TAB)
+    function render_settings_tab_render($current = Growtype_Ai_Admin::SETTINGS_DEFAULT_TAB)
     {
         $tabs = $this->settings_tabs();
 

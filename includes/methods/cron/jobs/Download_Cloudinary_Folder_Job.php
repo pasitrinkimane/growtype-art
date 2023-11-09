@@ -2,8 +2,10 @@
 
 class Download_Cloudinary_Folder_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $model_id = $job_payload['model_id'];
 
         error_log('model_id: ' . $model_id);
@@ -30,11 +32,7 @@ class Download_Cloudinary_Folder_Job
 
         if (empty($cd_images)) {
             error_log('empty $cd_images: ' . print_r($cd_images, true));
-
             $cloudinary->delete_folder($model['image_folder']);
-
-            Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::MODEL_JOBS_TABLE, [$job['id']]);
-
             exit();
         }
 
@@ -77,7 +75,7 @@ class Download_Cloudinary_Folder_Job
                 ], $existing_image[0]['id']);
             }
 
-            growtype_ai_save_file([
+            growtype_ai_save_external_file([
                 'location' => $saving_location,
                 'url' => $cd_image['url'],
                 'name' => $cd_image_name,

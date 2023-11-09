@@ -2,8 +2,10 @@
 
 class Download_Model_Images_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $models = [
             [
                 'id' => $job_payload['model_id']
@@ -14,13 +16,8 @@ class Download_Model_Images_Job
 
         $saving_location = 'locally';
 
-//                        d($models);
-
         foreach ($models as $model) {
-
             $images = growtype_ai_get_model_images($model['id']);
-
-//                            d($images);
 
             if (!empty($images)) {
                 foreach ($images as $image) {
@@ -63,7 +60,7 @@ class Download_Model_Images_Job
                         ]);
                     }
 
-                    growtype_ai_save_file([
+                    growtype_ai_save_external_file([
                         'location' => $saving_location,
                         'url' => $cd_img['url'],
                         'name' => $image['name'],

@@ -2,6 +2,8 @@
 
 class Growtype_Ai_Crud
 {
+    const IMAGES_FOLDER_NAME = 'models';
+
     public function __construct()
     {
         $this->load_methods();
@@ -49,7 +51,7 @@ class Growtype_Ai_Crud
         }
 
         $filename = basename($image['url']);
-        $ext = pathinfo($filename, PATHINFO_EXTENSION);
+        $ext = is_readable($filename) ? pathinfo($filename, PATHINFO_EXTENSION) : 'jpg';
         $new_name = uniqid();
 
         $file = [
@@ -84,14 +86,16 @@ class Growtype_Ai_Crud
         ]);
 
         /**
-         * Save prompt
+         * Save meta details
          */
-        if (isset($image['prompt'])) {
-            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                'image_id' => $image_id,
-                'meta_key' => 'prompt',
-                'meta_value' => $image['prompt']
-            ]);
+        if (isset($image['meta_details'])) {
+            foreach ($image['meta_details'] as $key => $meta) {
+                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                    'image_id' => $image_id,
+                    'meta_key' => $meta['key'],
+                    'meta_value' => $meta['value']
+                ]);
+            }
         }
 
         /**
@@ -103,10 +107,10 @@ class Growtype_Ai_Crud
             $saving_locations = ['locally', 'cloudinary'];
             foreach ($saving_locations as $saving_location) {
                 $file['location'] = $saving_location;
-                $saved_image = growtype_ai_save_file($file, $file['folder']);
+                $saved_image = growtype_ai_save_external_file($file, $file['folder']);
             }
         } else {
-            $saved_image = growtype_ai_save_file($file, $file['folder']);
+            $saved_image = growtype_ai_save_external_file($file, $file['folder']);
         }
 
         /**

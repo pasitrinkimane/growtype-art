@@ -164,6 +164,40 @@ class Openai_Crud
         }
     }
 
+    public function format_model_character($model_id)
+    {
+        $character_details = growtype_ai_get_model_character_details($model_id);
+
+        $data = [];
+        foreach ($character_details as $character_detail) {
+            $data[$character_detail['meta_key']] = $character_detail['meta_value'];
+        }
+
+        if (!empty($data)) {
+            $content = Openai_Crud::generate_model_character_content($data);
+
+            if (!empty($content) && is_array($content)) {
+                foreach ($content as $key => $value) {
+                    Growtype_Ai_Database_Crud::update_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE,
+                        [
+                            [
+                                'key' => 'model_id',
+                                'values' => [$model_id]
+                            ]
+                        ],
+                        [
+                            'reference_key' => 'meta_key',
+                            'update_value' => 'meta_value'
+                        ],
+                        [
+                            $key => sanitize_text_field($value)
+                        ]
+                    );
+                }
+            }
+        }
+    }
+
     public function format_model_images($model_id = null, $regenerate_values = false)
     {
         if (empty($model_id)) {
@@ -171,21 +205,6 @@ class Openai_Crud
         } else {
             $models = [growtype_ai_get_model_details($model_id)];
         }
-
-//        global $wpdb;
-//        $records = $wpdb->get_results("SELECT image_id, meta_value, COUNT(meta_value) FROM wp_growtype_ai_image_settings where meta_key='caption' group by meta_value HAVING COUNT(meta_value) > 1", ARRAY_A);
-//
-////        var_dump(count($records));
-//
-//        foreach (array_slice($records, 0, 300) as $record) {
-//            $this->format_image($record['image_id'], true);
-//        }
-//
-//        dd('done');
-//
-//        $existing_captions = [];
-//        d(growtype_ai_get_image_details($image['id']));
-
 
         foreach ($models as $model) {
             $images = growtype_ai_get_model_images($model['id']);
@@ -204,7 +223,7 @@ class Openai_Crud
             'regenerate_content' => true,
         ]);
 
-//        d(growtype_ai_get_image_details($image_id));
+        return $Generate_Image_Content;
     }
 
     public function format_image_job($image_id, $regenerate_values = false)
@@ -213,6 +232,44 @@ class Openai_Crud
             'image_id' => $image_id,
             'regenerate_content' => $regenerate_values,
         ]), 5);
+    }
+
+    public function generate_model_character_content($data)
+    {
+        $open_ai = new OpenAi($this->open_ai_key);
+
+        $gender = $data['character_gender'];
+        $nationality = $data['character_nationality'];
+        $occupation = $data['character_occupation'];
+
+        $messages_content = sprintf('Generate interesting %s character description in a array format presented below as "example". Change "example" array values. Do not change "example" array keys. "character_title" should be a popular name according to nationality, occupation should be %s and nationality %s.  Change other array values according to nationality and occupation. Use metric unit system. Return only array without extra content. Example - %s', $gender, $occupation, $nationality,
+            json_encode($data));
+
+        $complete = $open_ai->chat([
+            'model' => 'gpt-3.5-turbo',
+            'messages' => [
+                [
+                    "role" => "system",
+                    "content" => "You are a helpful assistant."
+                ],
+                [
+                    "role" => "user",
+                    "content" => $messages_content
+                ],
+            ],
+            'temperature' => 1.0,
+            'max_tokens' => 3000,
+            'frequency_penalty' => 0,
+            'presence_penalty' => 0,
+        ]);
+
+        $completion = json_decode($complete, true);
+
+        $content = isset($completion['choices'][0]['message']['content']) ? $completion['choices'][0]['message']['content'] : null;
+
+        $content = json_decode($content, true);
+
+        return $content;
     }
 }
 

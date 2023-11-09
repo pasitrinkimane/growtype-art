@@ -84,7 +84,7 @@ class Growtype_Ai_Database_Optimize
         }
     }
 
-    public static function clean_duplicate_images($generator = 'leonardoai')
+    public static function clean_duplicate_images()
     {
         /**
          * Remove duplicates
@@ -110,7 +110,7 @@ class Growtype_Ai_Database_Optimize
                 }
             }
 
-            $image_url = growtype_ai_get_upload_dir() . '/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'];
+            $image_url = growtype_ai_build_local_image_url($image);
 
             if (!file_exists($image_url)) {
                 $alternative_extension = $image['extension'] === 'jpg' ? 'png' : 'jpg';
@@ -137,7 +137,7 @@ class Growtype_Ai_Database_Optimize
         return count($unique_images);
     }
 
-    public static function sync_local_images($generator = 'leonardoai')
+    public static function sync_local_images($generator = 'models')
     {
         error_log('Syncing local images...');
 
@@ -197,7 +197,7 @@ class Growtype_Ai_Database_Optimize
         return $existing_images_amount;
     }
 
-    public static function optimize_all_images($generator = 'leonardoai')
+    public static function optimize_all_images($generator = 'models')
     {
         error_log('Optimizing local images...');
 

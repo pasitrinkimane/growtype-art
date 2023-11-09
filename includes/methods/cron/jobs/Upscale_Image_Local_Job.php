@@ -2,8 +2,10 @@
 
 class Upscale_Image_Local_Job
 {
-    public function run($job_payload)
+    public function run($job)
     {
+        $job_payload = json_decode($job['payload'], true);
+
         $image_path = isset($job_payload['path']) ? $job_payload['path'] : null;
 
         if (empty($image_path)) {
