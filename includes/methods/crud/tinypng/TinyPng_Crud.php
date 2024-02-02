@@ -2,7 +2,7 @@
 
 require GROWTYPE_AI_PATH . '/vendor/autoload.php';
 
-class TinyPng
+class TinyPng_Crud
 {
     public function __construct()
     {

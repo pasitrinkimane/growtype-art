@@ -1,0 +1,10 @@
+# standards
+/.cache/
+/.env
+/.idea/
+/vendor/
+composer.lock
+coverage.xml
+clover.xml
+*.local.*
+.phpunit.result.cache
