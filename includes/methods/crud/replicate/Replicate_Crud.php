@@ -1,6 +1,6 @@
 <?php
 
-class Replicate
+class Replicate_Crud
 {
 
     public function __construct()

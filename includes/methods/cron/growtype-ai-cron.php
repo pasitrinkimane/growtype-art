@@ -22,11 +22,11 @@ class Growtype_Ai_Cron
     function cron_activation()
     {
         if (!wp_next_scheduled(self::GROWTYPE_AI_BUNDLE_JOBS_CRON)) {
-            wp_schedule_event(time(), 'every10minute', self::GROWTYPE_AI_BUNDLE_JOBS_CRON);
+            wp_schedule_event(time(), 'hourly', self::GROWTYPE_AI_BUNDLE_JOBS_CRON);
         }
 
         if (!wp_next_scheduled(self::GROWTYPE_AI_COMPRESS_IMAGES_JOB_CRON)) {
-            wp_schedule_event(time(), 'every5minute', self::GROWTYPE_AI_COMPRESS_IMAGES_JOB_CRON);
+            wp_schedule_event(time(), 'hourly', self::GROWTYPE_AI_COMPRESS_IMAGES_JOB_CRON);
         }
     }
 
@@ -85,6 +85,14 @@ class Growtype_Ai_Cron
                 'classname' => 'Compress_Images_Job',
                 'path' => GROWTYPE_AI_PATH . '/includes/methods/cron/jobs/Compress_Images_Job.php',
             ],
+            'generate-meal-plan' => [
+                'classname' => 'Generate_Meal_Plan_Job',
+                'path' => GROWTYPE_AI_PATH . '/includes/methods/cron/jobs/Generate_Meal_Plan_Job.php',
+            ],
+            'generate-meal' => [
+                'classname' => 'Generate_Meal_Job',
+                'path' => GROWTYPE_AI_PATH . '/includes/methods/cron/jobs/Generate_Meal_Job.php',
+            ],
         ]);
 
         return $jobs;
@@ -92,7 +100,6 @@ class Growtype_Ai_Cron
 
     function generate_bundle_jobs()
     {
-        $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
         $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
 
         if (empty($bundle_ids)) {
@@ -100,12 +107,21 @@ class Growtype_Ai_Cron
         }
 
         $delay = 0;
-        foreach ($models as $model) {
-            if (!in_array($model['id'], $bundle_ids)) {
+        foreach ($bundle_ids as $bundle_id) {
+            $existing_content = growtype_ai_get_model_single_setting($bundle_id, 'generatable_images_limit');
+
+            if (!empty($existing_content)) {
+                $model_images = growtype_ai_get_model_images($bundle_id);
+                if (!empty($existing_content['meta_value']) && count($model_images) >= (int)$existing_content['meta_value']) {
+                    continue;
+                }
+            }
+
+            if (empty($bundle_id)) {
                 continue;
             }
 
-            growtype_cron_init_job('generate-model', json_encode(['model_id' => $model['id']]), $delay);
+            growtype_cron_init_job('generate-model', json_encode(['model_id' => $bundle_id]), $delay);
 
             $delay += 20;
         }
@@ -114,7 +130,7 @@ class Growtype_Ai_Cron
     function generate_compress_images_job()
     {
         $images_limit = 40;
-        $models = growtype_ai_get_featured_in_group_images(['talkiemate']);
+        $models = growtype_ai_get_featured_in_group_images(['talkiemate'], ['admin', 'external_user']);
 
         $images_ids = [];
         foreach ($models as $model) {

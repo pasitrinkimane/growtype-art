@@ -5,13 +5,14 @@ namespace partials;
 require GROWTYPE_AI_PATH . '/vendor/autoload.php';
 
 use Cloudinary_Crud;
+use Exception;
 use Extract_Image_Colors_Job;
 use Growtype_Ai_Crud;
 use Growtype_Ai_Database;
 use Growtype_Ai_Database_Crud;
 use React\EventLoop\Loop;
 
-class Leonardo_Ai_Crud
+class Leonardo_Ai_Base
 {
     const MODELS_FOLDER_NAME = 'models';
 
@@ -75,6 +76,7 @@ class Leonardo_Ai_Crud
             'model_id' => $model_id,
             'generation_id' => $generation_details['generation_id'],
             'image_prompt' => $generation_details['image_prompt'],
+            'post_id' => $generation_details['post_id'] ?? '',
         ]), 60);
 
         return $generation_details;
@@ -82,13 +84,19 @@ class Leonardo_Ai_Crud
 
     public function generate_model_image($model_id)
     {
-        $credentials = $this->user_credentials();
+        $leonardo_ai_settings_user_nr = growtype_ai_get_model_single_setting($model_id, 'leonardo_ai_settings_user_nr');
+        $leonardo_ai_settings_user_nr = $leonardo_ai_settings_user_nr['meta_value'] ?? '';
 
-        $users = array_keys($credentials);
-
-        shuffle($users);
+        if (!empty($leonardo_ai_settings_user_nr)) {
+            $users = [$leonardo_ai_settings_user_nr];
+        } else {
+            $available_credentials = $this->user_credentials();
+            $users = array_keys($available_credentials);
+            shuffle($users);
+        }
 
         $generation_id = null;
+        $error_message = null;
         foreach ($users as $user_nr) {
             $token = $this->retrieve_access_token($user_nr);
 
@@ -105,6 +113,7 @@ class Leonardo_Ai_Crud
                 $image_generating = $this->init_image_generating($credentials, $model_id);
                 $generation_id = $image_generating['generation_id'];
             } catch (Exception $e) {
+                $error_message = $e->getMessage();
                 if (strpos($e->getMessage(), 'not enough tokens') !== false) {
                     continue;
                 }
@@ -117,13 +126,14 @@ class Leonardo_Ai_Crud
 
 
         if (empty($generation_id)) {
-            throw new Exception('No generationId');
+            throw new Exception($error_message);
         }
 
         return [
             'generation_id' => $generation_id,
             'image_prompt' => isset($image_generating['image_prompt']) ? $image_generating['image_prompt'] : null,
-            'user_nr' => $user_nr
+            'user_nr' => $user_nr,
+            'post_id' => isset($image_generating['post_id']) ? $image_generating['post_id'] : null,
         ];
     }
 
@@ -144,7 +154,7 @@ class Leonardo_Ai_Crud
         return $generations;
     }
 
-    public function retrieve_single_generation($model_id, $user_nr, $generation_id)
+    public function retrieve_single_generation($model_id, $user_nr, $generation_id, $args = [])
     {
         $token = $this->get_access_token($user_nr);
 
@@ -172,13 +182,11 @@ class Leonardo_Ai_Crud
 
         $generations = [$single_generation];
 
-//        error_log(print_r($generations, true));
-
         if (!empty($generations)) {
             /**
              * Save generation
              */
-            $this->save_generations($generations, $model_id);
+            $this->save_generations($generations, $model_id, $args);
 
             /**
              * Delete generation from Leonardo.ai
@@ -189,6 +197,10 @@ class Leonardo_Ai_Crud
         return $generations;
     }
 
+    /**
+     * @param $user_nr
+     * @return mixed
+     */
     public function get_access_token($user_nr = null)
     {
         $token = $this->retrieve_access_token($user_nr);
@@ -200,6 +212,10 @@ class Leonardo_Ai_Crud
         return $token;
     }
 
+    /**
+     * @param $cookie
+     * @return mixed|null
+     */
     function get_login_details($cookie)
     {
         $url = 'https://app.leonardo.ai/api/auth/me';
@@ -214,9 +230,9 @@ class Leonardo_Ai_Crud
 
         $body = wp_remote_retrieve_body($response);
 
-        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+        $responce_data = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        return $responceData;
+        return $responce_data;
     }
 
     function retrieve_access_token($user_nr = 1)
@@ -235,9 +251,9 @@ class Leonardo_Ai_Crud
 
         $body = wp_remote_retrieve_body($response);
 
-        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+        $responce_data = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        return isset($responceData['accessToken']) ? $responceData['accessToken'] : null;
+        return isset($responce_data['accessToken']) ? $responce_data['accessToken'] : null;
     }
 
     function return_generation($token, $generation_id)
@@ -276,6 +292,10 @@ class Leonardo_Ai_Crud
         if (!empty($model_id)) {
             $model_details = growtype_ai_get_model_details($model_id);
 
+            if (empty($model_details)) {
+                throw new Exception('No model details');
+            }
+
             $image_prompt = $model_details['prompt'];
             $prompt_variables = isset($model_details['settings']['prompt_variables']) ? $model_details['settings']['prompt_variables'] : null;
             $prompt_variables = !empty($prompt_variables) ? explode('|', $prompt_variables) : null;
@@ -284,6 +304,12 @@ class Leonardo_Ai_Crud
                 $rendom_promp_variable_key = array_rand($prompt_variables, 1);
 
                 $image_prompt = str_replace('{prompt_variable}', $prompt_variables[$rendom_promp_variable_key], $image_prompt);
+            }
+
+            foreach ($model_details['settings'] as $key => $setting) {
+                if (strpos($key, 'character') !== false) {
+                    $image_prompt = str_replace('{' . $key . '}', $setting, $image_prompt);
+                }
             }
 
             $leonardoMagic = isset($model_details['settings']['leonardo_magic']) && !$model_details['settings']['leonardo_magic'] ? false : true;
@@ -315,6 +341,8 @@ class Leonardo_Ai_Crud
                 'expandedDomain' => true,
                 'contrastRatio' => 0.5,
                 'photoReal' => isset($model_details['settings']['photoReal']) && $model_details['settings']['photoReal'] ? true : false,
+                'controlnets' => [],
+                'elements' => [],
             ];
 
             if (isset($default_args['leonardoMagic']) && $default_args['leonardoMagic']) {
@@ -330,13 +358,59 @@ class Leonardo_Ai_Crud
             }
 
             if (isset($model_details['settings']['init_generation_image_id']) && !empty($model_details['settings']['init_generation_image_id'])) {
-                $default_args['init_generation_image_id'] = $model_details['settings']['init_generation_image_id'];
+                $default_args['init_image_id'] = $model_details['settings']['init_generation_image_id'];
+            }
+
+            if (!empty($custom_args)) {
+                $default_args = array_merge($default_args, $custom_args);
+            }
+
+            /**
+             * Check if data should be collected from posts
+             */
+            if (isset($model_details['settings']['post_type_to_collect_data_from']) && !empty($model_details['settings']['post_type_to_collect_data_from'])) {
+                $posts = get_posts([
+                    'post_type' => $model_details['settings']['post_type_to_collect_data_from'],
+                    'post_status' => ['draft', 'publish'],
+                    'numberposts' => -1
+                ]);
+
+                $post_id = null;
+                $post_exists = false;
+                foreach ($posts as $post) {
+                    $images_ids = get_post_meta($post->ID, 'growtype_ai_images_ids', true);
+                    $images_ids = !empty($images_ids) ? json_decode($images_ids, true) : [];
+                    $growtype_ai_images_generating = get_post_meta($post->ID, 'growtype_ai_images_generating', true);
+
+                    if (empty($images_ids) || count($images_ids) < 3) {
+                        $post_id = $post->ID;
+
+                        $post_title = explode('-', $post->post_title);
+                        $post_title = $post_title[0];
+                        $default_args['prompt'] = str_replace('{post_title}', $post_title, $default_args['prompt']);
+                        update_post_meta($post->ID, 'growtype_ai_images_generating', true);
+
+                        $post_exists = true;
+
+                        break;
+                    }
+                }
+
+                if (!$post_exists) {
+                    $posts = array_shuffle($posts);
+                    $post = $posts[0];
+
+                    $post_title = explode('-', $post->post_title);
+                    $post_title = $post_title[0];
+                    $default_args['prompt'] = str_replace('{post_title}', $post_title, $default_args['prompt']);
+                    update_post_meta($post->ID, 'growtype_ai_images_generating', true);
+                }
             }
 
             $parameters = [
                 'operationName' => 'CreateSDGenerationJob',
                 'variables' => [
-                    'arg1' => empty($custom_args) ? $default_args : $custom_args
+                    'arg1' => $default_args
                 ],
                 'query' => 'mutation CreateSDGenerationJob($arg1: SDGenerationInput!) { sdGenerationJob(arg1: $arg1) { generationId __typename }}'
             ];
@@ -369,6 +443,8 @@ class Leonardo_Ai_Crud
 }';
         }
 
+//        d(json_decode($parameters, true));
+
         $response = wp_remote_post($url, array (
             'headers' => array (
                 'Content-Type' => 'application/json; charset=utf-8',
@@ -381,12 +457,12 @@ class Leonardo_Ai_Crud
 
         $body = wp_remote_retrieve_body($response);
 
-        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+        $responce_data = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        $generation_id = isset($responceData['data']['sdGenerationJob']['generationId']) ? $responceData['data']['sdGenerationJob']['generationId'] : null;
+        $generation_id = isset($responce_data['data']['sdGenerationJob']['generationId']) ? $responce_data['data']['sdGenerationJob']['generationId'] : null;
 
         if (empty($generation_id)) {
-            $message = isset($responceData['errors'][0]['message']) ? $responceData['errors'][0]['message'] : '';
+            $message = isset($responce_data['errors'][0]['message']) ? $responce_data['errors'][0]['message'] : '';
 
             $ignored_messages = [
                 'not enough tokens',
@@ -398,13 +474,15 @@ class Leonardo_Ai_Crud
             }
 
             if (!in_array($message, $ignored_messages)) {
-                throw new Exception(json_encode($responceData));
+                throw new Exception(json_encode($responce_data));
             }
         }
 
         return [
             'generation_id' => $generation_id,
             'image_prompt' => $image_prompt,
+            'post_id' => isset($post_id) ? $post_id : null,
+            'message' => $message ?? '',
         ];
     }
 
@@ -432,9 +510,9 @@ class Leonardo_Ai_Crud
 
         $body = wp_remote_retrieve_body($response);
 
-        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+        $responce_data = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        return $responceData;
+        return $responce_data;
     }
 
     function get_generations($token, $amount = 10, $user_nr = null)
@@ -443,39 +521,22 @@ class Leonardo_Ai_Crud
 
         $user_id = $this->get_user_credentials($user_nr)['user_id'];
 
-//        $parameters = '{
-//    "operationName": "GetAIGenerationFeed",
-//    "variables": {
-//        "where": {
-//            "userId": {
-//                "_eq": "' . $user_id . '"
-//            },
-//            "canvasRequest": {
-//                "_eq": false
-//            }
-//        },
-//        "userId": "' . $user_id . '"
-//    },
-//    "query": "query GetAIGenerationFeed($where: generations_bool_exp = {}, $userId: uuid!) {\n  generations(limit: ' . $amount . ', order_by: [{createdAt: desc}], where: $where) {\n    guidanceScale\n    inferenceSteps\n    modelId\n    scheduler\n    coreModel\n    sdVersion\n    prompt\n    negativePrompt\n    id\n    status\n    quantity\n    createdAt\n    imageHeight\n    imageWidth\n    presetStyle\n    sdVersion\n    seed\n    tiling\n    initStrength\n    user {\n      username\n      id\n      __typename\n    }\n    custom_model {\n      id\n      userId\n      name\n      modelHeight\n      modelWidth\n      __typename\n    }\n    init_image {\n      id\n      url\n      __typename\n    }\n    generated_images(order_by: [{url: desc}]) {\n      id\n      url\n      likeCount\n      generated_image_variation_generics(order_by: [{createdAt: desc}]) {\n        url\n        status\n        createdAt\n        id\n        transformType\n        __typename\n      }\n      user_liked_generated_images(limit: 1, where: {userId: {_eq: $userId}}) {\n        generatedImageId\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"
-//}';
-
         $parameters = '{
-   "operationName":"GetAIGenerationFeed",
-   "variables":{
-      "where":{
-         "userId":{
-            "_eq": "' . $user_id . '"
-         },
-         "canvasRequest":{
-            "_eq":false
-         }
+  "operationName": "GetAIGenerationFeed",
+  "variables": {
+    "where": {
+      "userId": {
+        "_eq": "' . $user_id . '"
       },
-      "offset":0,
-      "limit":' . $amount . '
-   },
-   "query":"query GetAIGenerationFeed($where: generations_bool_exp = {}, $userId: uuid, $limit: Int, $offset: Int = 0) {\n  generations(\n    limit: $limit\n    offset: $offset\n    order_by: [{createdAt: desc}]\n    where: $where\n  ) {\n    alchemy\n    contrastRatio\n    highResolution\n    guidanceScale\n    inferenceSteps\n    modelId\n    scheduler\n    coreModel\n    sdVersion\n    prompt\n    negativePrompt\n    id\n    status\n    quantity\n    createdAt\n    imageHeight\n    imageWidth\n    presetStyle\n    sdVersion\n    public\n    seed\n    tiling\n    initStrength\n    highContrast\n    promptMagic\n    promptMagicVersion\n    promptMagicStrength\n    imagePromptStrength\n    expandedDomain\n    photoReal\n    photoRealStrength\n    nsfw\n    user {\n      username\n      id\n      __typename\n    }\n    custom_model {\n      id\n      userId\n      name\n      modelHeight\n      modelWidth\n      __typename\n    }\n    init_image {\n      id\n      url\n      __typename\n    }\n    generated_images(order_by: [{url: desc}]) {\n      id\n      url\n      likeCount\n      nsfw\n      generated_image_variation_generics(order_by: [{createdAt: desc}]) {\n        url\n        status\n        createdAt\n        id\n        transformType\n        upscale_details {\n          oneClicktype\n          isOneClick\n          id\n          variationId\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    generation_elements {\n      id\n      lora {\n        akUUID\n        name\n        description\n        urlImage\n        baseModel\n        weightDefault\n        weightMin\n        weightMax\n        __typename\n      }\n      weightApplied\n      __typename\n    }\n    __typename\n  }\n}"
+      "canvasRequest": {
+        "_eq": false
+      }
+    },
+    "offset": 0,
+    "limit":' . $amount . '
+  },
+  "query": "query GetAIGenerationFeed($where: generations_bool_exp = {}, $userId: uuid, $limit: Int, $offset: Int = 0) {\n  generations(\n    limit: $limit\n    offset: $offset\n    order_by: [{createdAt: desc}]\n    where: $where\n  ) {\n    alchemy\n    contrastRatio\n    highResolution\n    guidanceScale\n    inferenceSteps\n    modelId\n    scheduler\n    coreModel\n    sdVersion\n    prompt\n    negativePrompt\n    id\n    status\n    quantity\n    createdAt\n    imageHeight\n    imageWidth\n    presetStyle\n    sdVersion\n    public\n    seed\n    tiling\n    initStrength\n    imageToImage\n    highContrast\n    promptMagic\n    promptMagicVersion\n    promptMagicStrength\n    imagePromptStrength\n    expandedDomain\n    motion\n    photoReal\n    photoRealStrength\n    nsfw\n    user {\n      username\n      id\n      __typename\n    }\n    custom_model {\n      id\n      userId\n      name\n      modelHeight\n      modelWidth\n      __typename\n    }\n    init_image {\n      id\n      url\n      __typename\n    }\n    generated_images(order_by: [{url: desc}]) {\n      id\n      url\n      motionGIFURL\n      motionMP4URL\n      likeCount\n      nsfw\n      generated_image_variation_generics(order_by: [{createdAt: desc}]) {\n        url\n        status\n        createdAt\n        id\n        transformType\n        upscale_details {\n          alchemyRefinerCreative\n          alchemyRefinerStrength\n          oneClicktype\n          isOneClick\n          id\n          variationId\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    generation_elements {\n      id\n      lora {\n        akUUID\n        name\n        description\n        urlImage\n        baseModel\n        weightDefault\n        weightMin\n        weightMax\n        __typename\n      }\n      weightApplied\n      __typename\n    }\n    generation_controlnets(order_by: {controlnetOrder: asc}) {\n      id\n      weightApplied\n      controlnet_definition {\n        akUUID\n        displayName\n        displayDescription\n        controlnetType\n        __typename\n      }\n      controlnet_preprocessor_matrix {\n        id\n        preprocessorName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"
 }';
-
 
         $response = wp_remote_post($url, array (
             'headers' => array (
@@ -489,16 +550,9 @@ class Leonardo_Ai_Crud
 
         $body = wp_remote_retrieve_body($response);
 
-        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+        $responce_data = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        return isset($responceData['data']['generations']) ? $responceData['data']['generations'] : null;
-    }
-
-    function get_user_feed($user_nr, $args)
-    {
-        $token = $this->retrieve_access_token($user_nr);
-
-        return $this->get_feed_images($token, $args);
+        return isset($responce_data['data']['generations']) ? $responce_data['data']['generations'] : null;
     }
 
     /**
@@ -591,9 +645,9 @@ class Leonardo_Ai_Crud
 
         $body = wp_remote_retrieve_body($response);
 
-        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+        $responce_data = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        return isset($responceData['data']['generated_images']) ? $responceData['data']['generated_images'] : null;
+        return isset($responce_data['data']['generated_images']) ? $responce_data['data']['generated_images'] : null;
     }
 
     function delete_generation($token, $id)
@@ -614,9 +668,9 @@ class Leonardo_Ai_Crud
 
         $body = wp_remote_retrieve_body($response);
 
-        $responceData = (!is_wp_error($response)) ? json_decode($body, true) : null;
+        $responce_data = (!is_wp_error($response)) ? json_decode($body, true) : null;
 
-        return $responceData;
+        return $responce_data;
     }
 
     /**
@@ -624,7 +678,7 @@ class Leonardo_Ai_Crud
      * @param $existing_model_id
      * @return void
      */
-    function save_generations($generations, $existing_model_id = null)
+    function save_generations($generations, $existing_model_id, $args = [])
     {
         /**
          * Group generations by unique key
@@ -648,7 +702,6 @@ class Leonardo_Ai_Crud
         }
 
         foreach ($grouped_generations as $generations_group) {
-
             $reference_id = growtype_ai_generate_reference_id();
 
             if (!empty($existing_model_id)) {
@@ -699,6 +752,7 @@ class Leonardo_Ai_Crud
                         'pose_to_image' => isset($generation['poseToImage']) ? $generation['poseToImage'] : false,
                         'pose_to_image_type' => isset($generation['poseToImageType']) ? $generation['poseToImageType'] : 'POSE',
                         'photoReal' => isset($generation['photoReal']) ? $generation['photoReal'] : false,
+                        'created_by' => 'admin',
                     ];
 
                     if (isset($generation['modelId']) && !empty($generation['modelId']) && !$model_settings['photoReal']) {
@@ -710,7 +764,6 @@ class Leonardo_Ai_Crud
                     }
 
                     foreach ($model_settings as $key => $value) {
-
                         $existing_content = growtype_ai_get_model_single_setting($model_id, $key);
 
                         if (!empty($existing_content)) {
@@ -730,6 +783,8 @@ class Leonardo_Ai_Crud
                     $model_id = $existing_models[0]['id'];
                 }
 
+                $model_details = growtype_ai_get_model_details($model_id);
+
                 foreach ($generation['generated_images'] as $image) {
                     $image['imageWidth'] = isset($generation['imageWidth']) ? $generation['imageWidth'] : null;
                     $image['imageHeight'] = isset($generation['imageHeight']) ? $generation['imageHeight'] : null;
@@ -739,6 +794,11 @@ class Leonardo_Ai_Crud
                     $image['meta_details'] = [];
                     foreach ($generation as $key => $value) {
                         if (!in_array($key, ['imageHeight', 'imageWidth', 'public', 'status', 'expandedDomain', '__typename'])) {
+
+                            if (isset($model_details['settings']['created_by']) && $model_details['settings']['created_by'] === 'external_user' && $key === 'nsfw') {
+                                $value = '0';
+                            }
+
                             array_push($image['meta_details'], [
                                 'key' => $key,
                                 'value' => is_array($value) ? json_encode($value) : (!empty($value) ? $value : '0')
@@ -759,6 +819,18 @@ class Leonardo_Ai_Crud
                         'model_id' => $model_id,
                         'image_id' => $saved_image['id']
                     ]);
+
+                    /**
+                     * assign image to post
+                     */
+                    if (isset($args['post_id']) && !empty($args['post_id'])) {
+                        $existing_images = get_post_meta($args['post_id'], 'growtype_ai_images_ids', true);
+                        $existing_images = !empty($existing_images) ? json_decode($existing_images, true) : [];
+                        $existing_images = !empty($existing_images) ? $existing_images : [];
+                        array_push($existing_images, $saved_image['id']);
+                        update_post_meta($args['post_id'], 'growtype_ai_images_ids', json_encode($existing_images));
+                        update_post_meta($args['post_id'], 'growtype_ai_images_generating', false);
+                    }
 
                     /**
                      * Generate image content

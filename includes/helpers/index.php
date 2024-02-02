@@ -1,5 +1,8 @@
 <?php
 
+include_once 'partials/model.php';
+include_once 'partials/character.php';
+
 if (!function_exists('d')) {
     function d($data)
     {
@@ -297,7 +300,7 @@ if (!function_exists('growtype_ai_delete_model_images')) {
 }
 
 /**
- * Model details
+ * Model setting
  */
 if (!function_exists('growtype_ai_get_model_single_setting')) {
     function growtype_ai_get_model_single_setting($model_id, $setting_key)
@@ -739,19 +742,30 @@ if (!function_exists('growtype_ai_get_model_character_default_data')) {
     function growtype_ai_get_model_character_default_data()
     {
         return [
+            'character_gpt_personality_extension' => '',
+            'character_intro_message' => "",
+            'character_can_answer_to_questions' => "",
             'character_title' => "Olivia Wright",
             'character_description' => "A traveler with an insatiable wanderlust for both the world and the senses.",
             'character_introduction' => "Hi, my name is Olivia. I am a nurse and love to help people. Im Canadian and currently live in Toronto. I dream to help people all around the world. I love to chat about gardening, books, and music. Lets have a chat 🌟💖",
             'character_personality' => "Nurturing, Thoughtful",
             'character_occupation' => "Nurse",
             'character_hobbies' => "Gardening, Reading",
-            'character_body_shape' => "Slim",
+            'character_body_shape' => "Hourglass",
             'character_age' => "22",
             'character_height' => "165",
             'character_weight' => "58",
             'character_nationality' => "American",
+            'character_location' => "Los Angeles",
             'character_gender' => "Female",
-            'character_dreams' => "Finding True Love"
+            'character_dreams' => "Finding True Love",
+            'character_style' => "realistic",
+            'character_ethnicity' => "caucasian",
+            'character_eye_color' => "blue",
+            'character_hair_style' => "bangs",
+            'character_hair_color' => "",
+            'character_breast_size' => "medium",
+            'character_butt_size' => "medium",
         ];
     }
 }
@@ -770,6 +784,19 @@ if (!function_exists('growtype_ai_get_model_featured_in_options')) {
 }
 
 /**
+ * Model details
+ */
+if (!function_exists('growtype_ai_get_model_users_options')) {
+    function growtype_ai_get_model_users_options()
+    {
+        return [
+            'admin' => 'Admin',
+            'external_user' => 'External User',
+        ];
+    }
+}
+
+/**
  *
  */
 if (!function_exists('growtype_ai_compress_existing_image')) {
@@ -781,31 +808,33 @@ if (!function_exists('growtype_ai_compress_existing_image')) {
             try {
                 $image_details = growtype_ai_get_image_details($image_id);
 
-                if (!isset($image_details['settings']['compressed'])) {
-                    error_log(sprintf('Compressing image %s', $image_details['name'] . '.' . $image_details['extension']));
+                if (in_array($image_details['extension'], ['jpg', 'png'])) {
+                    if (!isset($image_details['settings']['compressed'])) {
+                        error_log(sprintf('Compressing image %s', $image_details['name'] . '.' . $image_details['extension']));
 
-                    $resmush = new Resmush();
-                    $img_path = growtype_ai_get_image_url($image_id);
-                    $img_url = !empty($img_path) ? $resmush->compress_online($img_path) : '';
+                        $resmush = new Resmush_Crud();
+                        $img_path = growtype_ai_get_image_url($image_id);
+                        $img_url = !empty($img_path) ? $resmush->compress_online($img_path) : '';
 
-                    if (!empty($img_url)) {
-                        unlink($image_path);
+                        if (!empty($img_url)) {
+                            unlink($image_path);
 
-                        growtype_ai_save_external_file([
-                            'location' => 'locally',
-                            'url' => $img_url,
-                            'name' => $image_details['name'],
-                            'extension' => $image_details['extension'],
-                        ], $image_details['folder']);
+                            growtype_ai_save_external_file([
+                                'location' => 'locally',
+                                'url' => $img_url,
+                                'name' => $image_details['name'],
+                                'extension' => $image_details['extension'],
+                            ], $image_details['folder']);
 
-                        Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
-                            'image_id' => $image_id,
-                            'meta_key' => 'compressed',
-                            'meta_value' => 'true',
-                        ]);
+                            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                                'image_id' => $image_id,
+                                'meta_key' => 'compressed',
+                                'meta_value' => 'true',
+                            ]);
+                        }
+                    } else {
+                        error_log(sprintf('Image already compressed. Image %s', $image_details['name'] . '.' . $image_details['extension']));
                     }
-                } else {
-                    error_log(sprintf('Image already compressed. Image %s', $image_details['name'] . '.' . $image_details['extension']));
                 }
             } catch (Exception $e) {
                 throw new Exception($e->getMessage());
@@ -815,43 +844,83 @@ if (!function_exists('growtype_ai_compress_existing_image')) {
 }
 
 if (!function_exists('growtype_ai_get_featured_in_group_images')) {
-    function growtype_ai_get_featured_in_group_images($groups)
+    function growtype_ai_get_featured_in_group_images($groups, $created_by_options, $unique_hashes)
     {
         global $wpdb;
 
-        $like = '';
+        $like_sql = '';
         foreach ($groups as $key => $group) {
             if ($key === 0) {
-                $like .= "ST.meta_value LIKE '%$group%'";
+                $like_sql .= "MS.meta_value LIKE '%$group%'";
             } else {
-                $like .= "OR ST.meta_value LIKE '%$group%'";
+                $like_sql .= "OR MS.meta_value LIKE '%$group%'";
             }
         }
 
-        if (empty($like)) {
+        if (empty($like_sql)) {
             return [];
         }
 
-        $models = $wpdb->get_results("SELECT * FROM wp_growtype_ai_model_settings as ST
+        $created_by_sql = '';
+        foreach ($created_by_options as $key => $created_by) {
+            if ($key === 0) {
+                $created_by_sql .= "MS2.meta_value = '$created_by'";
+            } else {
+                $created_by_sql .= "OR MS2.meta_value = '$created_by'";
+            }
+        }
+
+        if (empty($created_by_sql)) {
+            return [];
+        }
+
+        $unique_hashes_sql = '';
+        if (!empty($unique_hashes)) {
+            $unique_hashes_sql = "and (MS3.meta_value = '" . implode("' OR MS3.meta_value = '", $unique_hashes) . "')";
+        }
+
+        $models_settings = $wpdb->get_results("SELECT * FROM wp_growtype_ai_model_settings as ST
 WHERE ST.model_id 
 IN (
-SELECT model_id FROM wp_growtype_ai_model_settings as ST where ST.meta_key='featured_in' and $like and model_id > '' group by ST.model_id
+SELECT ST.model_id FROM wp_growtype_ai_model_settings as ST
+LEFT JOIN wp_growtype_ai_model_settings as MS ON (ST.model_id = MS.model_id AND MS.meta_key='featured_in')
+LEFT JOIN wp_growtype_ai_model_settings as MS2 ON (ST.model_id = MS2.model_id AND MS2.meta_key='created_by')
+LEFT JOIN wp_growtype_ai_model_settings as MS3 ON (ST.model_id = MS3.model_id AND MS3.meta_key='created_by_unique_hash')
+WHERE ST.model_id > ''
+and
+($like_sql)
+and
+($created_by_sql)
+$unique_hashes_sql
+group by ST.model_id
 )", ARRAY_A);
 
-        $images_with_settings = $wpdb->get_results("SELECT * FROM wp_growtype_ai_model_image as MI
+        $images_with_settings = $wpdb->get_results("SELECT MI.model_id, 
+MI.image_id, 
+IM.folder, 
+IM.name, 
+IM.extension,
+IMGS.meta_value as nsfw, 
+IMGS2.meta_value as is_featured,
+IMGS3.meta_value as is_cover
+FROM wp_growtype_ai_model_image as MI
 left join wp_growtype_ai_images as IM on MI.image_id=IM.id
-left join wp_growtype_ai_image_settings as IMG_S on IM.id=IMG_S.image_id
+LEFT JOIN wp_growtype_ai_image_settings AS IMGS ON (MI.image_id = IMGS.image_id AND IMGS.meta_key='nsfw')
+LEFT JOIN wp_growtype_ai_image_settings AS IMGS2 ON (MI.image_id = IMGS2.image_id AND IMGS2.meta_key='is_featured')
+LEFT JOIN wp_growtype_ai_image_settings AS IMGS3 ON (MI.image_id = IMGS3.image_id AND IMGS3.meta_key='is_cover')
 WHERE MI.model_id 
 IN (
 SELECT model_id FROM wp_growtype_ai_model_settings as ST where ST.meta_key='featured_in' and ST.meta_value LIKE '%talkiemate%' group by ST.model_id
-)", ARRAY_A);
+) group by MI.image_id", ARRAY_A);
 
         $images_wth_meta = [];
         foreach ($images_with_settings as $image) {
             $images_wth_meta[$image['model_id']][$image['image_id']]['folder'] = $image['folder'];
             $images_wth_meta[$image['model_id']][$image['image_id']]['name'] = $image['name'];
             $images_wth_meta[$image['model_id']][$image['image_id']]['extension'] = $image['extension'];
-            $images_wth_meta[$image['model_id']][$image['image_id']][$image['meta_key']] = $image['meta_value'];
+            $images_wth_meta[$image['model_id']][$image['image_id']]['nsfw'] = !empty($image['nsfw']) ? $image['nsfw'] : false;
+            $images_wth_meta[$image['model_id']][$image['image_id']]['is_featured'] = !empty($image['is_featured']) ? $image['is_featured'] : false;
+            $images_wth_meta[$image['model_id']][$image['image_id']]['is_cover'] = !empty($image['is_cover']) ? $image['is_cover'] : false;
         }
 
         $images_grouped = [];
@@ -888,10 +957,17 @@ SELECT model_id FROM wp_growtype_ai_model_settings as ST where ST.meta_key='feat
 
         $profile_keys = growtype_ai_get_model_character_default_data();
 
-        $required_keys = array_merge(array_keys($profile_keys), ['slug', 'categories']);
+        $required_keys = array_merge(array_keys($profile_keys), [
+            'slug',
+            'categories',
+            'tags',
+            'created_by',
+            'created_by_unique_hash',
+            'model_is_private',
+        ]);
 
         $return_data = [];
-        foreach ($models as $model) {
+        foreach ($models_settings as $model) {
             if (!in_array($model['meta_key'], $required_keys)) {
                 continue;
             }
@@ -926,6 +1002,30 @@ SELECT model_id FROM wp_growtype_ai_model_settings as ST where ST.meta_key='feat
 
             if ($model['meta_key'] === 'categories') {
                 $return_data[$model['model_id']]['categories'] = !empty($model['meta_value']) ? json_decode(stripslashes($model['meta_value']), true) : [];
+            }
+
+            if ($model['meta_key'] === 'tags') {
+                $return_data[$model['model_id']]['tags'] = !empty($model['meta_value']) ? json_decode(stripslashes($model['meta_value']), true) : [];
+            }
+
+            if ($model['meta_key'] === 'created_by') {
+                $return_data[$model['model_id']]['created_by'] = !empty($model['meta_value']) ? $model['meta_value'] : '';
+            }
+
+            if ($model['meta_key'] === 'created_by_unique_hash') {
+                $return_data[$model['model_id']]['created_by_unique_hash'] = !empty($model['meta_value']) ? $model['meta_value'] : '';
+            }
+
+            if ($model['meta_key'] === 'model_is_private') {
+                $return_data[$model['model_id']]['model_is_private'] = !empty($model['meta_value']) ? $model['meta_value'] : false;
+            }
+
+            if (!isset($return_data[$model['model_id']]['updated_at']) || empty($return_data[$model['model_id']]['updated_at'])) {
+                $return_data[$model['model_id']]['updated_at'] = $model['updated_at'] ?? '';
+            }
+
+            if (!isset($return_data[$model['model_id']]['created_at']) || empty($return_data[$model['model_id']]['created_at'])) {
+                $return_data[$model['model_id']]['created_at'] = $model['created_at'] ?? '';
             }
         }
 

@@ -36,6 +36,12 @@ class Extract_Image_Colors_Job
             return;
         }
 
+        $image_details = growtype_ai_get_image_details($image_id);
+
+        if (!in_array($image_details['extension'], ['jpg', 'png'])) {
+            return;
+        }
+
         $palette = Palette::fromFilename($img_path);
 
         $extractor = new ColorExtractor($palette);

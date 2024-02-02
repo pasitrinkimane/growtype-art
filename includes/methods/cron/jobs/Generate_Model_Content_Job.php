@@ -8,8 +8,8 @@ class Generate_Model_Content_Job
 
         $existing_content = growtype_ai_get_model_single_setting($job_payload['model_id'], $job_payload['meta_key']);
 
-        $openai_crud = new Openai_Crud();
-        $new_content = $openai_crud->generate_content($job_payload['prompt'], $job_payload['meta_key']);
+        $openai_crud = new Openai_Base_Image();
+        $new_content = $openai_crud->generate_text_content($job_payload['prompt'], $job_payload['meta_key']);
 
         if (empty($new_content)) {
             throw new Exception('Empty content');

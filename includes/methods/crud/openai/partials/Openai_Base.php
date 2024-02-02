@@ -1,32 +1,15 @@
 <?php
 
-class Openai_Loader
+class Openai_Base
 {
-
     public function __construct()
     {
-        $this->load_methods();
+        $this->open_ai_key = self::api_key();
     }
 
-    private function load_methods()
+    public static function api_key()
     {
-        /**
-         * Image
-         */
-        include GROWTYPE_AI_PATH . '/includes/methods/crud/openai/Openai_Crud.php';
-        new Openai_Crud();
-
-        /**
-         * Image
-         */
-        include GROWTYPE_AI_PATH . '/includes/methods/crud/openai/partials/image.php';
-        new Openai_Crud_Image();
-
-        /**
-         * Image
-         */
-        include GROWTYPE_AI_PATH . '/includes/methods/crud/openai/partials/meals.php';
-        new Openai_Crud_Meals();
+        return get_option('growtype_ai_openai_api_key');
     }
 }
 

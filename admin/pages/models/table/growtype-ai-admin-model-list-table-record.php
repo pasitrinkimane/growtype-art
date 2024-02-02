@@ -1,6 +1,7 @@
 <?php
 
-// Exit if accessed directly.
+use partials\Leonardo_Ai_Base;
+
 defined('ABSPATH') || exit;
 
 class Growtype_Ai_Admin_Model_List_Table_Record
@@ -35,8 +36,10 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                 if ($action === 'bulk_delete' || $action2 === 'bulk_delete') {
                     $delete_ids = esc_sql($model_id);
 
-                    foreach ($delete_ids as $id) {
-                        self::delete_item($id);
+                    if (!empty($delete_ids)) {
+                        foreach ($delete_ids as $id) {
+                            self::delete_item($id);
+                        }
                     }
                 }
             }
@@ -78,20 +81,16 @@ class Growtype_Ai_Admin_Model_List_Table_Record
      */
     public function process_bundle_action()
     {
-        if (isset($_POST['action']) && ($_POST['action'] === 'add-to-bundle' || $_POST['action'] === 'remove-from-bundle')) {
-            $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
+        if (isset($_REQUEST['page']) && $_REQUEST['page'] === Growtype_Ai_Admin::MODELS_PAGE_NAME && isset($_REQUEST['action']) && ($_REQUEST['action'] === 'add-to-bundle' || $_REQUEST['action'] === 'remove-from-bundle')) {
+            $models_id = $_REQUEST['model'];
 
-            $models_id = $_POST['model'];
-
-            if ($_POST['action'] === 'add-to-bundle') {
-                $bundle_ids = array_unique(array_merge($bundle_ids, $models_id));
+            if ($_REQUEST['action'] === 'add-to-bundle') {
+                growtype_ai_admin_update_bundle_keys($models_id, 'add');
             }
 
-            if ($_POST['action'] === 'remove-from-bundle') {
-                $bundle_ids = array_unique(array_diff($bundle_ids, $models_id));
+            if ($_REQUEST['action'] === 'remove-from-bundle') {
+                growtype_ai_admin_update_bundle_keys($models_id, 'remove');
             }
-
-            update_option('growtype_ai_bundle_ids', implode(',', array_filter($bundle_ids)));
 
             $this->redirect_index();
         }
@@ -149,20 +148,20 @@ class Growtype_Ai_Admin_Model_List_Table_Record
      */
     public function process_download_zip_action()
     {
-        if (isset($_POST['action']) && ($_POST['action'] === 'download-zip')) {
-            $models_ids = $_POST['model'];
+        if (isset($_REQUEST['page']) && $_REQUEST['page'] === Growtype_Ai_Admin::MODELS_PAGE_NAME && isset($_REQUEST['action']) && ($_REQUEST['action'] === 'download-zip')) {
+            $models_ids = $_REQUEST['model'];
 
             foreach ($models_ids as $model_id) {
                 echo '<iframe src="https://growtype.com/wp/wp-admin/admin.php?page=growtype-ai-models&action=download-ziped-model&model_id=' . $model_id . '"></iframe>';
             }
 
-            echo '<script>setTimeout(function (){window.location.href = "https://growtype.com/wp/wp-admin/admin.php?page=growtype-ai-models&paged=' . $_POST['paged'] . '";},3000)</script>';
+            echo '<script>setTimeout(function (){window.location.href = "https://growtype.com/wp/wp-admin/admin.php?page=growtype-ai-models&paged=' . $_REQUEST['paged'] . '";},3000)</script>';
 
             exit();
         }
 
-        if (isset($_GET['action']) && ($_GET['action'] === 'download-ziped-model')) {
-            $model_id = $_GET['model_id'];
+        if (isset($_REQUEST['page']) && $_REQUEST['page'] === Growtype_Ai_Admin::MODELS_PAGE_NAME && isset($_REQUEST['action']) && ($_REQUEST['action'] === 'download-ziped-model')) {
+            $model_id = $_REQUEST['model_id'];
             $this->download_ziped_model($model_id);
         }
     }
@@ -222,7 +221,7 @@ class Growtype_Ai_Admin_Model_List_Table_Record
             }
 
             if (isset($settings['slug']) && !empty($settings['slug'])) {
-                $settings['slug'] = strtolower(str_replace(' ', '-', $settings['slug']));
+                $settings['slug'] = growtype_ai_format_character_slug($settings['slug']);
 
                 $existing_settings = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
                     [
@@ -234,6 +233,10 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                 if (isset($existing_settings[0]['model_id']) && $existing_settings[0]['model_id'] !== $_POST['update_item_id']) {
                     $settings['slug'] = $settings['slug'] . '-' . strtolower(wp_generate_password(2, false, false));
                 }
+            }
+
+            if (isset($settings['data_for_generating_character_details']) && empty($settings['data_for_generating_character_details'])) {
+                unset($settings['data_for_generating_character_details']);
             }
 
             Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODELS_TABLE, $model, $_POST['update_item_id']);
@@ -252,6 +255,13 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                 $settings
             );
 
+            $data_for_generating_character_details = $settings['data_for_generating_character_details'] ?? '';
+            $data_for_generating_character_details = !empty($data_for_generating_character_details) ? json_decode($data_for_generating_character_details, true) : '';
+
+            if (!empty($data_for_generating_character_details)) {
+                Openai_Base_Image::update_character_details($_POST['update_item_id'], $data_for_generating_character_details);
+            }
+
             do_action('growtype_ai_model_update', $_POST['update_item_id']);
         }
     }
@@ -262,34 +272,8 @@ class Growtype_Ai_Admin_Model_List_Table_Record
     public function process_duplicate_model_action()
     {
         if (isset($_GET['action']) && $_GET['action'] === 'index-duplicate-model') {
-            $model_details = growtype_ai_get_model_details($_GET['model']);
 
-            $reference_id = growtype_ai_generate_reference_id();
-
-            $model_id = Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODELS_TABLE, [
-                'prompt' => $model_details['prompt'],
-                'negative_prompt' => $model_details['negative_prompt'],
-                'reference_id' => $reference_id,
-                'provider' => $model_details['provider'],
-                'image_folder' => Growtype_Ai_Crud::IMAGES_FOLDER_NAME . '/' . $reference_id
-            ]);
-
-            $model_settings = $model_details['settings'];
-
-            foreach ($model_settings as $key => $value) {
-
-                $existing_content = growtype_ai_get_model_single_setting($model_id, $key);
-
-                if (!empty($existing_content)) {
-                    continue;
-                }
-
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
-                    'model_id' => $model_id,
-                    'meta_key' => $key,
-                    'meta_value' => $value
-                ]);
-            }
+            growtype_ai_admin_duplicate_model($_GET['model']);
 
             /**
              * Redirect
@@ -330,7 +314,7 @@ class Growtype_Ai_Admin_Model_List_Table_Record
             switch ($action) {
                 case 'generate-images':
                     error_log('process_generate_image_action -> generate-images');
-                    $crud = new Leonardo_Ai_Crud();
+                    $crud = new Leonardo_Ai_Base();
                     $generate_details = $crud->generate_model($model_id);
 
                     $redirect_args = [
@@ -342,7 +326,7 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                     break;
                 case 'index-generate-images':
                     error_log('index-generate-images');
-                    $crud = new Leonardo_Ai_Crud();
+                    $crud = new Leonardo_Ai_Base();
                     $generate_details = $crud->generate_model($model_id);
 
                     $redirect_args = [
@@ -362,7 +346,7 @@ class Growtype_Ai_Admin_Model_List_Table_Record
     public function process_generate_content_action()
     {
         if (isset($_GET['action']) && ($_GET['action'] === 'generate-model-content' || $_GET['action'] === 'generate-image-content' || $_GET['action'] === 'regenerate-image-content')) {
-            $openai_crud = new Openai_Crud();
+            $openai_crud = new Openai_Base_Image();
 
             $model_id = isset($_GET['model']) ? $_GET['model'] : null;
 
@@ -383,7 +367,7 @@ class Growtype_Ai_Admin_Model_List_Table_Record
         }
 
         if (isset($_GET['action']) && ($_GET['action'] === 'generate-model-character-content')) {
-            $openai_crud = new Openai_Crud();
+            $openai_crud = new Openai_Base_Image();
 
             $model_id = isset($_GET['model']) ? $_GET['model'] : null;
 
@@ -406,7 +390,7 @@ class Growtype_Ai_Admin_Model_List_Table_Record
         if (!empty($action)) {
             switch ($action) {
                 case 'retrieve-model-images':
-                    $crud = new Leonardo_Ai_Crud();
+                    $crud = new Leonardo_Ai_Base();
                     $amount = 100;
 
                     if (empty($model_id)) {
@@ -416,7 +400,16 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                         ]);
                     }
 
-                    $users_credentials = Leonardo_Ai_Crud::user_credentials();
+                    $leonardo_ai_settings_user_nr = growtype_ai_get_model_single_setting($model_id, 'leonardo_ai_settings_user_nr');
+                    $leonardo_ai_settings_user_nr = $leonardo_ai_settings_user_nr['meta_value'] ?? '';
+
+                    $users_credentials = Leonardo_Ai_Base::user_credentials();
+
+                    if (!empty($leonardo_ai_settings_user_nr)) {
+                        $updated_users_credentials = [];
+                        $updated_users_credentials[$leonardo_ai_settings_user_nr] = $users_credentials[$leonardo_ai_settings_user_nr];
+                        $users_credentials = $updated_users_credentials;
+                    }
 
                     foreach ($users_credentials as $user_nr => $user_credentials) {
 
@@ -437,9 +430,9 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                     ]);
                     break;
                 case 'retrieve-models':
-                    $crud = new Leonardo_Ai_Crud();
+                    $crud = new Leonardo_Ai_Base();
                     $amount = 15;
-                    $users_credentials = Leonardo_Ai_Crud::user_credentials();
+                    $users_credentials = Leonardo_Ai_Base::user_credentials();
 
                     $retrieved_users = [];
                     foreach ($users_credentials as $user_nr => $user_credentials) {
@@ -523,7 +516,7 @@ class Growtype_Ai_Admin_Model_List_Table_Record
 
                         $upscale_image_url = $asset['url'];
 
-                        $real_esrgan = new Replicate();
+                        $real_esrgan = new ReplicateCrud();
                         $real_esrgan->upscale($upscale_image_url, [
                             'id' => $image['id'],
                             'public_id' => $cloudinary_public_id
@@ -542,6 +535,12 @@ class Growtype_Ai_Admin_Model_List_Table_Record
 
     public function delete_item($id)
     {
+        if (empty($id)) {
+            return;
+        }
+
+        growtype_ai_admin_update_bundle_keys([$id], 'remove');
+
         $model = growtype_ai_get_model_details($id);
 
         $images_saving_location = growtype_ai_get_images_saving_location();
@@ -568,7 +567,9 @@ class Growtype_Ai_Admin_Model_List_Table_Record
 
         $model_images_dir = growtype_ai_get_upload_dir() . '/' . $model['image_folder'];
 
-        rmdir($model_images_dir);
+        if (file_exists($model_images_dir)) {
+            rmdir($model_images_dir);
+        }
 
         return Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::MODELS_TABLE, [$id]);
     }
@@ -726,7 +727,11 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                         'prompt_variables',
                         'init_generation_image_id',
                         'categories',
-                        'high_contrast'
+                        'high_contrast',
+                        'post_type_to_collect_data_from',
+                        'generatable_images_limit',
+                        'model_is_private',
+                        'leonardo_ai_settings_user_nr',
                     ];
 
                     $existing_keys = array_pluck($models_settings, 'meta_key');
@@ -765,8 +770,12 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                             $meta_value = strtolower($meta_value);
                         }
 
-                        if ($item['meta_key'] === 'prompt_variables' && empty($item['meta_value'])) {
-                            $meta_value = 'white, black, and little bit gold | red, blue, white, gray | rose gold  blue | red, orange, yellow, green, blue, purple, pink | Red and Yellow|Pink and Purple|Blue and White|Orange and Yellow|Red and White|Pink and White|Purple and White|Yellow and White|Blue and Yellow|Pink and Red|Orange and Red|Red and Purple|Yellow and Orange|Pink and Yellow|Purple and Pink|Blue and Purple|Red and Orange|Yellow and Green|Purple and Blue|Pink and Orange|Green and White';
+//                        if ($item['meta_key'] === 'prompt_variables' && empty($item['meta_value'])) {
+//                            $meta_value = 'white, black, and little bit gold | red, blue, white, gray | rose gold  blue | red, orange, yellow, green, blue, purple, pink | Red and Yellow|Pink and Purple|Blue and White|Orange and Yellow|Red and White|Pink and White|Purple and White|Yellow and White|Blue and Yellow|Pink and Red|Orange and Red|Red and Purple|Yellow and Orange|Pink and Yellow|Purple and Pink|Blue and Purple|Red and Orange|Yellow and Green|Purple and Blue|Pink and Orange|Green and White';
+//                        }
+
+                        if ($item['meta_key'] === 'generatable_images_limit' && empty($item['meta_value'])) {
+                            $meta_value = '40';
                         }
 
                         if ($item['meta_key'] === 'slug' && empty($item['meta_value'])) {
@@ -821,11 +830,8 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                 <table class="form-table">
                     <tbody>
                     <?php
-
                     $model_character_details = growtype_ai_get_model_character_details($id);
-
                     $required_data = growtype_ai_get_model_character_default_data();
-
                     $existing_keys = array_pluck($model_character_details, 'meta_key');
 
                     foreach ($required_data as $required_key => $required_value) {
@@ -863,7 +869,13 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                                 <label for=""><?php echo $item['meta_key'] ?></label>
                             </th>
                             <td>
-                                <?php if (in_array($item['meta_key'], ['character_description', 'character_introduction'])) { ?>
+                                <?php if (in_array($item['meta_key'], [
+                                    'character_description',
+                                    'character_introduction',
+                                    'character_gpt_personality_extension',
+                                    'character_intro_message',
+                                    'character_can_answer_to_questions',
+                                ])) { ?>
                                     <textarea class="large-text code" rows="5" name="settings[<?php echo $item['meta_key'] ?>]"><?php echo $meta_value ?></textarea>
                                 <?php } else { ?>
                                     <input class="regular-text code" type="text" name="settings[<?php echo $item['meta_key'] ?>]" value="<?php echo $meta_value ?>"/>
@@ -873,6 +885,25 @@ class Growtype_Ai_Admin_Model_List_Table_Record
                     <?php } ?>
                     </tbody>
                 </table>
+
+                <hr>
+
+                <h3>Message for generating character details:</h3>
+                <?php
+                $data_for_generating = Openai_Base_Image::get_model_data_for_generating($id);
+                $data_for_generating = Openai_Base_Image::message_for_generating_character_description($data_for_generating);
+
+                echo $data_for_generating;
+                ?>
+
+                <h3>Last data for generating character details:</h3>
+                <?php
+                $character_generating_details = growtype_ai_get_model_single_setting($id, 'data_for_generating_character_details')['meta_value'] ?? '';
+                echo $character_generating_details;
+                ?>
+
+                <h3>Data for generating character details:</h3>
+                <textarea class="large-text code" rows="5" name="settings[data_for_generating_character_details]"></textarea>
             </div>
         </div>
 
@@ -890,15 +921,15 @@ class Growtype_Ai_Admin_Model_List_Table_Record
         <div style="display:flex;justify-content: flex-end;margin-bottom: 40px;">
             <div style="display: flex;flex-wrap: wrap;gap:10px;flex-direction: column;width: 100%;">
                 <div>
+                    <p>Generating</p>
+                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-images', $id) ?>
+                </div>
+                <div>
                     <p>Content</p>
                     <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate model details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-model-content', $id) ?>
                     <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate character details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-model-character-content', $id) ?>
                     <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate images details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-image-content', $id) ?>
                     <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Re-Generate images details', 'growtype-ai') . '</a>', $_REQUEST['page'], 'regenerate-image-content', $id) ?>
-                </div>
-                <div>
-                    <p>Generating</p>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate image', 'growtype-ai') . '</a>', $_REQUEST['page'], 'generate-images', $id) ?>
                 </div>
                 <div>
                     <p>Retrieving</p>

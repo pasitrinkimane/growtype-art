@@ -1,5 +1,7 @@
 <?php
 
+use partials\Leonardo_Ai_Base;
+
 class Retrieve_Model_Job
 {
     public function run($job)
@@ -7,8 +9,10 @@ class Retrieve_Model_Job
         $job_payload = json_decode($job['payload'], true);
 
         try {
-            $crud = new Leonardo_Ai_Crud();
-            $crud->retrieve_single_generation($job_payload['model_id'], $job_payload['user_nr'], $job_payload['generation_id']);
+            $crud = new Leonardo_Ai_Base();
+            $crud->retrieve_single_generation($job_payload['model_id'], $job_payload['user_nr'], $job_payload['generation_id'], [
+                'post_id' => $job_payload['post_id'] ?? ''
+            ]);
         } catch (Exception $e) {
             /**
              * Update available_at time

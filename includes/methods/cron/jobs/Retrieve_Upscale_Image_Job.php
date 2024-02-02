@@ -11,7 +11,7 @@ class Retrieve_Upscale_Image_Job
          */
         $get_url = $job_payload['upscaled_image']['urls']['get'];
 
-        $replicate = new Replicate();
+        $replicate = new ReplicateCrud();
 
         $retrieve = $replicate->real_esrgan_retrieve($get_url);
 
@@ -27,7 +27,7 @@ class Retrieve_Upscale_Image_Job
         }
 
         try {
-            $resmush = new Resmush();
+            $resmush = new Resmush_Crud();
 
             $img_url = $resmush->compress_online($output);
 

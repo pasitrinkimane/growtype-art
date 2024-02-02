@@ -47,7 +47,7 @@ class Upscale_Image_Job
                 'height' => $size[1],
             ], $image['id']);
 
-            $resmush = new Resmush();
+            $resmush = new Resmush_Crud();
             $img_path = growtype_ai_get_image_path($image['id']);
             $img_url = !empty($img_path) ? $resmush->compress($img_path) : '';
 

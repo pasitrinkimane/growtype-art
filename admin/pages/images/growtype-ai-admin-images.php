@@ -20,6 +20,34 @@ class Growtype_Ai_Admin_Images
     {
         $image_id = $_POST['image_id'];
 
+        /**
+         * Delete image in assigned posts
+         */
+        $image_details = growtype_ai_get_image_model_details($image_id);
+
+        if (isset($image_details['settings']['post_type_to_collect_data_from']) && !empty($image_details['settings']['post_type_to_collect_data_from'])) {
+            $posts = get_posts([
+                'post_type' => $image_details['settings']['post_type_to_collect_data_from'],
+                'post_status' => 'any',
+                'numberposts' => -1
+            ]);
+
+            foreach ($posts as $post) {
+                $growtype_ai_images_ids = get_post_meta($post->ID, 'growtype_ai_images_ids', true);
+                $growtype_ai_images_ids = !empty($growtype_ai_images_ids) ? json_decode($growtype_ai_images_ids, true) : [];
+
+                if (!empty($growtype_ai_images_ids)) {
+                    if (($key = array_search($image_id, $growtype_ai_images_ids)) !== false) {
+                        unset($growtype_ai_images_ids[$key]);
+                    }
+
+                    $growtype_ai_images_ids = array_values($growtype_ai_images_ids);
+
+                    update_post_meta($post->ID, 'growtype_ai_images_ids', json_encode($growtype_ai_images_ids));
+                }
+            }
+        }
+
         Growtype_Ai_Crud::delete_image($image_id);
 
         do_action('growtype_ai_model_image_delete', $image_id);
@@ -187,7 +215,7 @@ class Growtype_Ai_Admin_Images
 
         $img_url = growtype_ai_get_image_url($image['id']);
 
-        $main_colors = isset($image['settings']['main_colors']) && !empty($image['settings']['main_colors']) ? implode(',', json_decode($image['settings']['main_colors'], true)) : '';
+        $main_colors = isset($image['settings']['main_colors']) && !empty($image['settings']['main_colors']) && !empty(json_decode($image['settings']['main_colors'], true)) ? implode(',', json_decode($image['settings']['main_colors'], true)) : '';
 
         $is_featured = isset($image['settings']['is_featured']) ? $image['settings']['is_featured'] : false;
         $is_cover = isset($image['settings']['is_cover']) ? $image['settings']['is_cover'] : false;
@@ -198,7 +226,13 @@ class Growtype_Ai_Admin_Images
         if (!empty($img_url)) { ?>
             <div class="image <?= $is_featured ? 'is-featured' : '' ?> <?= $is_cover ? 'is-cover' : '' ?> <?= isset($image['settings']['nsfw']) && $image['settings']['nsfw'] ? 'is-nsfw' : '' ?>" data-id="<?= $image['id'] ?>">
                 <a href="<?php echo $img_url ?>?v=<?php echo self::IMAGE_VERSION ?>" target="_blank" style="min-height: 100px;width: 100%;display: flex;margin-bottom: 10px;">
-                    <img src="<?php echo $img_url ?>?v=<?php echo self::IMAGE_VERSION ?>" alt="" style="max-width: 100%;">
+                    <?php if (in_array($image['extension'], ['jpg', 'png'])) { ?>
+                        <img src="<?php echo $img_url ?>?v=<?php echo self::IMAGE_VERSION ?>" alt="" style="max-width: 100%;">
+                    <?php } else { ?>
+                        <video width="100%" height="100%" controls autoplay loop>
+                            <source type="video/mp4" src="<?php echo $img_url ?>">
+                        </video>
+                    <?php } ?>
                 </a>
                 <div style="display:flex;flex-wrap: wrap;gap: 15px;flex-direction: column;">
                     <a href="#" class="button button-primary button-delete" data-id="<?= $image['id'] ?>"><?= __('Delete', 'growtype-ai') ?></a>

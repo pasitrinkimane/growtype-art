@@ -119,17 +119,21 @@ class Growtype_Ai_Admin_Models
 
             <?php echo $message ?>
 
-            <form method="post">
-                <?php
-                if ($action === 'edit') {
-                    $this->item_obj->prepare_inner_table($id);
-                } else {
-                    $this->items_obj->prepare_items();
+            <?php if ($action === 'edit') { ?>
+                <form method="post">
+                    <?php $this->item_obj->prepare_inner_table($id); ?>
+                </form>
+            <?php } else {
+                $this->items_obj->prepare_items();
+                ?>
+                <form id="models-filter" method="get">
+                    <input type="hidden" name="page" value="<?php echo $_REQUEST['page'] ?>"/>
+                    <?php
                     $this->items_obj->search_box('Search', 'search');
                     $this->items_obj->display();
-                }
-                ?>
-            </form>
+                    ?>
+                </form>
+            <?php } ?>
 
             <?php if ($action === 'edit') { ?>
                 <div class="b-imgs" style="gap: 10px;display: grid;">

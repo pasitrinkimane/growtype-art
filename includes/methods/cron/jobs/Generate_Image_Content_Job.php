@@ -6,7 +6,12 @@ class Generate_Image_Content_Job
     {
         $job_payload = json_decode($job['payload'], true);
 
-        $image_id = $job_payload['image_id'];
+        $image_id = $job_payload['image_id'] ?? '';
+
+        if (empty($image_id)) {
+            throw new Exception('Empty image id');
+        }
+
         $regenerate_content = isset($job_payload['regenerate_content']) ? $job_payload['regenerate_content'] : false;
 
         $model = growtype_ai_get_image_model_details($image_id);
@@ -54,12 +59,12 @@ class Generate_Image_Content_Job
 
         foreach ($required_fields as $meta_key => $field) {
             if ($regenerate_content || empty($image['settings'][$meta_key])) {
-                $openai_crud = new Openai_Crud();
+                $openai_crud = new Openai_Base_Image();
 
                 $content = $field['content'];
 
                 if (isset($field['generate']) && $field['generate']) {
-                    $content = $openai_crud->generate_content($prompt, $meta_key);
+                    $content = $openai_crud->generate_text_content($prompt, $meta_key);
                 }
 
                 if (!empty($content)) {

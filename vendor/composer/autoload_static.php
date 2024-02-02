@@ -8,8 +8,8 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
 {
     public static $files = array (
         '7b11c4dc42b3b3023073cb14e519683c' => __DIR__ . '/..' . '/ralouphie/getallheaders/src/getallheaders.php',
-        'c964ee0ededf28c96ebd9db5099ef910' => __DIR__ . '/..' . '/guzzlehttp/promises/src/functions_include.php',
         '6e3fae29631ef280660b3cdad06f25a8' => __DIR__ . '/..' . '/symfony/deprecation-contracts/function.php',
+        'c964ee0ededf28c96ebd9db5099ef910' => __DIR__ . '/..' . '/guzzlehttp/promises/src/functions_include.php',
         '37a3dc5111fe8f707ab4c132ef1dbc62' => __DIR__ . '/..' . '/guzzlehttp/guzzle/src/functions_include.php',
         '460404fa6d3686d7820838788517c1f9' => __DIR__ . '/..' . '/rappasoft/laravel-helpers/src/arrays.php',
         'c0908dd0408c67235210b4bf031d1290' => __DIR__ . '/..' . '/rappasoft/laravel-helpers/src/classes.php',
@@ -34,6 +34,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
             'Psr\\Log\\' => 8,
             'Psr\\Http\\Message\\' => 17,
             'Psr\\Http\\Client\\' => 16,
+            'Psr\\Container\\' => 14,
         ),
         'O' => 
         array (
@@ -52,6 +53,14 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
             'GuzzleHttp\\Psr7\\' => 16,
             'GuzzleHttp\\Promise\\' => 19,
             'GuzzleHttp\\' => 11,
+        ),
+        'F' => 
+        array (
+            'Faker\\' => 6,
+        ),
+        'A' => 
+        array (
+            'Ahc\\Json\\' => 9,
         ),
     );
 
@@ -81,6 +90,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         array (
             0 => __DIR__ . '/..' . '/psr/http-client/src',
         ),
+        'Psr\\Container\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/psr/container/src',
+        ),
         'Orhanerday\\OpenAi\\' => 
         array (
             0 => __DIR__ . '/..' . '/orhanerday/open-ai/src',
@@ -104,6 +117,14 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'GuzzleHttp\\' => 
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/guzzle/src',
+        ),
+        'Faker\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/fakerphp/faker/src/Faker',
+        ),
+        'Ahc\\Json\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/adhocore/json-fixer/src',
         ),
     );
 

@@ -9,6 +9,8 @@
         "rappasoft/laravel-helpers": "^2.0",
         "orhanerday/open-ai": "^4.0",
         "tinify/tinify": "^1.6",
-        "league/color-extractor": "^0.4.0"
+        "league/color-extractor": "^0.4.0",
+        "adhocore/json-fixer": "^1.0",
+        "fakerphp/faker": "^1.23"
     }
 }

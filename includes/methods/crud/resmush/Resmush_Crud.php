@@ -2,11 +2,11 @@
 
 require GROWTYPE_AI_PATH . '/vendor/autoload.php';
 
-class Resmush
+class Resmush_Crud
 {
     public function __construct()
     {
-        define('RESMUSH_WEBSERVICE', 'http://api.resmush.it/ws.php?img=');
+
     }
 
     public function compress($path)

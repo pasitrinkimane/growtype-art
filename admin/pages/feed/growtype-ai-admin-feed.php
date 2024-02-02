@@ -47,7 +47,7 @@ class Growtype_Ai_Admin_Feed
             $query_args[0]['orderby'] = 'rand()';
         }
 
-        $leonardo_ai_crud = new Leonardo_Ai_Crud();
+        $leonardo_ai_crud = new Leonardo_Ai_Feed();
 
         $offset = isset($_GET['offset']) ? $_GET['offset'] : 0;
         $search = isset($_GET['search']) ? $_GET['search'] : 'portrait';

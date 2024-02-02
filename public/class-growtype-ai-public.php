@@ -54,20 +54,6 @@ class Growtype_Ai_Public
     {
         $this->growtype_ai = $growtype_ai;
         $this->version = $version;
-
-        add_action('wp_footer', array ($this, 'add_scripts_to_footer'));
-    }
-
-    /***
-     *
-     */
-    function add_scripts_to_footer()
-    {
-        ?>
-        <script type="text/javascript">
-            window.growtypeSearch = {};
-        </script>
-        <?php
     }
 
     /**

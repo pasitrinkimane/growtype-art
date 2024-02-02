@@ -72,7 +72,7 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
 
                 if ($options) { ?>
                     <select name="filter_action_custom" class="ewc-filter-cat">
-                        <option value="">Filter records</option>
+                        <option value="">All</option>
                         <?php foreach ($options as $option) { ?>
                             <option value="<?php echo $option['value']; ?>" <?php selected(isset($_REQUEST['filter_action_custom']) && $option['value'] === $_REQUEST['filter_action_custom']) ?>><?php echo $option['title']; ?></option>
                         <?php } ?>
@@ -139,6 +139,23 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
 
         $items = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE, [$args]);
 
+        /**
+         * Update missing values
+         */
+//        foreach ($items as $item) {
+//            if (!empty(growtype_ai_get_model_single_setting($item['id'], 'created_by_unique_hash'))) {
+//                growtype_ai_admin_update_model_settings($item['id'], [
+//                    'created_by' => 'external_user',
+//                ],
+//                    ['created_by']);
+//            } else {
+//                growtype_ai_admin_update_model_settings($item['id'], [
+//                    'created_by' => 'admin',
+//                ],
+//                    ['created_by']);
+//            }
+//        }
+
         if (isset($_REQUEST['action'])) {
             $total_items = count($items);
         } else {
@@ -178,6 +195,9 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
             'stats' => __('Stats', 'growtype-ai'),
             'featured_in' => __('Featured in', 'growtype-ai'),
             'images' => __('Images', 'growtype-ai'),
+            'created_by' => __('Created by', 'growtype-ai'),
+            'created_by_unique_hash' => __('Character UNIQUE HASH', 'growtype-ai'),
+            'is_private' => __('Is private', 'growtype-ai'),
             'created_at' => __('Created at', 'growtype-ai'),
             'updated_at' => __('Updated at', 'growtype-ai'),
         ));
@@ -272,6 +292,27 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
         return sprintf('%1$s %2$s', $item['id'], $this->row_actions($actions, true));
     }
 
+    function column_created_by($row)
+    {
+        $model = growtype_ai_get_model_details($row['id']);
+
+        echo isset($model['settings']['created_by']) && !empty($model['settings']['created_by']) ? '<span style="color:red;">' . $model['settings']['created_by'] . '</span>' : 'admin';
+    }
+
+    function column_created_by_unique_hash($row)
+    {
+        $model = growtype_ai_get_model_details($row['id']);
+
+        echo isset($model['settings']['created_by_unique_hash']) && !empty($model['settings']['created_by_unique_hash']) ? '<span>' . $model['settings']['created_by_unique_hash'] . '</span>' : '';
+    }
+
+    function column_is_private($row)
+    {
+        $model = growtype_ai_get_model_details($row['id']);
+
+        echo isset($model['settings']['model_is_private']) && !empty($model['settings']['model_is_private']) ? '<span style="color:green;font-weight: bold;font-size:18px;">true</span>' : 'false';
+    }
+
     function column_in_bundle($item)
     {
         $bundle_ids = explode(',', get_option('growtype_ai_bundle_ids'));
@@ -283,7 +324,6 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
     position: relative;
     top: 10px;">Yes</span>' : 'No';
     }
-
 
     /**
      * @param $row
@@ -307,7 +347,6 @@ class Growtype_Ai_Admin_Result_List_Table extends WP_List_Table
 
         echo Growtype_Ai_Admin_Model_List_Table_Record::render_feaatured_in_select($meta_value);
     }
-
 
     /**
      * @param $row

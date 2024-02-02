@@ -1,6 +1,6 @@
 <?php
 
-class Openai_Crud
+class Leonardo_Ai_Crud
 {
     public function __construct()
     {
@@ -12,19 +12,19 @@ class Openai_Crud
         /**
          * Base
          */
-        include GROWTYPE_AI_PATH . '/includes/methods/crud/openai/partials/Openai_Base.php';
+        include GROWTYPE_AI_PATH . '/includes/methods/crud/leonardoai/partials/Leonardo_Ai_Base.php';
 
         /**
-         * Image
+         * Cpt
          */
-        include GROWTYPE_AI_PATH . '/includes/methods/crud/openai/partials/Openai_Base_Image.php';
-        new Openai_Base_Image();
+        include GROWTYPE_AI_PATH . '/includes/methods/crud/leonardoai/partials/Leonardo_Ai_Meta.php';
+        new Leonardo_Ai_Meta();
 
         /**
-         * Image
+         * Feed
          */
-        include GROWTYPE_AI_PATH . '/includes/methods/crud/openai/partials/Openai_Base_Meal.php';
-        new Openai_Base_Meal();
+        include GROWTYPE_AI_PATH . '/includes/methods/crud/leonardoai/partials/Leonardo_Ai_Feed.php';
+        new Leonardo_Ai_Feed();
     }
 }
 

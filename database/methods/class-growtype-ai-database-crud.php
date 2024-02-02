@@ -81,6 +81,10 @@ class Growtype_Ai_Database_Crud
     {
         global $wpdb;
 
+        if (empty($data)) {
+            return;
+        }
+
         $table = $wpdb->prefix . $table;
 
         $wpdb->insert($table, $data);

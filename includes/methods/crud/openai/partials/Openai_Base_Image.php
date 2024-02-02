@@ -1,6 +1,8 @@
 <?php
 
-class Openai_Crud_Image extends Openai_Base
+use Orhanerday\OpenAi\OpenAi;
+
+class Openai_Base_Image extends Openai_Base
 {
     public function __construct()
     {
@@ -159,7 +161,7 @@ class Openai_Crud_Image extends Openai_Base
         }
     }
 
-    public function format_model_character($model_id)
+    public static function get_model_data_for_generating($model_id)
     {
         $character_details = growtype_ai_get_model_character_details($model_id);
 
@@ -168,27 +170,44 @@ class Openai_Crud_Image extends Openai_Base
             $data[$character_detail['meta_key']] = $character_detail['meta_value'];
         }
 
+        return $data;
+    }
+
+    public function format_model_character($model_id)
+    {
+        $data = self::get_model_data_for_generating($model_id);
+
         if (!empty($data)) {
             $content = $this->generate_model_character_content($data);
 
-            if (!empty($content) && is_array($content)) {
-                foreach ($content as $key => $value) {
-                    Growtype_Ai_Database_Crud::update_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE,
-                        [
-                            [
-                                'key' => 'model_id',
-                                'values' => [$model_id]
-                            ]
-                        ],
-                        [
-                            'reference_key' => 'meta_key',
-                            'update_value' => 'meta_value'
-                        ],
-                        [
-                            $key => sanitize_text_field($value)
-                        ]
-                    );
+            self::update_character_details($model_id, $content);
+        }
+    }
+
+    public static function update_character_details($model_id, $content)
+    {
+        if (!empty($content) && is_array($content)) {
+            foreach ($content as $key => $value) {
+
+                if (empty($value)) {
+                    continue;
                 }
+
+                Growtype_Ai_Database_Crud::update_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE,
+                    [
+                        [
+                            'key' => 'model_id',
+                            'values' => [$model_id]
+                        ]
+                    ],
+                    [
+                        'reference_key' => 'meta_key',
+                        'update_value' => 'meta_value'
+                    ],
+                    [
+                        $key => sanitize_text_field($value)
+                    ]
+                );
             }
         }
     }
@@ -229,17 +248,26 @@ class Openai_Crud_Image extends Openai_Base
         ]), 5);
     }
 
+    public static function message_for_generating_character_description($data)
+    {
+        $gender = $data['character_gender'] ?? '';
+        $nationality = $data['character_nationality'] ?? '';
+        $occupation = $data['character_occupation'] ?? '';
+
+        if (empty($gender) || empty($nationality) || empty($occupation)) {
+            return '';
+        }
+
+        return sprintf('Generate interesting %s character description in a array format presented below as "example". Change "example" array values. Do not change "example" array keys. "character_title" should be a popular name according to nationality, occupation should be %s and nationality %s.  Change other array values according to nationality and occupation. Create interesting and welcoming {character_intro_message}. Use metric unit system. Return only array without extra content. Do not change character_style value. Example - %s',
+            $gender, $occupation, $nationality,
+            json_encode($data));
+    }
+
     public function generate_model_character_content($data)
     {
-        d($this->open_ai_key);
         $open_ai = new OpenAi($this->open_ai_key);
 
-        $gender = $data['character_gender'];
-        $nationality = $data['character_nationality'];
-        $occupation = $data['character_occupation'];
-
-        $messages_content = sprintf('Generate interesting %s character description in a array format presented below as "example". Change "example" array values. Do not change "example" array keys. "character_title" should be a popular name according to nationality, occupation should be %s and nationality %s.  Change other array values according to nationality and occupation. Use metric unit system. Return only array without extra content. Example - %s', $gender, $occupation, $nationality,
-            json_encode($data));
+        $messages_content = self::message_for_generating_character_description($data);
 
         $complete = $open_ai->chat([
             'model' => 'gpt-3.5-turbo',
@@ -253,7 +281,7 @@ class Openai_Crud_Image extends Openai_Base
                     "content" => $messages_content
                 ],
             ],
-            'temperature' => 1.0,
+            'temperature' => 0.5,
             'max_tokens' => 3000,
             'frequency_penalty' => 0,
             'presence_penalty' => 0,
