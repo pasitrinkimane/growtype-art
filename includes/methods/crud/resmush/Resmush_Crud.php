@@ -1,27 +1,29 @@
 <?php
 
-require GROWTYPE_AI_PATH . '/vendor/autoload.php';
+require GROWTYPE_ART_PATH . '/vendor/autoload.php';
 
 class Resmush_Crud
 {
-    public function __construct()
-    {
-
-    }
-
     public function compress($path)
     {
-        shell_exec('cd ' . GROWTYPE_AI_PATH . '/resources/plugins/resmushit; sh run.sh ' . $path . '  2>&1');
+        shell_exec('cd ' . GROWTYPE_ART_PATH . '/resources/plugins/resmushit; sh run.sh ' . $path . '  2>&1');
     }
 
-    public function compress_online($url)
-    {
-        $o = json_decode(file_get_contents(RESMUSH_WEBSERVICE . $url));
+    public function compress_online($img_url) {
+        $api_url = "http://api.resmush.it/ws.php?img=" . urlencode($img_url);
 
-        if (isset($o->error)) {
-            die('Error');
-        }
+        $opts = [
+            "http" => [
+                "method" => "GET",
+                "header" => "User-Agent: GrowtypeBot/1.0\r\n" .
+                    "Referer: https://content.nsfwspace.com\r\n"
+            ]
+        ];
 
-        return $o->dest;
+        $context = stream_context_create($opts);
+        $response = @file_get_contents($api_url, false, $context);
+
+        $data = json_decode($response);
+        return isset($data->dest) ? $data->dest : '';
     }
 }

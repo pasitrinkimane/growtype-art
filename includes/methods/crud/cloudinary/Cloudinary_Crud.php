@@ -1,6 +1,6 @@
 <?php
 
-require GROWTYPE_AI_PATH . '/vendor/autoload.php';
+require GROWTYPE_ART_PATH . '/vendor/autoload.php';
 
 use Cloudinary\Cloudinary;
 use Cloudinary\Configuration\Configuration;
@@ -15,9 +15,9 @@ class Cloudinary_Crud
     {
         $config = new Configuration();
 
-        $config->cloud->cloudName = get_option('growtype_ai_cloudinary_cloudname');
-        $config->cloud->apiKey = get_option('growtype_ai_cloudinary_apikey');
-        $config->cloud->apiSecret = get_option('growtype_ai_cloudinary_apisecret');
+        $config->cloud->cloudName = get_option('growtype_art_cloudinary_cloudname');
+        $config->cloud->apiKey = get_option('growtype_art_cloudinary_apikey');
+        $config->cloud->apiSecret = get_option('growtype_art_cloudinary_apisecret');
         $config->url->secure = true;
 
         $this->cloudinary = new Cloudinary($config);
@@ -25,7 +25,7 @@ class Cloudinary_Crud
 
     //https://res.cloudinary.com/dmm4mlnmq/image/upload/w_5.8,c_scale/q_100/v1678257789/leonardoai/f8678b9703ec56106a2935aa617f6fcb/64082e7d3aee0.jpg
     //https://res.cloudinary.com/dmm4mlnmq/image/upload/e_auto_brightness/q_100/e_vectorize:colors:500:detail:10.9/v1/leonardoai/f8678b9703ec56106a2935aa617f6fcb/640754c1444ab.svg
-    //https://wp-basic.test/wp/wp-admin/admin.php?post_type=growtype_ai_models&page=growtype-ai-models&action=sync-images&item=190
+    //https://wp-basic.test/wp/wp-admin/admin.php?post_type=growtype_art_models&page=growtype-art-models&action=sync-images&item=190
     public function adjust_image($public_id, $method, $value)
     {
         switch ($method) {
@@ -127,13 +127,13 @@ class Cloudinary_Crud
 
     public function pull_images($model_id)
     {
-        $model = growtype_ai_get_model_details($model_id);
+        $model = growtype_art_get_model_details($model_id);
 
         if (empty($model)) {
             return;
         }
 
-        $existing_images = growtype_ai_get_model_images($model_id);
+        $existing_images = growtype_art_get_model_images_grouped($model_id)['original'] ?? [];
 
         $external_images = $this->get_assets([
             'resource_type' => 'image',
@@ -157,7 +157,7 @@ class Cloudinary_Crud
             if (!in_array($image['asset_id'], $existing_images_asset_ids)) {
                 $parts = explode('/', $image['public_id']);
                 $new_name = end($parts);
-                $image_id = Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                $image_id = Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGES_TABLE, [
                     'name' => $new_name,
                     'extension' => $image['format'],
                     'width' => $image['width'],
@@ -167,7 +167,7 @@ class Cloudinary_Crud
                     'reference_id' => $image['asset_id'],
                 ]);
 
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
             }
 
             $tags = isset($image['tags']) ? $image['tags'] : null;
@@ -175,7 +175,7 @@ class Cloudinary_Crud
             $caption_text = isset($image['context']['custom']['caption']) ? $image['context']['custom']['caption'] : null;
 
             if (empty($tags) || empty($alt_text) || empty($caption_text)) {
-                $existing_image = Growtype_Ai_Database_Crud::get_single_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                $existing_image = Growtype_Art_Database_Crud::get_single_record(Growtype_Art_Database::IMAGES_TABLE, [
                     [
                         'key' => 'reference_id',
                         'values' => [$image['asset_id']],
@@ -191,13 +191,13 @@ class Cloudinary_Crud
 
     public function sync_images($model_id)
     {
-        $model = growtype_ai_get_model_details($model_id);
+        $model = growtype_art_get_model_details($model_id);
 
         if (empty($model)) {
             return;
         }
 
-        $existing_images = growtype_ai_get_model_images($model_id);
+        $existing_images = growtype_art_get_model_images_grouped($model_id)['original'] ?? [];
 
         $external_images = $this->get_assets([
             'resource_type' => 'image',
@@ -216,21 +216,21 @@ class Cloudinary_Crud
         $img_to_delete = array_diff($existing_images_asset_ids, $external_images_asset_ids);
 
         if (!empty($img_to_delete)) {
-            $images_to_delete = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGES_TABLE, [
+            $images_to_delete = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::IMAGES_TABLE, [
                 [
                     'key' => 'reference_id',
                     'values' => $img_to_delete,
                 ]
             ]);
 
-            Growtype_Ai_Database_Crud::delete_records(Growtype_Ai_Database::IMAGES_TABLE, array_pluck($images_to_delete, 'id'));
+            Growtype_Art_Database_Crud::delete_records(Growtype_Art_Database::IMAGES_TABLE, array_pluck($images_to_delete, 'id'));
         }
 
         foreach ($external_images as $image) {
             if (!in_array($image['asset_id'], $existing_images_asset_ids)) {
                 $parts = explode('/', $image['public_id']);
                 $new_name = end($parts);
-                $image_id = Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                $image_id = Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGES_TABLE, [
                     'name' => $new_name,
                     'extension' => $image['format'],
                     'width' => $image['width'],
@@ -240,7 +240,7 @@ class Cloudinary_Crud
                     'reference_id' => $image['asset_id'],
                 ]);
 
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
             }
 
             $tags = isset($image['tags']) ? $image['tags'] : null;
@@ -248,7 +248,7 @@ class Cloudinary_Crud
             $caption_text = isset($image['context']['custom']['caption']) ? $image['context']['custom']['caption'] : null;
 
             if (empty($tags) || empty($alt_text) || empty($caption_text)) {
-                $existing_image = Growtype_Ai_Database_Crud::get_single_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                $existing_image = Growtype_Art_Database_Crud::get_single_record(Growtype_Art_Database::IMAGES_TABLE, [
                     [
                         'key' => 'reference_id',
                         'values' => [$image['asset_id']],
@@ -276,13 +276,13 @@ class Cloudinary_Crud
     public function update_cloudinary_images_details($model_id = null)
     {
         if (empty($model_id)) {
-            $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
+            $models = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODELS_TABLE);
         } else {
-            $models = [growtype_ai_get_model_details($model_id)];
+            $models = [growtype_art_get_model_details($model_id)];
         }
 
         foreach ($models as $model) {
-            $images = growtype_ai_get_model_images($model['id']);
+            $images = growtype_art_get_model_images_grouped($model['id'])['original'] ?? [];
 
             foreach ($images as $image) {
                 $this->update_cloudinary_image_details($image['id']);
@@ -292,13 +292,13 @@ class Cloudinary_Crud
 
     public function update_cloudinary_image_details($image_id)
     {
-        $image = growtype_ai_get_image_details($image_id);
+        $image = growtype_art_get_image_details($image_id);
 
         if (empty($image)) {
             return null;
         }
 
-        $public_id = growtype_ai_get_cloudinary_public_id($image);
+        $public_id = growtype_art_get_cloudinary_public_id($image);
 
         $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : null;
         $title = isset($image['settings']['caption']) ? $image['settings']['caption'] : null;
@@ -314,7 +314,7 @@ class Cloudinary_Crud
          * Add tags
          */
         if (isset($image_meta['tags'])) {
-            Growtype_Ai_Database_Crud::delete_single_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::delete_single_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 [
                     'key' => 'image_id',
                     'value' => $image_id,
@@ -325,7 +325,7 @@ class Cloudinary_Crud
                 ]
             ]);
 
-            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 'image_id' => $image_id,
                 'meta_key' => 'tags',
                 'meta_value' => json_encode($image_meta['tags'])
@@ -338,7 +338,7 @@ class Cloudinary_Crud
 
         if (isset($image_meta['context']['custom']['alt'])) {
 
-            Growtype_Ai_Database_Crud::delete_single_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::delete_single_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 [
                     'key' => 'image_id',
                     'value' => $image_id,
@@ -349,7 +349,7 @@ class Cloudinary_Crud
                 ]
             ]);
 
-            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 'image_id' => $image_id,
                 'meta_key' => 'alt_text',
                 'meta_value' => $image_meta['context']['custom']['alt']
@@ -365,7 +365,7 @@ class Cloudinary_Crud
 
         if (isset($image_meta['context']['custom']['caption'])) {
 
-            Growtype_Ai_Database_Crud::delete_single_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::delete_single_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 [
                     'key' => 'image_id',
                     'value' => $image_id,
@@ -376,7 +376,7 @@ class Cloudinary_Crud
                 ]
             ]);
 
-            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 'image_id' => $image_id,
                 'meta_key' => 'caption',
                 'meta_value' => $image_meta['context']['custom']['caption']

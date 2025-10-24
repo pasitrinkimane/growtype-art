@@ -18,7 +18,7 @@ class OptimizationSettings
     {
         add_action('admin_init', array ($this, 'admin_settings'));
 
-        add_filter('growtype_ai_admin_settings_tabs', array ($this, 'settings_tab'));
+        add_filter('growtype_art_admin_settings_tabs', array ($this, 'settings_tab'));
     }
 
     function settings_tab($tabs)
@@ -34,18 +34,18 @@ class OptimizationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_optimization',
-            'growtype_ai_optimization_clean_duplicate_settings'
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_clean_duplicate_settings'
         );
 
         add_settings_field(
-            'growtype_ai_optimization_clean_duplicate_settings',
+            'growtype_art_optimization_clean_duplicate_settings',
             'Clean duplicate settings (clean db records)',
-            array ($this, 'growtype_ai_optimization_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_optimization_settings',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_ai_optimization_clean_duplicate_settings'
+                'name' => 'growtype_art_optimization_clean_duplicate_settings'
             ]
         );
 
@@ -53,19 +53,19 @@ class OptimizationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_optimization',
-            'growtype_ai_optimization_clean_duplicate_images'
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_clean_duplicate_images'
         );
 
         add_settings_field(
-            'growtype_ai_optimization_clean_duplicate_images',
+            'growtype_art_optimization_clean_duplicate_images',
             'Clean duplicate images (clean db records)',
-            array ($this, 'growtype_ai_optimization_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_optimization_settings',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_ai_optimization_clean_duplicate_images',
-                'amount' => count(Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGES_TABLE))
+                'name' => 'growtype_art_optimization_clean_duplicate_images',
+                'amount' => count(Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::IMAGES_TABLE))
             ]
         );
 
@@ -74,18 +74,18 @@ class OptimizationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_optimization',
-            'growtype_ai_optimization_sync_local_images'
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_sync_local_images'
         );
 
         add_settings_field(
-            'growtype_ai_optimization_sync_local_images',
+            'growtype_art_optimization_sync_local_images',
             'Sync local images (check and upload local images)',
-            array ($this, 'growtype_ai_optimization_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_optimization_settings',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_ai_optimization_sync_local_images'
+                'name' => 'growtype_art_optimization_sync_local_images'
             ]
         );
 
@@ -93,18 +93,18 @@ class OptimizationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_optimization',
-            'growtype_ai_optimization_sync_models'
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_sync_models'
         );
 
         add_settings_field(
-            'growtype_ai_optimization_sync_models',
+            'growtype_art_optimization_sync_models',
             'Sync models (sync models with images)',
-            array ($this, 'growtype_ai_optimization_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_optimization_settings',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_ai_optimization_sync_models'
+                'name' => 'growtype_art_optimization_sync_models'
             ]
         );
 
@@ -112,18 +112,18 @@ class OptimizationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_optimization',
-            'growtype_ai_optimization_optimize_all_images'
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_optimize_all_images'
         );
 
         add_settings_field(
-            'growtype_ai_optimization_optimize_all_images',
+            'growtype_art_optimization_optimize_all_images',
             'Optimize images (upscale and compress images)',
-            array ($this, 'growtype_ai_optimization_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_optimization_settings',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_ai_optimization_optimize_all_images'
+                'name' => 'growtype_art_optimization_optimize_all_images'
             ]
         );
 
@@ -131,18 +131,18 @@ class OptimizationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_optimization',
-            'growtype_ai_optimization_get_images_colors'
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_get_images_colors'
         );
 
         add_settings_field(
-            'growtype_ai_optimization_get_images_colors',
+            'growtype_art_optimization_get_images_colors',
             'Get images colors',
-            array ($this, 'growtype_ai_optimization_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_optimization_settings',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_ai_optimization_get_images_colors'
+                'name' => 'growtype_art_optimization_get_images_colors'
             ]
         );
 
@@ -150,18 +150,37 @@ class OptimizationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_optimization',
-            'growtype_ai_optimization_model_assign_categories'
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_model_assign_categories'
         );
 
         add_settings_field(
-            'growtype_ai_optimization_model_assign_categories',
+            'growtype_art_optimization_model_assign_categories',
             'Assign categories',
-            array ($this, 'growtype_ai_optimization_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_optimization_settings',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_ai_optimization_model_assign_categories'
+                'name' => 'growtype_art_optimization_model_assign_categories'
+            ]
+        );
+
+        /**
+         *
+         */
+        register_setting(
+            'growtype_art_settings_optimization',
+            'growtype_art_optimization_rename_images'
+        );
+
+        add_settings_field(
+            'growtype_art_optimization_rename_images',
+            'Rename Images',
+            array ($this, 'growtype_art_optimization_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_optimization_settings',
+            [
+                'name' => 'growtype_art_optimization_rename_images'
             ]
         );
     }
@@ -169,7 +188,7 @@ class OptimizationSettings
     /**
      *
      */
-    function growtype_ai_optimization_input($args)
+    function growtype_art_optimization_input($args)
     {
         ?>
         <input type="checkbox" class="regular-text ltr" name="<?php echo $args['name'] ?>"/>

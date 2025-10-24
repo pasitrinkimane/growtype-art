@@ -1,3 +1,36 @@
+2.12.0 / 2023-12-03
+==================
+
+New functionality and features
+------------------------------
+
+  * Add support for access keys management in Account Provisioning API
+  * Add support for `visualSearch` Admin API
+  * Add support for `fields` parameter in Search and Admin APIs
+  * Add support for Search URL
+  * Add support for `useFetchFormat` in `VideoTag`
+  * Add support for `on_success` upload parameter
+
+Other Changes
+-------------
+
+  * Remove redundant `teapot/status-code` dependency
+
+2.11.0 / 2023-05-23
+==================
+
+New functionality and features
+------------------------------
+
+  * Add support for related assets Admin APIs
+  * Add support for `extra_headers` option in Upload and Admin API
+
+Other Changes
+-------------
+
+  * Fix Guzzle compatibility issues
+  * Update analytics token algorithm
+
 2.10.2 / 2023-02-01
 ==================
 

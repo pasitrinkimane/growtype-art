@@ -18,7 +18,7 @@ class EvaluationSettings
     {
         add_action('admin_init', array ($this, 'admin_settings'));
 
-        add_filter('growtype_ai_admin_settings_tabs', array ($this, 'settings_tab'));
+        add_filter('growtype_art_admin_settings_tabs', array ($this, 'settings_tab'));
     }
 
     function settings_tab($tabs)
@@ -34,18 +34,18 @@ class EvaluationSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_evaluation',
-            'growtype_ai_evaluation_image_colors'
+            'growtype_art_settings_evaluation',
+            'growtype_art_evaluation_image_colors'
         );
 
         add_settings_field(
-            'growtype_ai_evaluation_image_colors',
+            'growtype_art_evaluation_image_colors',
             'Image colors (image_id)',
-            array ($this, 'growtype_ai_evaluation_input'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_evaluation_settings',
+            array ($this, 'growtype_art_evaluation_input'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_evaluation_settings',
             [
-                'name' => 'growtype_ai_evaluation_image_colors'
+                'name' => 'growtype_art_evaluation_image_colors'
             ]
         );
     }
@@ -53,7 +53,7 @@ class EvaluationSettings
     /**
      *
      */
-    function growtype_ai_evaluation_input($args)
+    function growtype_art_evaluation_input($args)
     {
         ?>
         <input type="text" class="regular-text ltr" name="<?php echo $args['name'] ?>"/>

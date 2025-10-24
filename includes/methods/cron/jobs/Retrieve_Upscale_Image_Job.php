@@ -5,16 +5,9 @@ class Retrieve_Upscale_Image_Job
     public function run($job)
     {
         $job_payload = json_decode($job['payload'], true);
-
-        /**
-         * Try to retrieve the image
-         */
-        $get_url = $job_payload['upscaled_image']['urls']['get'];
-
-        $replicate = new ReplicateCrud();
-
-        $retrieve = $replicate->real_esrgan_retrieve($get_url);
-
+        $get_url = $job_payload['response']['urls']['get'];
+        $replicate = new Replicate_Crud();
+        $retrieve = $replicate->retrieve_generation($get_url);
         $output = $retrieve['output'];
 
         error_log(print_r([
@@ -56,10 +49,10 @@ class Retrieve_Upscale_Image_Job
 
             $image_id = $job_payload['original_image']['id'];
 
-            $image = growtype_ai_get_image_details($image_id);
+            $image = growtype_art_get_image_details($image_id);
 
             if (!isset($image['settings']['real_esrgan'])) {
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                     'image_id' => $image_id,
                     'meta_key' => 'real_esrgan',
                     'meta_value' => 'true',
@@ -67,7 +60,7 @@ class Retrieve_Upscale_Image_Job
             }
 
             if (!isset($image['settings']['compressed'])) {
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                     'image_id' => $image_id,
                     'meta_key' => 'compressed',
                     'meta_value' => 'true',

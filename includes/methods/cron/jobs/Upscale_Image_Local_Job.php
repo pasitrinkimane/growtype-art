@@ -19,7 +19,7 @@ class Upscale_Image_Local_Job
         $upscale_size = 2;
 
         if ($size[0] < $max_width) {
-            shell_exec('cd ' . GROWTYPE_AI_PATH . 'resources/plugins/waifu2x; sh run.sh ' . $image_path . ' ' . $image_path . ' ' . $upscale_size . '  2>&1');
+            shell_exec('cd ' . GROWTYPE_ART_PATH . 'resources/plugins/waifu2x; sh run.sh ' . $image_path . ' ' . $image_path . ' ' . $upscale_size . '  2>&1');
 
             $resmush = new Resmush_Crud();
 

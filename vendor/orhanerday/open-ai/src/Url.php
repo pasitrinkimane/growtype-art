@@ -84,6 +84,24 @@ class Url
      * @param
      * @return string
      */
+    public static function transcriptionsUrl(): string
+    {
+        return self::OPEN_AI_URL . "/audio/transcriptions";
+    }
+
+    /**
+     * @param
+     * @return string
+     */
+    public static function translationsUrl(): string
+    {
+        return self::OPEN_AI_URL . "/audio/translations";
+    }
+
+    /**
+     * @param
+     * @return string
+     */
     public static function filesUrl(): string
     {
         return self::OPEN_AI_URL . "/files";
@@ -95,7 +113,7 @@ class Url
      */
     public static function fineTuneUrl(): string
     {
-        return self::OPEN_AI_URL . "/fine-tunes";
+        return self::OPEN_AI_URL . "/fine_tuning/jobs";
     }
 
     /**

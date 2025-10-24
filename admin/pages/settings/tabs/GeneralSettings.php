@@ -18,7 +18,7 @@ class GeneralSettings
     {
         add_action('admin_init', array ($this, 'admin_settings'));
 
-        add_filter('growtype_ai_admin_settings_tabs', array ($this, 'settings_tab'));
+        add_filter('growtype_art_admin_settings_tabs', array ($this, 'settings_tab'));
     }
 
     function settings_tab($tabs)
@@ -34,48 +34,48 @@ class GeneralSettings
          *
          */
         register_setting(
-            'growtype_ai_settings_general',
-            'growtype_ai_images_saving_location'
+            'growtype_art_settings_general',
+            'growtype_art_images_saving_location'
         );
 
         add_settings_field(
-            'growtype_ai_images_saving_location',
+            'growtype_art_images_saving_location',
             'Images saving location',
-            array ($this, 'growtype_ai_images_saving_location_callback'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_image_generating_settings'
+            array ($this, 'growtype_art_images_saving_location_callback'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_image_generating_settings'
         );
 
         /**
          *
          */
         register_setting(
-            'growtype_ai_settings_general',
-            'growtype_ai_bundle_ids'
+            'growtype_art_settings_general',
+            'growtype_art_bundle_ids'
         );
 
         add_settings_field(
-            'growtype_ai_bundle_ids',
+            'growtype_art_bundle_ids',
             'Bundle ids (separated by comma)',
-            array ($this, 'growtype_ai_bundle_ids_callback'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_image_generating_settings'
+            array ($this, 'growtype_art_bundle_ids_callback'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_image_generating_settings'
         );
     }
 
     /**
      *
      */
-    function growtype_ai_images_saving_location_callback()
+    function growtype_art_images_saving_location_callback()
     {
-        $value = get_option('growtype_ai_images_saving_location');
+        $value = get_option('growtype_art_images_saving_location');
 
         $options = [
             'locally' => 'locally',
             'cloudinary' => 'cloudinary',
         ];
         ?>
-        <select name="growtype_ai_images_saving_location">
+        <select name="growtype_art_images_saving_location">
             <?php foreach ($options as $key => $option) : ?>
                 <option value="<?php echo $key; ?>" <?php echo $value == $key ? 'selected' : ''; ?>>
                     <?php echo $option; ?>
@@ -88,11 +88,11 @@ class GeneralSettings
     /**
      *
      */
-    function growtype_ai_bundle_ids_callback()
+    function growtype_art_bundle_ids_callback()
     {
-        $value = preg_replace("/\s+/", "", get_option('growtype_ai_bundle_ids'));
+        $value = preg_replace("/\s+/", "", get_option('growtype_art_bundle_ids'));
         ?>
-        <input type="text" class="regular-text ltr" name="growtype_ai_bundle_ids" value="<?php echo $value ?>"/>
+        <input type="text" class="regular-text ltr" name="growtype_art_bundle_ids" value="<?php echo $value ?>"/>
         <?php
     }
 }

@@ -10,7 +10,7 @@ class Download_Cloudinary_Folder_Job
 
         error_log('model_id: ' . $model_id);
 
-        $model = growtype_ai_get_model_details($model_id);
+        $model = growtype_art_get_model_details($model_id);
 
         if (empty($model)) {
             throw new Exception('Empty model');
@@ -42,7 +42,7 @@ class Download_Cloudinary_Folder_Job
             $cd_image_folder = $cd_image['folder'];
             $cd_image_name = str_replace($cd_image['folder'] . '/', '', $cd_image['public_id']);
 
-            $existing_image = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGES_TABLE, [
+            $existing_image = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::IMAGES_TABLE, [
                 [
                     'key' => 'name',
                     'values' => [$cd_image_name]
@@ -50,7 +50,7 @@ class Download_Cloudinary_Folder_Job
             ]);
 
             if (empty($existing_image)) {
-                $image_id = Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                $image_id = Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGES_TABLE, [
                     'name' => $cd_image_name,
                     'extension' => $cd_image['format'],
                     'width' => $cd_image['width'],
@@ -59,23 +59,23 @@ class Download_Cloudinary_Folder_Job
                     'folder' => $cd_image['folder']
                 ]);
 
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, ['model_id' => $model_id, 'image_id' => $image_id]);
 
                 if (!empty($cd_image['tags'])) {
-                    Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                    Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                         'image_id' => $image_id,
                         'meta_key' => 'tags',
                         'meta_value' => json_encode($cd_image['tags'])
                     ]);
                 }
             } else {
-                Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::IMAGES_TABLE, [
+                Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::IMAGES_TABLE, [
                     'extension' => $cd_image['format'],
                     'location' => $saving_location,
                 ], $existing_image[0]['id']);
             }
 
-            growtype_ai_save_external_file([
+            growtype_art_save_external_file([
                 'location' => $saving_location,
                 'url' => $cd_image['url'],
                 'name' => $cd_image_name,

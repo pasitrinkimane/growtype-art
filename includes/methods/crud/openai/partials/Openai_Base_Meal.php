@@ -1,7 +1,5 @@
 <?php
 
-use Ahc\Json\Fixer;
-
 class Openai_Base_Meal extends Openai_Base
 {
     public function __construct()
@@ -116,30 +114,33 @@ class Openai_Base_Meal extends Openai_Base
         foreach ($posts as $index => $post) {
             $meals = json_decode($post->post_content, true);
 
-            $day_meal_plan = [];
-            foreach ($meals as $key => $meal) {
-                $post = get_post($meal);
+            if (!empty($meals)) {
+                $day_meal_plan = [];
+                foreach ($meals as $key => $meal) {
+                    $single_post = get_post($meal);
 
-                if (!in_array($post->post_status, ['draft', 'publish'])) {
-                    continue;
+                    if (!in_array($single_post->post_status, ['draft', 'publish'])) {
+                        continue;
+                    }
+
+                    $day_meal = json_decode($single_post->post_content, true);
+
+                    $meal_id = [
+                        'id' => $meal,
+                        'slug' => $single_post->post_name,
+                    ];
+
+                    $day_meal = array_merge($meal_id, $day_meal);
+
+                    $day_meal_plan[$key] = $day_meal;
                 }
 
-                $day_meal = json_decode($post->post_content, true);
-
-                $meal_id = [
-                    'id' => $meal,
-                    'slug' => $post->post_name,
+                $meal_plan[$index] = [
+                    'id' => $post->ID,
+                    'title' => $post->post_title,
+                    'meals' => $day_meal_plan
                 ];
-
-                $day_meal = array_merge($meal_id, $day_meal);
-
-                $day_meal_plan[$key] = $day_meal;
             }
-
-            $meal_plan[$index] = [
-                'id' => $post->ID,
-                'meals' => $day_meal_plan
-            ];
         }
 
         return $meal_plan;
@@ -161,13 +162,6 @@ class Openai_Base_Meal extends Openai_Base
         if (!$meal) {
             growtype_cron_init_job('generate-meal', $payload, 5);
         }
-    }
-
-    public static function fix_malformed_json($malformedJson)
-    {
-        error_log('!!!FIXING MALFORMED JSON!!!');
-
-        return (new Fixer)->fix($malformedJson);
     }
 }
 

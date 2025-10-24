@@ -13,7 +13,7 @@ class Compress_Images_Job
         }
 
         foreach ($images_ids as $images_id) {
-            growtype_ai_compress_existing_image($images_id);
+            growtype_art_compress_existing_image($images_id);
 
             sleep(2);
         }

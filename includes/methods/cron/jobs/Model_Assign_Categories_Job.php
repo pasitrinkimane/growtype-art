@@ -7,7 +7,7 @@ class Model_Assign_Categories_Job
         $job_payload = json_decode($job['payload'], true);
 
         $model_id = $job_payload['model_id'];
-        $model = growtype_ai_get_model_details($model_id);
+        $model = growtype_art_get_model_details($model_id);
 
         if (isset($model['settings']) && !isset($model['settings']['categories']) && isset($model['settings']['tags']) && !empty($model['settings']['tags'])) {
             $tags = $model['settings']['tags'];
@@ -16,7 +16,7 @@ class Model_Assign_Categories_Job
             ddd($model);
             ddd($tags);
 
-            $existing_categories = growtype_ai_get_art_categories();
+            $existing_categories = growtype_art_get_art_categories();
 
             $assigned_categories = [];
             foreach ($tags as $tag) {
@@ -32,7 +32,7 @@ class Model_Assign_Categories_Job
             d($assigned_categories);
 
             if (!empty($assigned_categories)) {
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
                     'model_id' => $model_id,
                     'meta_key' => 'categories',
                     'meta_value' => json_encode($assigned_categories),

@@ -12,7 +12,7 @@
       "type": "string",
       "source": "text",
       "selector": "div",
-      "default": "[growtype_ai]"
+      "default": "[growtype_art]"
     },
     "search_type": {
       "type": "string",
@@ -64,7 +64,7 @@
       "full"
     ]
   },
-  "textdomain": "growtype-ai",
+  "textdomain": "growtype-art",
   "editorScript": "file:./index.js",
   "editorStyle": "file:./index.css",
   "style": "file:./style-index.css"

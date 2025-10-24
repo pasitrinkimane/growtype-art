@@ -18,7 +18,7 @@ class CloudinarySettings
     {
         add_action('admin_init', array ($this, 'admin_settings'));
 
-        add_filter('growtype_ai_admin_settings_tabs', array ($this, 'settings_tab'));
+        add_filter('growtype_art_admin_settings_tabs', array ($this, 'settings_tab'));
     }
 
     function settings_tab($tabs)
@@ -34,81 +34,81 @@ class CloudinarySettings
          *
          */
         register_setting(
-            'growtype_ai_settings_cloudinary',
-            'growtype_ai_cloudinary_cloudname'
+            'growtype_art_settings_cloudinary',
+            'growtype_art_cloudinary_cloudname'
         );
 
         add_settings_field(
-            'growtype_ai_cloudinary_cloudname',
+            'growtype_art_cloudinary_cloudname',
             'Cloudname',
-            array ($this, 'growtype_ai_cloudinary_cloudname_callback'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_cloudinary_settings'
+            array ($this, 'growtype_art_cloudinary_cloudname_callback'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_cloudinary_settings'
         );
 
         /**
          *
          */
         register_setting(
-            'growtype_ai_settings_cloudinary',
-            'growtype_ai_cloudinary_apikey'
+            'growtype_art_settings_cloudinary',
+            'growtype_art_cloudinary_apikey'
         );
 
         add_settings_field(
-            'growtype_ai_cloudinary_apikey',
+            'growtype_art_cloudinary_apikey',
             'ApiKey',
-            array ($this, 'growtype_ai_cloudinary_apikey_callback'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_cloudinary_settings'
+            array ($this, 'growtype_art_cloudinary_apikey_callback'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_cloudinary_settings'
         );
 
         /**
          *
          */
         register_setting(
-            'growtype_ai_settings_cloudinary',
-            'growtype_ai_cloudinary_apisecret'
+            'growtype_art_settings_cloudinary',
+            'growtype_art_cloudinary_apisecret'
         );
 
         add_settings_field(
-            'growtype_ai_cloudinary_apisecret',
+            'growtype_art_cloudinary_apisecret',
             'ApiSecret',
-            array ($this, 'growtype_ai_cloudinary_apisecret_callback'),
-            Growtype_Ai_Admin::SETTINGS_PAGE_NAME,
-            'growtype_ai_cloudinary_settings'
+            array ($this, 'growtype_art_cloudinary_apisecret_callback'),
+            Growtype_Art_Admin::SETTINGS_PAGE_NAME,
+            'growtype_art_cloudinary_settings'
         );
     }
 
     /**
      *
      */
-    function growtype_ai_cloudinary_cloudname_callback()
+    function growtype_art_cloudinary_cloudname_callback()
     {
-        $value = preg_replace("/\s+/", "", get_option('growtype_ai_cloudinary_cloudname'));
+        $value = preg_replace("/\s+/", "", get_option('growtype_art_cloudinary_cloudname'));
         ?>
-        <input type="text" class="regular-text ltr" name="growtype_ai_cloudinary_cloudname" value="<?php echo $value ?>"/>
+        <input type="text" class="regular-text ltr" name="growtype_art_cloudinary_cloudname" value="<?php echo $value ?>"/>
         <?php
     }
 
     /**
      *
      */
-    function growtype_ai_cloudinary_apikey_callback()
+    function growtype_art_cloudinary_apikey_callback()
     {
-        $value = preg_replace("/\s+/", "", get_option('growtype_ai_cloudinary_apikey'));
+        $value = preg_replace("/\s+/", "", get_option('growtype_art_cloudinary_apikey'));
         ?>
-        <input type="text" class="regular-text ltr" name="growtype_ai_cloudinary_apikey" value="<?php echo $value ?>"/>
+        <input type="text" class="regular-text ltr" name="growtype_art_cloudinary_apikey" value="<?php echo $value ?>"/>
         <?php
     }
 
     /**
      *
      */
-    function growtype_ai_cloudinary_apisecret_callback()
+    function growtype_art_cloudinary_apisecret_callback()
     {
-        $value = preg_replace("/\s+/", "", get_option('growtype_ai_cloudinary_apisecret'));
+        $value = preg_replace("/\s+/", "", get_option('growtype_art_cloudinary_apisecret'));
         ?>
-        <input type="text" class="regular-text ltr" name="growtype_ai_cloudinary_apisecret" value="<?php echo $value ?>"/>
+        <input type="text" class="regular-text ltr" name="growtype_art_cloudinary_apisecret" value="<?php echo $value ?>"/>
         <?php
     }
 }

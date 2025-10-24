@@ -6,7 +6,7 @@ class Generate_Model_Content_Job
     {
         $job_payload = json_decode($job['payload'], true);
 
-        $existing_content = growtype_ai_get_model_single_setting($job_payload['model_id'], $job_payload['meta_key']);
+        $existing_content = growtype_art_get_model_single_setting($job_payload['model_id'], $job_payload['meta_key']);
 
         $openai_crud = new Openai_Base_Image();
         $new_content = $openai_crud->generate_text_content($job_payload['prompt'], $job_payload['meta_key']);
@@ -30,13 +30,13 @@ class Generate_Model_Content_Job
          * tags
          */
         if (!empty($existing_content)) {
-            Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
                 'model_id' => $job_payload['model_id'],
                 'meta_key' => $job_payload['meta_key'],
                 'meta_value' => $new_content,
             ], $existing_content['id']);
         } else {
-            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::MODEL_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
                 'model_id' => $job_payload['model_id'],
                 'meta_key' => $job_payload['meta_key'],
                 'meta_value' => $new_content,

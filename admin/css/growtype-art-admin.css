@@ -1,0 +1,111 @@
+/**
+ * All of the CSS for your admin-specific functionality should be
+ * included in this file.
+ */
+
+.wrap .image {
+    padding: 10px;
+}
+
+.wrap .image.is-featured {
+    border: 8px solid rgb(18 255 0 / 38%);
+}
+
+.wrap .image.is-cover {
+    outline: 5px solid black;
+}
+
+.wrap .image.is-nsfw {
+    background: pink;
+}
+
+.wrap .image.is-nudity {
+    border: 10px solid red;
+}
+
+.wrap .image.is-private {
+    background: #00afff;
+}
+
+.b-imgs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 2200px) {
+    .b-imgs {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1300px) {
+    .b-imgs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .b-imgs {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+}
+
+.wrap .tab .tab-header {
+    border-bottom: 1px solid black;
+    cursor: pointer;
+}
+
+.wrap .tab .tab-content {
+    display: none;
+}
+
+.wrap .tab.is-active .tab-content {
+    display: block;
+}
+
+.user-feed {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-gap: 10px;
+}
+
+.user-feed img {
+    max-width: 100%;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    margin-top: 40px;
+}
+
+.pagination a {
+    display: inline-block;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px; /* Rounded corners */
+    text-decoration: none; /* Remove underline */
+    color: #0073aa; /* Default link color */
+    background-color: #f9f9f9; /* Light background */
+    transition: background-color 0.3s, color 0.3s; /* Smooth hover effect */
+}
+
+.pagination a:hover {
+    background-color: #0073aa; /* Highlight on hover */
+    color: #fff; /* White text on hover */
+}
+
+.pagination a.active {
+    background-color: #0073aa; /* Active link background */
+    color: #fff; /* Active link text color */
+    font-weight: bold; /* Make active link bold */
+    border-color: #005177; /* Darker border for active link */
+}
+
+.pagination a.disabled {
+    color: #bbb; /* Gray color for disabled links */
+    background-color: #f5f5f5; /* Subtle gray background */
+    cursor: not-allowed; /* Disabled cursor */
+    pointer-events: none; /* Disable clicks */
+}

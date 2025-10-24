@@ -55,7 +55,7 @@ export default function Edit({attributes, setAttributes}) {
     const [settings, setSettings] = useState([]);
 
     const requestSettings = async () => {
-        const settings = await apiFetch({path: '/growtype-ai/v1/settings'});
+        const settings = await apiFetch({path: '/growtype-art/v1/settings'});
         setSettings(settings);
         return;
     };
@@ -82,7 +82,7 @@ export default function Edit({attributes, setAttributes}) {
             setAttributes({[attribute_key]: val})
         }
 
-        let shortcodeTag = '[growtype_ai';
+        let shortcodeTag = '[growtype_art';
         Object.entries(attributes).map(function (element) {
             if (element[0] !== 'shortcode') {
                 let propertyKey = element[0];
@@ -116,14 +116,14 @@ export default function Edit({attributes, setAttributes}) {
     };
 
     if (Object.entries(attributes).length === 0 || attributes.shortcode === '') {
-        attributes.shortcode = '[growtype_ai]'
+        attributes.shortcode = '[growtype_art]'
     }
 
     return (<div {...blockProps}>
         <InspectorControls key={'inspector'}>
             <Panel>
                 <PanelBody
-                    title={__('Main settings', 'growtype-ai')}
+                    title={__('Main settings', 'growtype-art')}
                     icon="admin-plugins"
                 >
 
@@ -133,7 +133,7 @@ export default function Edit({attributes, setAttributes}) {
 
         <InspectorAdvancedControls>
             <TextControl
-                label={__('Parent ID', 'growtype-ai')}
+                label={__('Parent ID', 'growtype-art')}
                 onChange={(val) => updateShortcode('parent_id', val)}
                 value={attributes.parent_id}
             />

@@ -12,7 +12,7 @@ class Extract_Image_Colors_Job
 
         $image_id = isset($job_payload['image_id']) ? $job_payload['image_id'] : null;
         $update_colors = isset($job_payload['update_colors']) ? $job_payload['update_colors'] : false;
-        $image = growtype_ai_get_image_details($image_id);
+        $image = growtype_art_get_image_details($image_id);
 
         if ($update_colors || (!isset($image['settings']['main_colors']) || empty($image['settings']['main_colors']))) {
             try {
@@ -30,13 +30,13 @@ class Extract_Image_Colors_Job
         ini_set('max_execution_time', '100');
         set_time_limit(100);
 
-        $img_path = growtype_ai_get_image_path($image_id);
+        $img_path = growtype_art_get_image_path($image_id);
 
         if (empty($img_path)) {
             return;
         }
 
-        $image_details = growtype_ai_get_image_details($image_id);
+        $image_details = growtype_art_get_image_details($image_id);
 
         if (!in_array($image_details['extension'], ['jpg', 'png'])) {
             return;
@@ -50,7 +50,7 @@ class Extract_Image_Colors_Job
         $color_groups = [];
         foreach ($colors as $color) {
             $color_code = Color::fromIntToHex($color);
-            $color_group_name = growtype_ai_color_code_to_group($color_code);
+            $color_group_name = growtype_art_color_code_to_group($color_code);
 
             if (!empty($color_group_name)) {
                 array_push($color_groups, $color_group_name);
@@ -64,10 +64,10 @@ class Extract_Image_Colors_Job
     {
         $color_groups = self::get_image_colors_groups($image_id);
 
-        $image = growtype_ai_get_image_details($image_id);
+        $image = growtype_art_get_image_details($image_id);
 
         if (isset($image['settings']['main_colors'])) {
-            $image_setting = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            $image_setting = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 [
                     'key' => 'meta_key',
                     'value' => 'main_colors',
@@ -79,13 +79,13 @@ class Extract_Image_Colors_Job
             ], 'where');
 
             if (!empty($image_setting)) {
-                Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                     'meta_key' => 'main_colors',
                     'meta_value' => json_encode($color_groups),
                 ], $image_setting[0]['id']);
             }
         } else {
-            Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                 'image_id' => $image_id,
                 'meta_key' => 'main_colors',
                 'meta_value' => json_encode($color_groups),
@@ -95,7 +95,7 @@ class Extract_Image_Colors_Job
 
     public static function get_image_details($image_id, $html = false)
     {
-        $img_path = growtype_ai_get_image_path($image_id);
+        $img_path = growtype_art_get_image_path($image_id);
         $palette = Palette::fromFilename($img_path);
         $extractor = new ColorExtractor($palette);
         $colors = $extractor->extract(5);
@@ -108,7 +108,7 @@ class Extract_Image_Colors_Job
         }
 
         $image_details = [
-            'url' => growtype_ai_get_image_url($image_id),
+            'url' => growtype_art_get_image_url($image_id),
             'colors' => $color_codes,
             'groups' => Extract_Image_Colors_Job::get_image_colors_groups($image_id),
         ];
@@ -116,19 +116,19 @@ class Extract_Image_Colors_Job
         if ($html) {
             ob_start();
 
-            echo '<div><img src="' . growtype_ai_get_image_url($image_id) . '" style="max-width: 250px;"></div>';
+            echo '<div><img src="' . growtype_art_get_image_url($image_id) . '" style="max-width: 250px;"></div>';
 
             foreach ($color_codes as $color_code) {
                 ?>
-                <div class="growtype-ai-color" style="background-color: <?php echo $color_code; ?>;">
-                    <?php echo $color_code; ?> - <?php echo growtype_ai_hex_to_rgb($color_code); ?>
+                <div class="growtype-art-color" style="background-color: <?php echo $color_code; ?>;">
+                    <?php echo $color_code; ?> - <?php echo growtype_art_hex_to_rgb($color_code); ?>
                 </div>
                 <?php
             }
 
             foreach (Extract_Image_Colors_Job::get_image_colors_groups($image_id) as $color_group) {
                 ?>
-                <div class="growtype-ai-color" style="">
+                <div class="growtype-art-color" style="">
                     <?php echo $color_group; ?>
                 </div>
                 <?php

@@ -7,9 +7,11 @@ namespace Composer\Autoload;
 class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
 {
     public static $files = array (
+        'ad155f8f1cf0d418fe49e248db8c661b' => __DIR__ . '/..' . '/react/promise/src/functions_include.php',
         '7b11c4dc42b3b3023073cb14e519683c' => __DIR__ . '/..' . '/ralouphie/getallheaders/src/getallheaders.php',
         '6e3fae29631ef280660b3cdad06f25a8' => __DIR__ . '/..' . '/symfony/deprecation-contracts/function.php',
-        'c964ee0ededf28c96ebd9db5099ef910' => __DIR__ . '/..' . '/guzzlehttp/promises/src/functions_include.php',
+        'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
+        '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
         '37a3dc5111fe8f707ab4c132ef1dbc62' => __DIR__ . '/..' . '/guzzlehttp/guzzle/src/functions_include.php',
         '460404fa6d3686d7820838788517c1f9' => __DIR__ . '/..' . '/rappasoft/laravel-helpers/src/arrays.php',
         'c0908dd0408c67235210b4bf031d1290' => __DIR__ . '/..' . '/rappasoft/laravel-helpers/src/classes.php',
@@ -23,11 +25,24 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'T' => 
         array (
             'Tinify\\' => 7,
-            'Teapot\\StatusCode\\' => 18,
+        ),
+        'S' => 
+        array (
+            'Symfony\\Polyfill\\Php80\\' => 23,
+            'Symfony\\Polyfill\\Mbstring\\' => 26,
+            'Symfony\\Component\\Routing\\' => 26,
+            'Symfony\\Component\\HttpFoundation\\' => 33,
         ),
         'R' => 
         array (
+            'React\\Stream\\' => 13,
+            'React\\Socket\\' => 13,
+            'React\\Promise\\' => 14,
             'React\\EventLoop\\' => 16,
+            'React\\Dns\\' => 10,
+            'React\\Cache\\' => 12,
+            'Ratchet\\RFC6455\\' => 16,
+            'Ratchet\\' => 8,
         ),
         'P' => 
         array (
@@ -58,6 +73,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         array (
             'Faker\\' => 6,
         ),
+        'E' => 
+        array (
+            'Evenement\\' => 10,
+        ),
         'A' => 
         array (
             'Ahc\\Json\\' => 9,
@@ -69,13 +88,53 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         array (
             0 => __DIR__ . '/..' . '/tinify/tinify/lib/Tinify',
         ),
-        'Teapot\\StatusCode\\' => 
+        'Symfony\\Polyfill\\Php80\\' => 
         array (
-            0 => __DIR__ . '/..' . '/teapot/status-code/src',
+            0 => __DIR__ . '/..' . '/symfony/polyfill-php80',
+        ),
+        'Symfony\\Polyfill\\Mbstring\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/polyfill-mbstring',
+        ),
+        'Symfony\\Component\\Routing\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/routing',
+        ),
+        'Symfony\\Component\\HttpFoundation\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/http-foundation',
+        ),
+        'React\\Stream\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/react/stream/src',
+        ),
+        'React\\Socket\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/react/socket/src',
+        ),
+        'React\\Promise\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/react/promise/src',
         ),
         'React\\EventLoop\\' => 
         array (
             0 => __DIR__ . '/..' . '/react/event-loop/src',
+        ),
+        'React\\Dns\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/react/dns/src',
+        ),
+        'React\\Cache\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/react/cache/src',
+        ),
+        'Ratchet\\RFC6455\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/ratchet/rfc6455/src',
+        ),
+        'Ratchet\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/cboden/ratchet/src/Ratchet',
         ),
         'Psr\\Log\\' => 
         array (
@@ -83,8 +142,8 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         ),
         'Psr\\Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/psr/http-factory/src',
-            1 => __DIR__ . '/..' . '/psr/http-message/src',
+            0 => __DIR__ . '/..' . '/psr/http-message/src',
+            1 => __DIR__ . '/..' . '/psr/http-factory/src',
         ),
         'Psr\\Http\\Client\\' => 
         array (
@@ -122,6 +181,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         array (
             0 => __DIR__ . '/..' . '/fakerphp/faker/src/Faker',
         ),
+        'Evenement\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/evenement/evenement/src',
+        ),
         'Ahc\\Json\\' => 
         array (
             0 => __DIR__ . '/..' . '/adhocore/json-fixer/src',
@@ -129,6 +192,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
     );
 
     public static $classMap = array (
+        'Attribute' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
         'Cloudinary\\Api\\Admin\\AdminApi' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Admin/AdminApi.php',
         'Cloudinary\\Api\\Admin\\ApiEndPoint' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Admin/ApiEndPoint.php',
         'Cloudinary\\Api\\Admin\\AssetsTrait' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Admin/AssetsTrait.php',
@@ -152,6 +216,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Api\\Exception\\NotFound' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Exception/NotFound.php',
         'Cloudinary\\Api\\Exception\\RateLimited' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Exception/RateLimited.php',
         'Cloudinary\\Api\\HttpMethod' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Utils/HttpMethod.php',
+        'Cloudinary\\Api\\HttpStatusCode' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Utils/HttpStatusCode.php',
         'Cloudinary\\Api\\Metadata\\DateMetadataField' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Metadata/DateMetadataField.php',
         'Cloudinary\\Api\\Metadata\\EnumMetadataField' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Metadata/EnumMetadataField.php',
         'Cloudinary\\Api\\Metadata\\IntMetadataField' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Metadata/IntMetadataField.php',
@@ -175,8 +240,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Api\\Provisioning\\AccountApiClient' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Provisioning/AccountApiClient.php',
         'Cloudinary\\Api\\Provisioning\\AccountEndPoint' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Provisioning/AccountEndPoint.php',
         'Cloudinary\\Api\\Provisioning\\UserRole' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Provisioning/UserRole.php',
-        'Cloudinary\\Api\\Search\\SearchApi' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/SearchApi.php',
-        'Cloudinary\\Api\\Search\\SearchFoldersApi' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/SearchFoldersApi.php',
+        'Cloudinary\\Api\\Search\\SearchApi' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Search/SearchApi.php',
+        'Cloudinary\\Api\\Search\\SearchFoldersApi' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Search/SearchFoldersApi.php',
+        'Cloudinary\\Api\\Search\\SearchQueryInterface' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Search/SearchQueryInterface.php',
+        'Cloudinary\\Api\\Search\\SearchQueryTrait' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Search/SearchQueryTrait.php',
         'Cloudinary\\Api\\UploadApiClient' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/UploadApiClient.php',
         'Cloudinary\\Api\\Upload\\ArchiveTrait' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Upload/ArchiveTrait.php',
         'Cloudinary\\Api\\Upload\\ContextCommand' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Api/Upload/ContextCommand.php',
@@ -210,6 +277,8 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Asset\\MediaAssetFinalizerTrait' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Asset/MediaAssetFinalizerTrait.php',
         'Cloudinary\\Asset\\ModerationStatus' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Asset/Moderation/ModerationStatus.php',
         'Cloudinary\\Asset\\ModerationType' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Asset/Moderation/ModerationType.php',
+        'Cloudinary\\Asset\\SearchAsset' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Asset/SearchAsset.php',
+        'Cloudinary\\Asset\\SearchAssetTrait' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Asset/SearchAssetTrait.php',
         'Cloudinary\\Asset\\Video' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Asset/Video.php',
         'Cloudinary\\ClassUtils' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Utils/ClassUtils.php',
         'Cloudinary\\Cloudinary' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Cloudinary.php',
@@ -228,6 +297,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Configuration\\Provisioning\\ProvisioningConfiguration' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Configuration/Provisioning/ProvisioningConfiguration.php',
         'Cloudinary\\Configuration\\ResponsiveBreakpointsConfig' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Configuration/ResponsiveBreakpointsConfig.php',
         'Cloudinary\\Configuration\\TagConfig' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Configuration/TagConfig.php',
+        'Cloudinary\\Configuration\\TagConfigTrait' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Configuration/TagConfigTrait.php',
         'Cloudinary\\Configuration\\UrlConfig' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Configuration/UrlConfig.php',
         'Cloudinary\\Configuration\\UrlConfigTrait' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Configuration/UrlConfigTrait.php',
         'Cloudinary\\Exception\\ConfigurationException' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Exception/ConfigurationException.php',
@@ -328,7 +398,11 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\AudioFormatInterface' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Format/AudioFormatInterface.php',
         'Cloudinary\\Transformation\\AudioFormatTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Format/AudioFormatTrait.php',
         'Cloudinary\\Transformation\\AudioFrequency' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Video/Transcode/Audio/AudioFrequency.php',
+        'Cloudinary\\Transformation\\AudioOverlay' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/AudioOverlay.php',
         'Cloudinary\\Transformation\\AudioQualifierTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Video/Transcode/Audio/AudioQualifierTrait.php',
+        'Cloudinary\\Transformation\\AudioSource' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/AudioSource.php',
+        'Cloudinary\\Transformation\\AudioSourceQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/AudioSourceQualifier.php',
+        'Cloudinary\\Transformation\\AudioSourceTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/AudioSourceTrait.php',
         'Cloudinary\\Transformation\\AutoBackground' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/AutoBackground.php',
         'Cloudinary\\Transformation\\AutoBackgroundMode' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/AutoBackgroundMode.php',
         'Cloudinary\\Transformation\\AutoBackgroundTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/AutoBackgroundTrait.php',
@@ -341,6 +415,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\Background' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/Background.php',
         'Cloudinary\\Transformation\\BackgroundColorTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/BackgroundColorTrait.php',
         'Cloudinary\\Transformation\\BackgroundQualifierTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/BackgroundQualifierTrait.php',
+        'Cloudinary\\Transformation\\BackgroundRemoval' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Pixel/BackgroundRemoval.php',
         'Cloudinary\\Transformation\\BackgroundTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/BackgroundTrait.php',
         'Cloudinary\\Transformation\\BaseAction' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/BaseAction.php',
         'Cloudinary\\Transformation\\BaseArgument' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/BaseArgument.php',
@@ -348,6 +423,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\BaseOffsetQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/Timeline/BaseOffsetQualifier.php',
         'Cloudinary\\Transformation\\BasePageAction' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Page/BasePageAction.php',
         'Cloudinary\\Transformation\\BasePosition' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/BasePosition.php',
+        'Cloudinary\\Transformation\\BasePositionalSourceContainer' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/BasePositionalSourceContainer.php',
         'Cloudinary\\Transformation\\BaseResizeAction' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Resize/BaseResizeAction.php',
         'Cloudinary\\Transformation\\BaseSource' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/BaseSource.php',
         'Cloudinary\\Transformation\\BaseSourceContainer' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/BaseSourceContainer.php',
@@ -417,6 +493,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\DeliveryBuilderTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/DeliveryBuilderTrait.php',
         'Cloudinary\\Transformation\\Density' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Image/Qualifier/Density.php',
         'Cloudinary\\Transformation\\Deshake' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Appearance/Deshake.php',
+        'Cloudinary\\Transformation\\DetectMultipleTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/DetectMultipleTrait.php',
         'Cloudinary\\Transformation\\DimensionsQualifierTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/Dimensions/DimensionsQualifierTrait.php',
         'Cloudinary\\Transformation\\Distort' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Shape/Distort.php',
         'Cloudinary\\Transformation\\Dither' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Pixel/Dither.php',
@@ -469,6 +546,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\Extract' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Page/Extract.php',
         'Cloudinary\\Transformation\\FetchImageSource' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/FetchImageSource.php',
         'Cloudinary\\Transformation\\FetchSourceQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/FetchSourceQualifier.php',
+        'Cloudinary\\Transformation\\FetchVideoSource' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/FetchVideoSource.php',
         'Cloudinary\\Transformation\\Fill' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Resize/Fill/Fill.php',
         'Cloudinary\\Transformation\\FillLight' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Adjustment/FillLight.php',
         'Cloudinary\\Transformation\\FillPad' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Resize/Fill/FillPad.php',
@@ -485,6 +563,8 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\FocusOn' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/Gravity/ObjectGravity/FocusOn.php',
         'Cloudinary\\Transformation\\FoodObjectGravityBuilderTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/Gravity/ObjectGravity/FoodObjectGravityBuilderTrait.php',
         'Cloudinary\\Transformation\\FoodObjectGravityInterface' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/Gravity/ObjectGravity/FoodObjectGravityInterface.php',
+        'Cloudinary\\Transformation\\ForegroundObject' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/Effect/ForegroundObject.php',
+        'Cloudinary\\Transformation\\ForegroundObjectTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/Effect/ForegroundObjectTrait.php',
         'Cloudinary\\Transformation\\Format' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Format/Format.php',
         'Cloudinary\\Transformation\\FormatInterface' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Format/FormatInterface.php',
         'Cloudinary\\Transformation\\FormatQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Format/FormatQualifier.php',
@@ -492,8 +572,17 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\FormatTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Format/FormatTrait.php',
         'Cloudinary\\Transformation\\Fps' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Video/Transcode/Fps.php',
         'Cloudinary\\Transformation\\Frame' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Page/Frame.php',
+        'Cloudinary\\Transformation\\FullListExpressionQualifierMultiValue' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/FullListExpressionQualifierMultiValue.php',
+        'Cloudinary\\Transformation\\FullListQualifierMultiValue' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/FullListQualifierMultiValue.php',
         'Cloudinary\\Transformation\\FurnitureObjectGravityBuilderTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/Gravity/ObjectGravity/FurnitureObjectGravityBuilderTrait.php',
         'Cloudinary\\Transformation\\FurnitureObjectGravityInterface' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/Gravity/ObjectGravity/FurnitureObjectGravityInterface.php',
+        'Cloudinary\\Transformation\\GenerativeEffect' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/GenerativeEffect.php',
+        'Cloudinary\\Transformation\\GenerativeEffectAction' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/GenerativeEffectAction.php',
+        'Cloudinary\\Transformation\\GenerativeEffectTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/GenerativeEffectTrait.php',
+        'Cloudinary\\Transformation\\GenerativeFillBackground' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Background/GenerativeFillBackground.php',
+        'Cloudinary\\Transformation\\GenerativeRecolor' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/GenerativeRecolor.php',
+        'Cloudinary\\Transformation\\GenerativeRemove' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/GenerativeRemove.php',
+        'Cloudinary\\Transformation\\GenerativeReplace' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/GenerativeReplace.php',
         'Cloudinary\\Transformation\\GenericResize' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Resize/Generic/GenericResize.php',
         'Cloudinary\\Transformation\\GenericResizeTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Resize/Generic/GenericResizeTrait.php',
         'Cloudinary\\Transformation\\GradientFade' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Pixel/GradientFade.php',
@@ -552,7 +641,9 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\LightroomEffectTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Addon/Lightroom/LightroomEffectTrait.php',
         'Cloudinary\\Transformation\\LimitedEffectQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/LimitedEffectQualifier.php',
         'Cloudinary\\Transformation\\LiquidRescaling' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/Gravity/LiquidRescaling.php',
+        'Cloudinary\\Transformation\\ListEffectQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/ListEffectQualifier.php',
         'Cloudinary\\Transformation\\ListExpressionQualifierMultiValue' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/ListExpressionQualifierMultiValue.php',
+        'Cloudinary\\Transformation\\ListQualifierMultiValue' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/ListQualifierMultiValue.php',
         'Cloudinary\\Transformation\\Loop' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Playback/Loop.php',
         'Cloudinary\\Transformation\\LutLayer' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/LutLayer.php',
         'Cloudinary\\Transformation\\LutSourceQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Layer/LutSourceQualifier.php',
@@ -612,6 +703,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\Prefix' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Image/Qualifier/Prefix.php',
         'Cloudinary\\Transformation\\Preview' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Playback/Preview.php',
         'Cloudinary\\Transformation\\Progressive' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Flag/Progressive.php',
+        'Cloudinary\\Transformation\\PromptTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Generative/PromptTrait.php',
         'Cloudinary\\Transformation\\PsdLayer' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Page/PsdLayer.php',
         'Cloudinary\\Transformation\\PsdTools' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Page/PsdTools.php',
         'Cloudinary\\Transformation\\Qualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/Qualifier.php',
@@ -633,6 +725,7 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Transformation\\QualityQualifierTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Quality/QualityQualifierTrait.php',
         'Cloudinary\\Transformation\\QualityTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Delivery/Quality/QualityTrait.php',
         'Cloudinary\\Transformation\\RecolorQualifier' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Adjustment/RecolorQualifier.php',
+        'Cloudinary\\Transformation\\RectangleRegion' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Qualifier/QualifierValue/Canvas/RectangleRegion.php',
         'Cloudinary\\Transformation\\Region' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Positioning/Region.php',
         'Cloudinary\\Transformation\\RegionEffectAction' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Pixel/RegionEffectAction.php',
         'Cloudinary\\Transformation\\RegionEffectTrait' => __DIR__ . '/..' . '/cloudinary/transformation-builder-sdk/src/Transformation/Effect/Pixel/RegionEffectTrait.php',
@@ -746,6 +839,10 @@ class ComposerStaticInitfeb7a4d46e9bddcf604cca8222c18d8d
         'Cloudinary\\Utils' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Utils/Utils.php',
         'Cloudinary\\Utils\\SignatureVerifier' => __DIR__ . '/..' . '/cloudinary/cloudinary_php/src/Utils/SignatureVerifier.php',
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
+        'PhpToken' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/PhpToken.php',
+        'Stringable' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Stringable.php',
+        'UnhandledMatchError' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/UnhandledMatchError.php',
+        'ValueError' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/ValueError.php',
     );
 
     public static function getInitializer(ClassLoader $loader)

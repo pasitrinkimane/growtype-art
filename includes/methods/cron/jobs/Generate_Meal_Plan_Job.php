@@ -4,42 +4,57 @@ use Orhanerday\OpenAi\OpenAi;
 
 class Generate_Meal_Plan_Job
 {
+    public static function is_valid_date($date, $format = 'Y-m-d')
+    {
+        $dateTime = DateTime::createFromFormat($format, $date);
+        return $dateTime && $dateTime->format($format) === $date;
+    }
+
     public function run($job)
     {
         $job_payload = json_decode($job['payload'], true);
 
         $user_details = $job_payload['user_details'] ?? '';
-        $day_name = $job_payload['day_name'] ?? '';
+        $date = $job_payload['day_name'] ?? date('Y-m-d');
+        $meals_amount = $job_payload['meals_amount'] ?? $user_details['meal_count_per_day'][0] ?? 2;
+
+//        error_log(print_r($user_details, true));
 
         if (empty($user_details)) {
             return '';
         }
 
-        $meal_plan_details = $this->create_meal_plan($user_details, $day_name);
-        $meal_plan = $meal_plan_details['plan'] ?? '';
-        $meal_plan_day = $meal_plan_details['day'] ?? '';
+        $meal_plan_details = $this->create_meal_plan($user_details, $meals_amount, $date);
+        $generated_meal_plan = $meal_plan_details['plan'] ?? '';
+//        $meal_plan_day = $meal_plan_details['day'] ?? '';
 
 //        $meal_plan = '{"lunch":{"name":"Grilled Chicken Salad","ingredients":{"Grilled chicken breast":{"unit":"grams","value":150},"Mixed greens":{"unit":"grams","value":100},"Cherry tomatoes":{"unit":"grams","value":50},"Cucumber (sliced)":{"unit":"grams","value":30},"Avocado (sliced)":{"unit":"grams","value":50},"Olive oil":{"unit":"ml","value":10},"Balsamic vinegar":{"unit":"ml","value":10},"Salt and pepper":{"unit":"","value":"To taste"}},"recipe":{"text":"Combine %s of mixed greens, %s of cherry tomatoes, %s of sliced cucumber, and %s of sliced avocado. Top with %s of grilled chicken breast slices, drizzle with %s of olive oil and %s of balsamic vinegar. Season with salt and pepper to taste. Toss gently before serving.","units":[{"unit":"grams","value":100},{"unit":"grams","value":50},{"unit":"grams","value":30},{"unit":"grams","value":50},{"unit":"grams","value":150},{"unit":"ml","value":10},{"unit":"ml","value":10}]},"duration":{"unit":"minutes","value":20},"macronutrients":{"Carbohydrates":{"unit":"grams","value":15},"Protein":{"unit":"grams","value":25},"Fat":{"unit":"grams","value":20}},"calories":350,"dietary_info":{"Vegan":false,"Vegetarian":false,"Gluten Intolerant":true,"Glucose Intolerant":false,"Diabetic":true,"Diarrhea":true,"Constipation":true},"benefits":["High in protein (chicken)","Rich in fiber (vegetables)","Healthy fats (avocado and olive oil)","Provides essential vitamins and minerals"]},"afternoon_snack":{"name":"Greek Yogurt with Mixed Berries","ingredients":{"Greek yogurt":{"unit":"grams","value":150},"Mixed berries":{"unit":"grams","value":100}},"duration":{"unit":"minutes","value":10},"macronutrients":{"Carbohydrates":{"unit":"grams","value":20},"Protein":{"unit":"grams","value":15},"Fat":{"unit":"grams","value":5}},"calories":180,"dietary_info":{"Vegan":false,"Vegetarian":true,"Gluten Intolerant":true,"Glucose Intolerant":false,"Diabetic":true,"Diarrhea":true,"Constipation":true},"benefits":["High in protein (Greek yogurt)","Rich in antioxidants (berries)","Probiotics for gut health","Low in added sugars"]},"dinner":{"name":"Salmon with Quinoa and Steamed Broccoli","ingredients":{"Salmon fillet":{"unit":"grams","value":150},"Quinoa (cooked)":{"unit":"grams","value":100},"Broccoli florets":{"unit":"grams","value":100},"Lemon wedges":{"unit":"units","value":1},"Olive oil":{"unit":"ml","value":10},"Garlic (minced)":{"unit":"teaspoon","value":1},"Salt and pepper":{"unit":"","value":"To taste"}},"recipe":{"text":"Season %s of salmon fillet with salt and pepper. In a pan, heat %s of olive oil and sauté %s of minced garlic. Add the seasoned salmon fillet and cook until done. Serve over %s of cooked quinoa and %s of steamed broccoli. Garnish with %s of lemon wedges.","units":[{"unit":"grams","value":150},{"unit":"ml","value":10},{"unit":"teaspoon","value":1},{"unit":"grams","value":100},{"unit":"grams","value":100},{"unit":"units","value":1}]},"duration":{"unit":"minutes","value":25},"macronutrients":{"Carbohydrates":{"unit":"grams","value":30},"Protein":{"unit":"grams","value":35},"Fat":{"unit":"grams","value":15}},"calories":400,"dietary_info":{"Vegan":false,"Vegetarian":false,"Gluten Intolerant":true,"Glucose Intolerant":false,"Diabetic":true,"Diarrhea":true,"Constipation":true},"benefits":["High in omega-3 fatty acids (salmon)","Complete protein source (quinoa)","Rich in fiber (broccoli)","Healthy fats (olive oil)"]},"evening_snack":{"name":"Carrot Sticks with Hummus","ingredients":{"Carrot sticks":{"unit":"grams","value":100},"Hummus":{"unit":"grams","value":50}},"duration":{"unit":"minutes","value":10},"macronutrients":{"Carbohydrates":{"unit":"grams","value":15},"Protein":{"unit":"grams","value":5},"Fat":{"unit":"grams","value":8}},"calories":120,"dietary_info":{"Vegan":true,"Vegetarian":true,"Gluten Intolerant":true,"Glucose Intolerant":true},"benefits":["Rich in beta-carotene (carrots)","Good source of plant-based protein (hummus)","Healthy fats from hummus","High in fiber"]}}';
 //        $meal_plan_day = 'Monday';
 
+//        error_log('MEAL PLAN GENERATING RESULT: ' . print_r($generated_meal_plan, true) . ' DATE: ' . $date);
 
-        if (!empty($meal_plan)) {
-            $meal_plan = json_decode($meal_plan, true);
+        if (!empty($generated_meal_plan)) {
+            $meal_plan = json_decode($generated_meal_plan, true);
 
             if (empty($meal_plan)) {
-                $meal_plan = Openai_Base_Meal::fix_malformed_json($meal_plan);
+                $meal_plan = Openai_Base::fix_malformed_json($generated_meal_plan);
 
                 if (!empty($meal_plan)) {
-                    $meal_plan = json_decode($meal_plan);
+                    $meal_plan = json_decode($meal_plan, true);
 
                     /**
                      * Remove last meal if mising dietary info
                      */
+
+                    error_log(sprintf('Remove last meal if missing dietary info. %s', print_r($meal_plan, true)));
+
                     $meal_plan_last_meal = end($meal_plan);
 
                     if (!isset($meal_plan_last_meal['dietary_info']) || (isset($meal_plan_last_meal['dietary_info']) && count($meal_plan_last_meal['dietary_info']) < 4)) {
                         array_pop($meal_plan);
                     }
+                } else {
+                    error_log('MEAL PLAN FIX MALFORMED JSON FAILED!!!! ' . print_r($meal_plan, true));
                 }
             }
 
@@ -79,6 +94,8 @@ class Generate_Meal_Plan_Job
 
                         $post_id = wp_insert_post($new_post);
 
+                        error_log(sprintf('Insert new meal. Post ID: %s', $post_id));
+
                         if (!$post_id) {
                             error_log('Error inserting post' . print_r($meal, true));
                         } else {
@@ -89,27 +106,29 @@ class Generate_Meal_Plan_Job
                     $final_meal_plan[$key] = (int)$post_id;
                 }
 
-                $required_keys = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack'];
+                if (count($final_meal_plan) < $meals_amount) {
+                    $required_keys = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack'];
 
-                $missing_meals = array_diff($required_keys, array_keys($final_meal_plan));
+                    $missing_meals = array_diff(array_slice($required_keys, $meals_amount), array_keys($final_meal_plan));
 
-                foreach ($missing_meals as $meal) {
-                    $args = array (
-                        'post_type' => 'meal', // Replace with your custom post type if applicable
-                        'tax_query' => array (
-                            array (
-                                'taxonomy' => 'meal_tax', // Replace with the actual taxonomy name
-                                'field' => 'slug',
-                                'terms' => $meal,
+                    foreach ($missing_meals as $meal) {
+                        $args = array (
+                            'post_type' => 'meal', // Replace with your custom post type if applicable
+                            'tax_query' => array (
+                                array (
+                                    'taxonomy' => 'meal_tax', // Replace with the actual taxonomy name
+                                    'field' => 'slug',
+                                    'terms' => $meal,
+                                ),
                             ),
-                        ),
-                    );
+                        );
 
-                    $posts = get_posts($args);
+                        $posts = get_posts($args);
 
-                    $post = array_shuffle($posts)[0];
+                        $post = array_shuffle($posts)[0];
 
-                    $final_meal_plan[$meal] = $post->ID;
+                        $final_meal_plan[$meal] = $post->ID;
+                    }
                 }
 
                 $post_id = $wpdb->get_var("SELECT ID FROM $wpdb->posts WHERE post_content = '" . json_encode($final_meal_plan) . "' AND post_type='meal_plan'");
@@ -117,21 +136,24 @@ class Generate_Meal_Plan_Job
                 if (!$post_id) {
                     $new_post = array (
                         'post_type' => 'meal_plan',
-                        'post_title' => $meal_plan_day,
+                        'post_title' => $date,
                         'post_content' => json_encode($final_meal_plan),
                         'post_status' => 'draft',
                         'post_excerpt' => json_encode($user_details),
                     );
 
-                    wp_insert_post($new_post);
-                }
+                    $new_post_id = wp_insert_post($new_post);
 
-                error_log('MEAL PLAN IMPORTING SUCCESSFUL!!!!');
+                    error_log(sprintf('MEAL PLAN IMPORTING SUCCESSFUL!!!! New Post id: %s', $new_post_id));
+                } else {
+                    error_log(sprintf('MEAL PLAN ALREADY EXISTS!!!! Post id: %s', $post_id));
+                }
             } else {
-                error_log('MEAL PLAN MALFORMED JSON!!!! ' . print_r($meal_plan_details, true));
+                error_log('!!!! MEAL PLAN MALFORMED JSON !!!!');
+//                error_log('MEAL PLAN MALFORMED JSON!!!! ' . print_r($meal_plan_details, true));
             }
         } else {
-            error_log('EMPTY MEAL PLAN!' . print_r($meal_plan_details, true));
+            error_log('EMPTY MEAL PLAN GENERATING RESULT!' . print_r($meal_plan_details, true));
         }
 
 //        error_log('Meal plan: ' . print_r($completion, true));
@@ -140,17 +162,22 @@ class Generate_Meal_Plan_Job
 //        die();
     }
 
-    function create_meal_plan($user_details, $day_name = null)
+    function create_meal_plan($user_details, $meals_amount, $date = null)
     {
         extract($user_details);
+
+        if (self::is_valid_date($date)) {
+            $day_name = date('l', strtotime($date));
+        }
 
         $day_name_number = rand(0, 6);
 
         $days_off_week = array ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday');
         $day_name = !empty($day_name) ? $day_name : $days_off_week[$day_name_number];
 
-        $content = sprintf('Create a %s day meal plan for a %s who has a primary goal to %s, who prefers %s diet, who has %s food allergies, who has %s medican conditions, who exercise %s, who would like to exercise %s per week, whose age is %s, whose height is %s cm, whose weight is %s kg and would like to reach %s kg weight.',
+        $content = sprintf('Create a healthy %s day meal plan including %s meals for a %s who has a primary goal to %s, who prefers %s diet, who has %s food allergies, who has %s medical conditions, who exercise %s, who would like to exercise %s per week, whose age is %s, whose height is %s cm, whose weight is %s kg and would like to reach %s kg weight. Increase portions to make sure that total daily calories amount is correct for my parameters. Make sure that the meal plan is designed using products readily available in local supermarkets.',
             $day_name,
+            $meals_amount,
             json_encode($gender),
             json_encode($primary_goal),
             json_encode($dietary_preferences),

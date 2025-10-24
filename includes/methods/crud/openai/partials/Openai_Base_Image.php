@@ -18,7 +18,7 @@ class Openai_Base_Image extends Openai_Base
 //        error_log('GPT generating content');
         $open_ai = new OpenAi($this->open_ai_key);
 
-        $text = str_replace('{prompt_variable}', '', $text);
+        $text = str_replace('{prompt_variables}', '', $text);
 
         $content = '';
         $already_used_answers = [];
@@ -101,7 +101,7 @@ class Openai_Base_Image extends Openai_Base
 
                 if (!empty($content) && ($type === 'caption' || $type === 'title')) {
                     global $wpdb;
-                    $records = $wpdb->get_results("SELECT meta_value FROM wp_growtype_ai_image_settings where meta_key='caption' and meta_value != '' group by meta_value", ARRAY_A);
+                    $records = $wpdb->get_results("SELECT meta_value FROM wp_growtype_art_image_settings where meta_key='caption' and meta_value != '' group by meta_value", ARRAY_A);
 
                     if (in_array($content, array_pluck($records, 'meta_value'))) {
                         $content = null;
@@ -120,14 +120,14 @@ class Openai_Base_Image extends Openai_Base
     public function format_models($generation_type = null, $regenerate_values = false, $model_id = null)
     {
         if (!empty($model_id)) {
-            $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE, [
+            $models = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODELS_TABLE, [
                 [
                     'key' => 'id',
                     'values' => [$model_id],
                 ]
             ]);
         } else {
-            $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
+            $models = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODELS_TABLE);
         }
 
         $generation_types = [
@@ -151,7 +151,7 @@ class Openai_Base_Image extends Openai_Base
 
         foreach ($generation_types as $type) {
             foreach ($models as $model) {
-                growtype_ai_init_job('generate-model-content', json_encode([
+                Growtype_Cron_Jobs::create_if_not_exists('generate-model-content', json_encode([
                     'meta_key' => $type['meta_key'],
                     'model_id' => $model_id,
                     'encode' => $type['encode'],
@@ -163,7 +163,7 @@ class Openai_Base_Image extends Openai_Base
 
     public static function get_model_data_for_generating($model_id)
     {
-        $character_details = growtype_ai_get_model_character_details($model_id);
+        $character_details = growtype_art_get_model_character_details($model_id);
 
         $data = [];
         foreach ($character_details as $character_detail) {
@@ -193,7 +193,7 @@ class Openai_Base_Image extends Openai_Base
                     continue;
                 }
 
-                Growtype_Ai_Database_Crud::update_records(Growtype_Ai_Database::MODEL_SETTINGS_TABLE,
+                Growtype_Art_Database_Crud::update_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE,
                     [
                         [
                             'key' => 'model_id',
@@ -205,7 +205,7 @@ class Openai_Base_Image extends Openai_Base
                         'update_value' => 'meta_value'
                     ],
                     [
-                        $key => sanitize_text_field($value)
+                        $key => sanitize_textarea_field($value)
                     ]
                 );
             }
@@ -215,13 +215,13 @@ class Openai_Base_Image extends Openai_Base
     public function format_model_images($model_id = null, $regenerate_values = false)
     {
         if (empty($model_id)) {
-            $models = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::MODELS_TABLE);
+            $models = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODELS_TABLE);
         } else {
-            $models = [growtype_ai_get_model_details($model_id)];
+            $models = [growtype_art_get_model_details($model_id)];
         }
 
         foreach ($models as $model) {
-            $images = growtype_ai_get_model_images($model['id']);
+            $images = growtype_art_get_model_images_grouped($model['id'])['original'] ?? [];
 
             foreach ($images as $image) {
                 $this->format_image_job($image['id'], $regenerate_values);
@@ -242,7 +242,7 @@ class Openai_Base_Image extends Openai_Base
 
     public function format_image_job($image_id, $regenerate_values = false)
     {
-        growtype_ai_init_job('generate-image-content', json_encode([
+        Growtype_Cron_Jobs::create_if_not_exists('generate-image-content', json_encode([
             'image_id' => $image_id,
             'regenerate_content' => $regenerate_values,
         ]), 5);
@@ -258,7 +258,7 @@ class Openai_Base_Image extends Openai_Base
             return '';
         }
 
-        return sprintf('Generate interesting %s character description in a array format presented below as "example". Change "example" array values. Do not change "example" array keys. "character_title" should be a popular name according to nationality, occupation should be %s and nationality %s.  Change other array values according to nationality and occupation. Create interesting and welcoming {character_intro_message}. Use metric unit system. Return only array without extra content. Do not change character_style value. Example - %s',
+        return sprintf(growtype_art_generate_character_prompt(),
             $gender, $occupation, $nationality,
             json_encode($data));
     }

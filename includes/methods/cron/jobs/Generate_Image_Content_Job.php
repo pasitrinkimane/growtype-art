@@ -14,13 +14,13 @@ class Generate_Image_Content_Job
 
         $regenerate_content = isset($job_payload['regenerate_content']) ? $job_payload['regenerate_content'] : false;
 
-        $model = growtype_ai_get_image_model_details($image_id);
+        $model = growtype_art_get_image_model_details($image_id);
 
         if (empty($model)) {
             throw new Exception('Empty model for image');
         }
 
-        $image = growtype_ai_get_image_details($image_id);
+        $image = growtype_art_get_image_details($image_id);
 
         $tags = isset($image['prompt']) ? $image['prompt'] : null;
         $title = isset($model['settings']['title']) ? $model['settings']['title'] : null;
@@ -44,7 +44,7 @@ class Generate_Image_Content_Job
 
         foreach ($required_fields as $meta_key => $field) {
             if (!isset($image['settings'][$meta_key])) {
-                Growtype_Ai_Database_Crud::insert_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                     'image_id' => $image['id'],
                     'meta_key' => $meta_key,
                     'meta_value' => '',
@@ -55,7 +55,7 @@ class Generate_Image_Content_Job
         /**
          * Get image details again
          */
-        $image = growtype_ai_get_image_details($image['id']);
+        $image = growtype_art_get_image_details($image['id']);
 
         foreach ($required_fields as $meta_key => $field) {
             if ($regenerate_content || empty($image['settings'][$meta_key])) {
@@ -68,7 +68,7 @@ class Generate_Image_Content_Job
                 }
 
                 if (!empty($content)) {
-                    $image_setting = Growtype_Ai_Database_Crud::get_records(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                    $image_setting = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                         [
                             'key' => 'image_id',
                             'value' => $image['id'],
@@ -80,7 +80,7 @@ class Generate_Image_Content_Job
                     ], 'where');
 
                     if (!empty($image_setting)) {
-                        Growtype_Ai_Database_Crud::update_record(Growtype_Ai_Database::IMAGE_SETTINGS_TABLE, [
+                        Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
                             'meta_value' => $content,
                         ], $image_setting[0]['id']);
                     }

@@ -22,7 +22,7 @@ class Generate_Meal_Job
             $meal = json_decode($meal, true);
 
             if (empty($meal)) {
-                $meal = Openai_Base_Meal::fix_malformed_json($meal);
+                $meal = Openai_Base::fix_malformed_json($meal);
 
                 if (!empty($meal)) {
                     $meal = json_decode($meal);

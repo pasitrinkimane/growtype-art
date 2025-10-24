@@ -1,3 +1,33 @@
+1.4.0 / 2024-01-07
+==================
+
+New functionality and features
+------------------------------
+
+  * Add support for `generativeFill` background
+  * Add support for AI generative effects
+
+1.3.0 / 2023-10-04
+==================
+
+New functionality and features
+------------------------------
+
+  * Add support for `FetchVideoSource` in video overlays
+  * Add support for audio layers
+
+Other Changes
+-------------
+
+  * Fix handling of effect value
+  * Fix phpdoc @param tags with the NULL type
+  * Add documentation references
+
+1.2.0 / 2023-03-23
+==================
+
+* Add support for `BackgroundRemoval` effect
+
 1.1.1 / 2023-01-28
 ==================
 

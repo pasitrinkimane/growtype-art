@@ -4,10 +4,10 @@ mix.setPublicPath('./public');
 mix.setResourceRoot('./../');
 
 mix
-    .sass('resources/styles/growtype-ai.scss', 'styles');
+    .sass('resources/styles/growtype-art.scss', 'styles');
 
 mix
-    .js('resources/scripts/growtype-ai.js', 'scripts');
+    .js('resources/scripts/growtype-art.js', 'scripts');
 
 mix
     .copyDirectory('resources/images', 'public/images');
