@@ -463,7 +463,7 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
                 $image_url = growtype_art_get_image_url($image['id']);
                 ?>
                 <div style="max-width: 200px;">
-                    <img src="<?php echo $image_url ?>" alt="" style="max-width: 100%;">
+                    <img src="<?php echo $image_url ?>" alt="" style="max-width: 100%;" loading="lazy">
                 </div>
             <?php } ?>
         </div>

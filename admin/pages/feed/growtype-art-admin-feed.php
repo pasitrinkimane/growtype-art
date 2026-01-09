@@ -72,7 +72,7 @@ class Growtype_Art_Admin_Feed
                 <?php foreach ($feed as $image) { ?>
                     <div class="user-feed-item">
                         <div class="img-wrapper">
-                            <img src="<?php echo $image['url'] ?>" class="img-fluid" alt="">
+                            <img src="<?php echo $image['url'] ?>" class="img-fluid" alt="" loading="lazy">
                         </div>
                         <div class="details">
                             <div class="detail-single">

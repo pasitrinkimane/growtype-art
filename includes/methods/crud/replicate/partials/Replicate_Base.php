@@ -222,6 +222,7 @@ class Replicate_Base
                     'interpolate_output' => true,
                     'lora_scale_transformer' => 1,
                     'lora_scale_transformer_2' => 1,
+                    'disable_safety_checker' => true,
                 ],
             ]),
             'method' => 'POST',

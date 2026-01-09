@@ -2,7 +2,6 @@
 
 namespace partials;
 
-use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
@@ -11,20 +10,18 @@ use Growtype_Cron_Jobs;
 
 class Piclumen_Base
 {
-    public function __construct()
-    {
-    }
-
     public static function api_key()
     {
         return \Growtype_Auth::credentials('piclumen');
     }
 
-    public function generate_model_image($model_id = null)
+    public function generate_model_image($model_id = null, $params = [])
     {
         $model = growtype_art_get_model_details($model_id);
 
-        if (!isset($model['prompt']) || empty($model['prompt'])) {
+        $prompt = isset($params['prompt']) && !empty($params['prompt']) ? $params['prompt'] : $model['prompt'];
+
+        if (empty($prompt)) {
             error_log('Empty prompt. Model ' . $model_id);
 
             return [
@@ -33,8 +30,7 @@ class Piclumen_Base
             ];
         }
 
-        $formatted_prompt = growtype_art_model_format_prompt($model['prompt'], $model_id);
-
+        $formatted_prompt = growtype_art_model_format_prompt($prompt, $model_id);
         $api_keys = self::api_key();
 
         if (empty($api_keys)) {
@@ -44,36 +40,51 @@ class Piclumen_Base
             ];
         }
 
-        $api_group_key = array_keys($api_keys)[array_rand(array_keys(self::api_key()))];
+        $api_group_keys = array_keys($api_keys);
+        shuffle($api_group_keys);
 
-        $token = $this->get_access_token($api_group_key);
+        $generation_details = null;
+        $params_urlencoded = '';
 
-        $params = [
-            'prompt' => $formatted_prompt,
-            'token' => $token
-        ];
+        foreach ($api_group_keys as $api_group_key) {
+            $token = $this->get_access_token($api_group_key);
 
-        $generation_details = $this->generate_image_init($params);
-
-        $params_urlencoded = urlencode(json_encode($params));
-
-        if (!isset($generation_details['data'])) {
-            if (isset($_GET['page']) && !empty($_GET['page'])) {
-                Growtype_Cron_Jobs::create_if_not_exists('generate-model', json_encode([
-                    'provider' => Growtype_Art_Crud::PICLUMEN_KEY,
-                    'model_id' => $model_id
-                ]), 30);
-
-                return [
-                    'success' => false,
-                    'message' => sprintf('Failed to generate image for model %s. Params: %s. Message: %s', $model_id, $params_urlencoded, $generation_details['message'] ?? ''),
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'message' => sprintf('Image is still generating. Model %s. Params: %s. Message: %s.', $model_id, $params_urlencoded, $generation_details['message'] ?? ''),
-                ];
+            if (empty($token)) {
+                error_log("Empty token for API group: $api_group_key");
+                continue;
             }
+
+            $params = [
+                'prompt' => $formatted_prompt,
+                'token' => $token,
+            ];
+
+            $params_urlencoded = urlencode(json_encode($params));
+//            error_log('Trying token group: ' . $api_group_key . ' → ' . print_r($params, true));
+
+            $generation_details = $this->generate_image_init($params);
+
+            if (isset($generation_details['data'])) {
+                break;
+            }
+        }
+
+        if (empty($generation_details['data'])) {
+            $message = sprintf(
+                'Failed to generate image for model %s. Params: %s. Message: %s',
+                $model_id,
+                $params_urlencoded,
+                $generation_details['message'] ?? 'No response data'
+            );
+
+            error_log($message);
+
+            return [
+                'success' => false,
+                'message' => (isset($_GET['page']) && !empty($_GET['page']))
+                    ? $message
+                    : sprintf('Image is still generating. %s', $message),
+            ];
         }
 
         Growtype_Cron_Jobs::create_if_not_exists('retrieve-model', json_encode([
@@ -81,17 +92,15 @@ class Piclumen_Base
             'api_group_key' => $api_group_key,
             'amount' => 1,
             'model_id' => $model_id,
-            'generation_id' => $generation_details['data']['markId']
+            'generation_id' => $generation_details['data']['markId'],
         ]), 30);
 
         return [
             'success' => true,
             'generations' => [
-                [
-                    'generation_id' => $generation_details['data']['markId']
-                ]
+                ['generation_id' => $generation_details['data']['markId']],
             ],
-            'message' => sprintf('Successfully generated. Params: %s', $params_urlencoded)
+            'message' => sprintf('Successfully generated. Params: %s', $params_urlencoded),
         ];
     }
 

@@ -1216,10 +1216,16 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
         foreach ($images_with_settings as $image) {
             $model_id = $image['model_id'];
             $image_id = $image['image_id'];
+            $image_name = $image['name'];
+
+            if (empty($image_name)) {
+                error_log(sprintf('Empty image name: %s', print_r($image, true)));
+                continue;
+            }
 
             if (isset($image['private']) && $image['private']) {
                 $group_name = 'private_images';
-            } elseif (str_contains($image['name'], 'thumbnail')) {
+            } elseif (str_contains($image_name, 'thumbnail')) {
                 $group_name = 'thumbnail_images';
             } elseif ($image['is_cover']) {
                 $group_name = 'cover_images';

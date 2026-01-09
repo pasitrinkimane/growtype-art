@@ -312,10 +312,10 @@ class Growtype_Art_Admin_Images
                 <div class="image-preview">
                     <a href="<?php echo growtype_art_image_get_alternative_format($img_url) ?>?v=<?php echo self::IMAGE_VERSION ?>" target="_blank" style="min-height: 100px;width: 100%;display: flex;margin-bottom: 10px;">
                         <?php if (in_array($image['extension'], ['jpg', 'jpeg', 'png', 'webp'])) { ?>
-                            <img src="<?php echo growtype_art_image_get_alternative_format($img_url) ?>?v=<?php echo self::IMAGE_VERSION ?>" alt="" style="max-width: 100%;">
+                            <img src="<?php echo growtype_art_image_get_alternative_format($img_url) ?>?v=<?php echo self::IMAGE_VERSION ?>" alt="" style="max-width: 100%;" loading="lazy">
                         <?php } else { ?>
-                            <video width="100%" height="100%" controls loop muted>
-                                <source type="video/mp4" src="<?php echo $img_url ?>">
+                            <video width="100%" height="100%" controls loop muted preload="none" class="lazy-video">
+                                <source type="video/mp4" data-src="<?php echo $img_url ?>">
                             </video>
                         <?php } ?>
                     </a>

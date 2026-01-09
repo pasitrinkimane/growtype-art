@@ -24,7 +24,7 @@ class Pollinations_Base
 
         $generation_details = $this->generate_image_init($params);
 
-        if (empty($generation_details) || isset($generation_details['errors']) || !$generation_details['success']) {
+        if (empty($generation_details) || isset($generation_details['error']) || isset($generation_details['errors']) || !$generation_details['success']) {
             return [
                 'success' => false,
                 'message' => $generation_details['errors'][0]['message'] ?? 'Something went wrong',
@@ -102,7 +102,7 @@ class Pollinations_Base
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
         // Execute the request
         $response = curl_exec($ch);

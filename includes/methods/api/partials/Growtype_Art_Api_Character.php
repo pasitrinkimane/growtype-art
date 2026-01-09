@@ -84,6 +84,12 @@ class Growtype_Art_Api_Character
             'callback' => array ($this, 'update_character_settings_callback'),
             'permission_callback' => array ($this, 'permission_check_callback')
         ));
+
+        register_rest_route('growtype-art/v1', 'upload/character/content', array (
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array ($this, 'upload_character_content_callback'),
+            'permission_callback' => array ($this, 'permission_check_callback')
+        ));
     }
 
     function permission_check_callback(WP_REST_Request $request)
@@ -908,9 +914,6 @@ class Growtype_Art_Api_Character
         if (!empty($model_id)) {
             try {
                 $model = growtype_art_get_model_details($model_id);
-//                $prompt_details = $prompt . '. ' . $model['prompt'];
-//                $prompt_details = substr($prompt_details, 0, 300);
-
                 $prompt = !empty($prompt) ? $prompt : $model['prompt'];
 
                 $generate_details = growtype_art_generate_model_image($model_id, [
@@ -953,6 +956,7 @@ class Growtype_Art_Api_Character
         $prompt = isset($params['prompt']) ? $params['prompt'] : '';
         $providers = isset($params['providers']) ? $params['providers'] : [];
         $reference_image = isset($params['reference_image']) ? $params['reference_image'] : null;
+        $types = isset($params['types']) ? $params['types'] : [];
 
         if (!empty($model_id)) {
             try {
@@ -963,6 +967,7 @@ class Growtype_Art_Api_Character
                     'prompt' => $prompt,
                     'providers' => $providers,
                     'reference_image' => $reference_image,
+                    'types' => $types,
                 ]);
 
                 if (empty($generate_details) || !$generate_details['success']) {
@@ -986,6 +991,169 @@ class Growtype_Art_Api_Character
         return wp_send_json([
             'success' => false,
             'message' => 'Character is missing',
+        ], 200);
+    }
+
+    function upload_character_content_callback($data)
+    {
+        $params = $data->get_params();
+        $files = $data->get_file_params();
+
+        $model_id = isset($params['model_id']) ? $params['model_id'] : null;
+        $slug = isset($params['slug']) ? $params['slug'] : null;
+        $character_name = isset($params['character_name']) ? $params['character_name'] : null;
+
+        if (empty($model_id)) {
+            if (!empty($slug)) {
+                $existing_model = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
+                    [
+                        'key' => 'meta_key',
+                        'value' => 'slug',
+                    ],
+                    [
+                        'key' => 'meta_value',
+                        'value' => $slug,
+                    ]
+                ], 'where');
+                $model_id = $existing_model[0]['model_id'] ?? null;
+            } elseif (!empty($character_name)) {
+                $existing_model = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
+                    [
+                        'key' => 'meta_key',
+                        'value' => 'character_title',
+                    ],
+                    [
+                        'key' => 'meta_value',
+                        'value' => $character_name,
+                    ]
+                ], 'where');
+                $model_id = $existing_model[0]['model_id'] ?? null;
+            }
+        }
+
+        if (empty($model_id)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Character not found',
+            ], 404);
+        }
+
+        if (empty($files) || !isset($files['content'])) {
+            if (isset($params['urls']) && !empty($params['urls'])) {
+                $uploaded_content = ['url' => $params['urls']];
+            } elseif (isset($params['url']) && !empty($params['url'])) {
+                $uploaded_content = ['url' => $params['url']];
+            } else {
+                return wp_send_json([
+                    'success' => false,
+                    'message' => 'No content to upload',
+                ], 400);
+            }
+        } else {
+            $uploaded_content = $files['content'];
+        }
+
+        $model = growtype_art_get_model_details($model_id);
+        if (empty($model)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Invalid model',
+            ], 400);
+        }
+
+        $uploaded_images = [];
+
+        // Handle URL(s) upload
+        if (isset($uploaded_content['url'])) {
+            $urls = is_array($uploaded_content['url']) ? $uploaded_content['url'] : [$uploaded_content['url']];
+
+            foreach ($urls as $item) {
+                $url = is_array($item) ? ($item['url'] ?? '') : $item;
+
+                if (empty($url)) {
+                    continue;
+                }
+
+                $image_data = [
+                    'url' => $url,
+                    'folder' => $model['image_folder'],
+                ];
+
+                if (is_array($item)) {
+                    $meta_details = [];
+                    $allowed_meta_keys = ['prompt', 'caption', 'nsfw', 'nudity', 'porn', 'private', 'provider', 'alt_text'];
+                    foreach ($item as $key => $value) {
+                        if (!in_array($key, $allowed_meta_keys)) {
+                            continue;
+                        }
+
+                        $meta_details[] = [
+                            'key' => $key,
+                            'value' => is_bool($value) ? ($value ? '1' : '0') : $value
+                        ];
+                    }
+
+                    if (!empty($meta_details)) {
+                        $image_data['meta_details'] = $meta_details;
+                    }
+                }
+
+                $saved_image = Growtype_Art_Crud::save_image($image_data);
+
+                if (!empty($saved_image) && isset($saved_image['id'])) {
+                    Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
+                        'model_id' => $model_id,
+                        'image_id' => $saved_image['id']
+                    ]);
+                    $uploaded_images[] = [
+                        'id' => $saved_image['id'],
+                        'url' => growtype_art_get_image_url($saved_image['id'])
+                    ];
+                }
+            }
+        } else {
+            // Support both single and multiple file uploads
+            if (!isset($uploaded_content['name'])) {
+                $content_to_process = $uploaded_content;
+            } else {
+                $content_to_process = [$uploaded_content];
+            }
+
+            foreach ($content_to_process as $file) {
+                $saved_image = Growtype_Art_Crud::save_image([
+                    'name' => $file['name'],
+                    'tmp_name' => $file['tmp_name'],
+                    'type' => $file['type'],
+                    'size' => $file['size'],
+                    'folder' => $model['image_folder'],
+                ]);
+
+                if (!empty($saved_image) && isset($saved_image['id'])) {
+                    Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
+                        'model_id' => $model_id,
+                        'image_id' => $saved_image['id']
+                    ]);
+                    $uploaded_images[] = [
+                        'id' => $saved_image['id'],
+                        'url' => growtype_art_get_image_url($saved_image['id'])
+                    ];
+                }
+            }
+        }
+
+        if (empty($uploaded_images)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Failed to upload content',
+            ], 500);
+        }
+
+        return wp_send_json([
+            'success' => true,
+            'message' => 'Content uploaded successfully',
+            'data' => [
+                'images' => $uploaded_images
+            ]
         ], 200);
     }
 }

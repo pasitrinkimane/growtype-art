@@ -6,6 +6,7 @@ class Growtype_Art_Crud
     const PICLUMEN_KEY = 'piclumen';
     const AIEASE_KEY = 'aiease';
     const RUNWARE_KEY = 'runware';
+    const FAL_KEY = 'fal';
     const SEGMIND_KEY = 'segmind';
     const GEMINI_KEY = 'gemini';
     const POLLINATIONS_KEY = 'pollinations';
@@ -19,7 +20,8 @@ class Growtype_Art_Crud
     const NSFW_PROVIDERS = [
         self::RUNWARE_KEY,
         self::POLLINATIONS_KEY,
-        self::SEGMIND_KEY,
+        self::FAL_KEY,
+//        self::SEGMIND_KEY,
 //        self::FREEFLUX_KEY,
 //        self::WRITECREAM_KEY,
     ];
@@ -31,6 +33,7 @@ class Growtype_Art_Crud
         self::RUNWARE_KEY,
         self::POLLINATIONS_KEY,
         self::SEGMIND_KEY,
+        self::FAL_KEY,
 //        self::TOGETHERAI_KEY,
 //        self::FREEFLUX_KEY,
 //        self::WRITECREAM_KEY,
@@ -58,6 +61,7 @@ class Growtype_Art_Crud
         Growtype_Art_Crud::RUNWARE_KEY => Growtype_Art_Crud::RUNWARE_KEY,
         Growtype_Art_Crud::GEMINI_KEY => Growtype_Art_Crud::GEMINI_KEY,
         Growtype_Art_Crud::SEGMIND_KEY => Growtype_Art_Crud::SEGMIND_KEY,
+        Growtype_Art_Crud::FAL_KEY => Growtype_Art_Crud::FAL_KEY,
 //        Growtype_Art_Crud::WRITECREAM_KEY => Growtype_Art_Crud::WRITECREAM_KEY,
     ];
 
@@ -90,6 +94,9 @@ class Growtype_Art_Crud
 
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/flatai/Flatai_Crud.php';
         new Flatai_Crud();
+
+        require_once GROWTYPE_ART_PATH . 'includes/methods/crud/fal/Fal_Crud.php';
+        new Fal_Crud();
 
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/perchance/Perchance_Crud.php';
         new Perchance_Crud();

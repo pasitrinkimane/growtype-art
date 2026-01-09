@@ -96,6 +96,7 @@ class Segmind_Base
             "width" => 1024,
             "height" => 1024,
             "max_images" => 1,
+            "seed" => -1,
 //            "aspect_ratio" => "match_input_image",
             "sequential_image_generation" => "disabled",
             "image_input" => $image_input,
