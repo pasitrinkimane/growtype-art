@@ -151,15 +151,27 @@ class Growtype_Art_Database
             if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
                 $charset_collate = $wpdb->get_charset_collate();
 
-                $sql = "CREATE TABLE IF NOT EXISTS $table_name (
-      id bigint(20) NOT NULL AUTO_INCREMENT,";
+                $sql = "CREATE TABLE $table_name (
+      id bigint(20) NOT NULL AUTO_INCREMENT, ";
                 foreach ($table['fields'] as $field) {
                     $sql .= $field['data_field'] . ' ' . $field['data_type'] . ', ';
                 }
                 $sql .= "created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY id (id)
+      updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, ";
+
+                if ($table_name == $wpdb->prefix . self::MODEL_SETTINGS_TABLE) {
+                    $sql .= "KEY model_id (model_id), KEY meta_key (meta_key), ";
+                }
+                if ($table_name == $wpdb->prefix . self::IMAGE_SETTINGS_TABLE) {
+                    $sql .= "KEY image_id (image_id), KEY meta_key (meta_key), ";
+                }
+                if ($table_name == $wpdb->prefix . self::MODEL_IMAGE_TABLE) {
+                    $sql .= "KEY model_id (model_id), KEY image_id (image_id), ";
+                }
+
+                $sql .= "PRIMARY KEY  (id)
     ) $charset_collate;";
+
 
                 dbDelta($sql);
             }

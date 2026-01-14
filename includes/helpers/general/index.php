@@ -1092,27 +1092,26 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
         $optimized_images = $params['optimized_images'] ?? [];
         $tags = $params['tags'] ?? [];
 
-        // Dynamically build SQL conditions
+        // Dynamically build SQL conditions and JOINS
         $conditions = [];
+        $joins = [];
         $query_params = [];
 
-        // Groups condition
+        // Groups condition (featured_in)
         if (!empty($groups)) {
+            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS ON (MO.id = MS.model_id AND MS.meta_key = 'featured_in')";
+            $group_conditions = [];
             foreach ($groups as $group) {
                 // Match against any value inside the JSON array
-                $conditions[] = "MS.meta_value LIKE %s";
+                $group_conditions[] = "MS.meta_value LIKE %s";
                 $query_params[] = '%' . $group . '%';
             }
-
-            // Optional: group conditions with OR
-            if (count($groups) > 1) {
-                $conditions[] = '(' . implode(' OR ', array_fill(0, count($groups), "MS.meta_value LIKE %s")) . ')';
-                $query_params = array_merge($query_params, array_map(fn($g) => "%$g%", $groups));
-            }
+            $conditions[] = '(' . implode(' OR ', $group_conditions) . ')';
         }
 
         // Created by options condition
         if (!empty($created_by_options)) {
+            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS2 ON (MO.id = MS2.model_id AND MS2.meta_key = 'created_by')";
             $created_by_placeholders = implode(',', array_fill(0, count($created_by_options), '%s'));
             $conditions[] = "MS2.meta_value IN ($created_by_placeholders)";
             $query_params = array_merge($query_params, $created_by_options);
@@ -1120,6 +1119,7 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
 
         // Unique hashes condition
         if (!empty($unique_hashes)) {
+            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS3 ON (MO.id = MS3.model_id AND MS3.meta_key = 'created_by_unique_hash')";
             $unique_hashes_placeholders = implode(',', array_fill(0, count($unique_hashes), '%s'));
             $conditions[] = "MS3.meta_value IN ($unique_hashes_placeholders)";
             $query_params = array_merge($query_params, $unique_hashes);
@@ -1127,6 +1127,7 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
 
         // Character slugs condition
         if (!empty($characters_slugs)) {
+            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS4 ON (MO.id = MS4.model_id AND MS4.meta_key = 'slug')";
             $characters_slugs_placeholders = implode(',', array_fill(0, count($characters_slugs), '%s'));
             $conditions[] = "MS4.meta_value IN ($characters_slugs_placeholders)";
             $query_params = array_merge($query_params, $characters_slugs);
@@ -1135,15 +1136,20 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
         // Models IDs condition
         if (!empty($models_ids)) {
             $models_ids_placeholders = implode(',', array_fill(0, count($models_ids), '%d'));
-            $conditions[] = "ST.model_id IN ($models_ids_placeholders)";
+            $conditions[] = "MO.id IN ($models_ids_placeholders)";
             $query_params = array_merge($query_params, $models_ids);
         }
 
+        // Occupation condition
         if (!empty($character_occupation)) {
-            $conditions[] = "MS5.meta_value='$character_occupation'";
+            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS5 ON (MO.id = MS5.model_id AND MS5.meta_key = 'character_occupation')";
+            $conditions[] = "MS5.meta_value = %s";
+            $query_params[] = $character_occupation;
         }
 
+        // Tags condition
         if (!empty($tags)) {
+            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS6 ON (MO.id = MS6.model_id AND MS6.meta_key = 'tags')";
             $tagConditions = [];
             foreach ($tags as $tag) {
                 // Prepare a condition that checks if MS6.meta_value JSON array contains the tag.
@@ -1155,34 +1161,46 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
             $conditions[] = '(' . implode(' OR ', $tagConditions) . ')';
         }
 
-        // Combine all conditions
+
+        // Combine constraints
+        $profile_keys = growtype_art_get_model_character_default_data();
+        $required_keys = array_merge(array_keys($profile_keys), [
+            'slug',
+            'categories',
+            'tags',
+            'created_by',
+            'created_by_unique_hash',
+            'model_is_private',
+            'priority_level',
+        ]);
+
+        $joins_sql = implode(' ', $joins);
         $where_sql = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
         // Base query for fetching models
         $query_settings = "
         SELECT ST.*, MO.*
-        FROM wp_growtype_art_model_settings AS ST
-        LEFT JOIN wp_growtype_art_models AS MO ON ST.model_id = MO.id
+        FROM {$wpdb->prefix}growtype_art_models AS MO
         INNER JOIN (
-            SELECT DISTINCT ST.model_id
-            FROM wp_growtype_art_model_settings AS ST
-            LEFT JOIN wp_growtype_art_model_settings AS MS ON (ST.model_id = MS.model_id AND MS.meta_key = 'featured_in')
-            LEFT JOIN wp_growtype_art_model_settings AS MS2 ON (ST.model_id = MS2.model_id AND MS2.meta_key = 'created_by')
-            LEFT JOIN wp_growtype_art_model_settings AS MS3 ON (ST.model_id = MS3.model_id AND MS3.meta_key = 'created_by_unique_hash')
-            LEFT JOIN wp_growtype_art_model_settings AS MS4 ON (ST.model_id = MS4.model_id AND MS4.meta_key = 'slug')
-            LEFT JOIN wp_growtype_art_model_settings AS MS5 ON (ST.model_id = MS5.model_id AND MS5.meta_key = 'character_occupation')
-            LEFT JOIN wp_growtype_art_model_settings AS MS6 ON (ST.model_id = MS6.model_id AND MS6.meta_key = 'tags')
+            SELECT MO.id
+            FROM {$wpdb->prefix}growtype_art_models AS MO
+            $joins_sql
             $where_sql
+            ORDER BY MO.id DESC
             LIMIT %d OFFSET %d
-        ) AS limited_models ON ST.model_id = limited_models.model_id
+        ) AS limited_models ON MO.id = limited_models.id
+        LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS ST ON MO.id = ST.model_id
+        WHERE ST.meta_key IN (" . implode(',', array_fill(0, count($required_keys), '%s')) . ")
     ";
 
         $query_params[] = $limit;
         $query_params[] = $offset;
+        $query_params = array_merge($query_params, $required_keys);
+
 
         $models_settings = $wpdb->get_results($wpdb->prepare($query_settings, $query_params), ARRAY_A);
 
-        $image_query_params = array_column($models_settings, 'model_id');
+        $image_query_params = !empty($models_settings) ? array_unique(array_column($models_settings, 'model_id')) : [];
 
         if (empty($image_query_params)) {
             return [];
@@ -1212,6 +1230,9 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
 
         $images_with_settings = $wpdb->get_results($wpdb->prepare($query_image_with_settings, $image_query_params), ARRAY_A);
 
+        $upload_dir_public = growtype_art_get_upload_dir_public();
+
+
         $images_grouped = [];
         foreach ($images_with_settings as $image) {
             $model_id = $image['model_id'];
@@ -1239,7 +1260,7 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
                 $group_name = 'public_images';
             }
 
-            $url = growtype_art_build_public_image_url($image);
+            $url = $upload_dir_public . '/' . $image['folder'] . '/' . $image['name'] . '.' . $image['extension'];
 
             if ($optimized_images) {
                 /**
@@ -1281,19 +1302,9 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
             ];
         }
 
-        $profile_keys = growtype_art_get_model_character_default_data();
-
-        $required_keys = array_merge(array_keys($profile_keys), [
-            'slug',
-            'categories',
-            'tags',
-            'created_by',
-            'created_by_unique_hash',
-            'model_is_private',
-            'priority_level',
-        ]);
 
         $json_values = [
+
             'categories',
             'tags',
         ];

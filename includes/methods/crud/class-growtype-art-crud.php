@@ -282,7 +282,7 @@ class Growtype_Art_Crud
 
             $saved_image = growtype_art_save_local_file($image, $file['folder']);
 
-            error_log(sprintf('Saved image 2: %s', print_r($saved_image, true)));
+            error_log(sprintf('Saved file details: %s', print_r($saved_image, true)));
         }
 
         if (!empty($crop_percent) && isset($saved_image['path'])) {

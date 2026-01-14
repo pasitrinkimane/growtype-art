@@ -998,11 +998,10 @@ class Growtype_Art_Api_Character
     {
         $params = $data->get_params();
         $files = $data->get_file_params();
-
+        error_log(sprintf('Upload character content callback: %s', print_r($params, true)));
         $model_id = isset($params['model_id']) ? $params['model_id'] : null;
         $slug = isset($params['slug']) ? $params['slug'] : null;
         $character_name = isset($params['character_name']) ? $params['character_name'] : null;
-
         if (empty($model_id)) {
             if (!empty($slug)) {
                 $existing_model = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
@@ -1030,14 +1029,12 @@ class Growtype_Art_Api_Character
                 $model_id = $existing_model[0]['model_id'] ?? null;
             }
         }
-
         if (empty($model_id)) {
             return wp_send_json([
                 'success' => false,
                 'message' => 'Character not found',
             ], 404);
         }
-
         if (empty($files) || !isset($files['content'])) {
             if (isset($params['urls']) && !empty($params['urls'])) {
                 $uploaded_content = ['url' => $params['urls']];
@@ -1052,7 +1049,6 @@ class Growtype_Art_Api_Character
         } else {
             $uploaded_content = $files['content'];
         }
-
         $model = growtype_art_get_model_details($model_id);
         if (empty($model)) {
             return wp_send_json([
@@ -1060,46 +1056,36 @@ class Growtype_Art_Api_Character
                 'message' => 'Invalid model',
             ], 400);
         }
-
         $uploaded_images = [];
-
-        // Handle URL(s) upload
+        // Handle URL(s) upload (Postman JSON format)
         if (isset($uploaded_content['url'])) {
             $urls = is_array($uploaded_content['url']) ? $uploaded_content['url'] : [$uploaded_content['url']];
-
             foreach ($urls as $item) {
                 $url = is_array($item) ? ($item['url'] ?? '') : $item;
-
                 if (empty($url)) {
                     continue;
                 }
-
                 $image_data = [
                     'url' => $url,
                     'folder' => $model['image_folder'],
                 ];
-
                 if (is_array($item)) {
                     $meta_details = [];
-                    $allowed_meta_keys = ['prompt', 'caption', 'nsfw', 'nudity', 'porn', 'private', 'provider', 'alt_text'];
+                    $allowed_meta_keys = ['prompt', 'caption', 'nsfw', 'nudity', 'porn', 'private', 'provider', 'alt_text', 'parent_image_id'];
                     foreach ($item as $key => $value) {
                         if (!in_array($key, $allowed_meta_keys)) {
                             continue;
                         }
-
                         $meta_details[] = [
                             'key' => $key,
                             'value' => is_bool($value) ? ($value ? '1' : '0') : $value
                         ];
                     }
-
                     if (!empty($meta_details)) {
                         $image_data['meta_details'] = $meta_details;
                     }
                 }
-
                 $saved_image = Growtype_Art_Crud::save_image($image_data);
-
                 if (!empty($saved_image) && isset($saved_image['id'])) {
                     Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
                         'model_id' => $model_id,
@@ -1112,22 +1098,36 @@ class Growtype_Art_Api_Character
                 }
             }
         } else {
-            // Support both single and multiple file uploads
+            // Handle file upload (Python multipart format)
             if (!isset($uploaded_content['name'])) {
                 $content_to_process = $uploaded_content;
             } else {
                 $content_to_process = [$uploaded_content];
             }
-
+            // Extract meta_details from params for file uploads
+            $meta_details = [];
+            $allowed_meta_keys = ['prompt', 'caption', 'nsfw', 'nudity', 'porn', 'private', 'provider', 'alt_text', 'parent_image_id'];
+            foreach ($allowed_meta_keys as $key) {
+                if (isset($params[$key]) && $params[$key] !== '') {
+                    $meta_details[] = [
+                        'key' => $key,
+                        'value' => $params[$key]
+                    ];
+                }
+            }
             foreach ($content_to_process as $file) {
-                $saved_image = Growtype_Art_Crud::save_image([
+                $image_data = [
                     'name' => $file['name'],
                     'tmp_name' => $file['tmp_name'],
                     'type' => $file['type'],
                     'size' => $file['size'],
                     'folder' => $model['image_folder'],
-                ]);
-
+                ];
+                // Add meta_details if available
+                if (!empty($meta_details)) {
+                    $image_data['meta_details'] = $meta_details;
+                }
+                $saved_image = Growtype_Art_Crud::save_image($image_data);
                 if (!empty($saved_image) && isset($saved_image['id'])) {
                     Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
                         'model_id' => $model_id,
@@ -1140,14 +1140,12 @@ class Growtype_Art_Api_Character
                 }
             }
         }
-
         if (empty($uploaded_images)) {
             return wp_send_json([
                 'success' => false,
                 'message' => 'Failed to upload content',
             ], 500);
         }
-
         return wp_send_json([
             'success' => true,
             'message' => 'Content uploaded successfully',

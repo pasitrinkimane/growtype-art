@@ -5,17 +5,33 @@ function growtype_art_image_get_alternative_format($url, $target_type = 'webp', 
     // Supported types
     $supported_types = ['jpg', 'jpeg', 'png', 'webp'];
 
+    static $path_cache = [];
+
     if (!in_array($target_type, $supported_types)) {
         return $url;
     }
 
+    if (strtolower(pathinfo($url, PATHINFO_EXTENSION)) === $target_type) {
+        return $url;
+    }
+
     $final_url = preg_replace('/\.(jpg|jpeg|png|webp)$/i', '.' . $target_type, $url);
+
+    if (isset($path_cache[$final_url])) {
+
+        return $path_cache[$final_url] ? $final_url : $url;
+    }
+
     $parsed_final_path = parse_url($final_url, PHP_URL_PATH);
     $final_path = $_SERVER['DOCUMENT_ROOT'] . '/web/' . $parsed_final_path;
 
     if (file_exists($final_path)) {
+        $path_cache[$final_url] = true;
         return $final_url;
     }
+
+    $path_cache[$final_url] = false;
+
 
     if (!$convert) {
         return $url;
