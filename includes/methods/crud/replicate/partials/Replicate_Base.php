@@ -17,6 +17,11 @@ class Replicate_Base
 
     public static function api_key()
     {
+        if (!class_exists('Growtype_Auth')) {
+            error_log('Growtype Art - Fatal Error: Growtype_Auth class not found. Please ensure Growtype - Auth plugin is activated.');
+            return [];
+        }
+
         return \Growtype_Auth::credentials('replicate');
     }
 

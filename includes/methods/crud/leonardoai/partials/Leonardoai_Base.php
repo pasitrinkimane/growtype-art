@@ -3,6 +3,7 @@
 namespace partials;
 
 require GROWTYPE_ART_PATH . '/vendor/autoload.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
 
 use Cloudinary_Crud;
 use Exception;
@@ -11,10 +12,17 @@ use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
 use Growtype_Cron_Jobs;
+use Growtype_Art_Generator_Base;
+use Loop; // Assuming Loop is used in retrieve_generation (line 343)
 
-class Leonardoai_Base
+class Leonardoai_Base extends Growtype_Art_Generator_Base
 {
     const MODELS_FOLDER_NAME = 'models';
+
+    public function get_provider_key()
+    {
+        return Growtype_Art_Crud::LEONARDOAI_KEY;
+    }
 
     public static function user_credentials($user_nr = null)
     {
@@ -104,31 +112,10 @@ class Leonardoai_Base
         return self::user_credentials()[$user_nr] ?? self::user_credentials()[1];
     }
 
-    public function generate_model_image($model_id = null, $params = [])
+    public function generate_image_init($params)
     {
-        $generation_details = $this->generate_model_image_init($model_id, $params);
-
-        if (empty($generation_details) || $generation_details['success'] === false) {
-            return $generation_details;
-        }
-
-        foreach ($generation_details['generations'] as $generation) {
-            Growtype_Cron_Jobs::create_if_not_exists('retrieve-model', json_encode([
-                'provider' => Growtype_Art_Crud::LEONARDOAI_KEY,
-                'user_nr' => $generation['user_nr'],
-                'amount' => 1,
-                'model_id' => $model_id,
-                'generation_id' => $generation['generation_id'],
-                'image_prompt' => $generation['image_prompt'],
-                'post_id' => $generation['post_id'] ?? '',
-            ]), 60);
-        }
-
-        return $generation_details;
-    }
-
-    public function generate_model_image_init($model_id, $params = [])
-    {
+        $model_id = $params['model_id'] ?? null;
+        
         $leonardoai_settings_user_nr = growtype_art_get_model_single_setting($model_id, 'leonardoai_settings_user_nr');
         $leonardoai_settings_user_nr = $leonardoai_settings_user_nr['meta_value'] ?? '';
 
@@ -142,6 +129,9 @@ class Leonardoai_Base
 
         $generation_id = null;
         $error_messages = [];
+        $used_user_nr = null;
+        $image_generating = null;
+
         foreach ($users as $user_nr) {
             $token = $this->retrieve_access_token($user_nr);
 
@@ -158,6 +148,7 @@ class Leonardoai_Base
             try {
                 $image_generating = $this->init_image_generating($credentials, $model_id, $params);
                 $generation_id = $image_generating['generation_id'];
+                $used_user_nr = $user_nr;
             } catch (Exception $e) {
                 $error_messages[] = [
                     'message' => $e->getMessage(),
@@ -175,50 +166,35 @@ class Leonardoai_Base
         }
 
         if (empty($generation_id)) {
-            if (php_sapi_name() === 'cli' || defined('STDIN')) {
-                throw new Exception(print_r($error_messages, true));
-            } else {
-                error_log('generate_model_image_init error: ' . json_encode($error_messages));
+             error_log('generate_image_init error: ' . json_encode($error_messages));
 
-                return [
-                    'success' => false,
-                    'message' => json_encode($error_messages),
-                ];
-            }
+             return [
+                 'success' => false,
+                 'message' => json_encode($error_messages),
+                 'errors' => $error_messages
+             ];
         }
 
         return [
-            'success' => true,
-            'generations' => [
-                [
-                    'generation_id' => $generation_id,
-                    'image_prompt' => isset($image_generating['image_prompt']) ? $image_generating['image_prompt'] : null,
-                    'user_nr' => $user_nr,
-                    'post_id' => isset($image_generating['post_id']) ? $image_generating['post_id'] : null,
-                ]
+            'status' => 'pending',
+            'task_id' => $generation_id,
+            'message' => 'Generation pending',
+            'cron_payload' => [
+                'user_nr' => $used_user_nr,
+                'image_prompt' => isset($image_generating['image_prompt']) ? $image_generating['image_prompt'] : null,
+                'post_id' => isset($image_generating['post_id']) ? $image_generating['post_id'] : null,
             ]
         ];
     }
 
-    public function retrieve_models($amount, $model_id = null, $user_nr = null)
+
+
+
+
+    public function retrieve_generations($model_id, $generation_ids, $args = [])
     {
-        $token = $this->get_access_token($user_nr);
+        $generation_id = is_array($generation_ids) ? $generation_ids[0] : $generation_ids;
 
-        $generations = $this->get_generations($token, $amount, $user_nr);
-
-        if (empty($generations)) {
-            return null;
-        }
-
-        $this->save_generations($generations, $model_id);
-
-        $this->delete_external_generations($token, $generations);
-
-        return $generations;
-    }
-
-    public function retrieve_generations($model_id, $generation_id, $args = [])
-    {
         $user_nr = $args['user_nr'];
 
         $token = $this->get_access_token($user_nr);
@@ -786,8 +762,10 @@ class Leonardoai_Base
      * @param $existing_model_id
      * @return void
      */
-    function save_generations($generations, $existing_model_id, $args = [])
+    function save_generations($generations, $model_id = null, $params = [])
     {
+        $existing_model_id = $model_id;
+        $args = $params;
         $auto_check_for_nsfw = growtype_art_get_model_single_setting($existing_model_id, 'auto_check_for_nsfw');
         $auto_check_for_nsfw = !empty($auto_check_for_nsfw) ? filter_var($auto_check_for_nsfw['meta_value'], FILTER_VALIDATE_BOOLEAN) : false;
 

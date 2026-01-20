@@ -2,143 +2,56 @@
 
 namespace partials;
 
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
 use Exception;
 use Growtype_Cron_Jobs;
+use Growtype_Art_Generator_Base;
 
-class Piclumen_Base
+class Piclumen_Base extends Growtype_Art_Generator_Base
 {
-    public static function api_key()
+    public function get_provider_key()
     {
-        return \Growtype_Auth::credentials('piclumen');
+        return Growtype_Art_Crud::PICLUMEN_KEY;
     }
 
-    public function generate_model_image($model_id = null, $params = [])
+    public function get_models()
     {
-        $model = growtype_art_get_model_details($model_id);
-
-        $prompt = isset($params['prompt']) && !empty($params['prompt']) ? $params['prompt'] : $model['prompt'];
-
-        if (empty($prompt)) {
-            error_log('Empty prompt. Model ' . $model_id);
-
-            return [
-                'success' => false,
-                'message' => sprintf('Empty prompt. Model %s.', $model_id),
-            ];
-        }
-
-        $formatted_prompt = growtype_art_model_format_prompt($prompt, $model_id);
-        $api_keys = self::api_key();
-
-        if (empty($api_keys)) {
-            return [
-                'success' => false,
-                'message' => sprintf('Empty API keys. Model %s.', $model_id),
-            ];
-        }
-
-        $api_group_keys = array_keys($api_keys);
-        shuffle($api_group_keys);
-
-        $generation_details = null;
-        $params_urlencoded = '';
-
-        foreach ($api_group_keys as $api_group_key) {
-            $token = $this->get_access_token($api_group_key);
-
-            if (empty($token)) {
-                error_log("Empty token for API group: $api_group_key");
-                continue;
-            }
-
-            $params = [
-                'prompt' => $formatted_prompt,
-                'token' => $token,
-            ];
-
-            $params_urlencoded = urlencode(json_encode($params));
-//            error_log('Trying token group: ' . $api_group_key . ' → ' . print_r($params, true));
-
-            $generation_details = $this->generate_image_init($params);
-
-            if (isset($generation_details['data'])) {
-                break;
-            }
-        }
-
-        if (empty($generation_details['data'])) {
-            $message = sprintf(
-                'Failed to generate image for model %s. Params: %s. Message: %s',
-                $model_id,
-                $params_urlencoded,
-                $generation_details['message'] ?? 'No response data'
-            );
-
-            error_log($message);
-
-            return [
-                'success' => false,
-                'message' => (isset($_GET['page']) && !empty($_GET['page']))
-                    ? $message
-                    : sprintf('Image is still generating. %s', $message),
-            ];
-        }
-
-        Growtype_Cron_Jobs::create_if_not_exists('retrieve-model', json_encode([
-            'provider' => Growtype_Art_Crud::PICLUMEN_KEY,
-            'api_group_key' => $api_group_key,
-            'amount' => 1,
-            'model_id' => $model_id,
-            'generation_id' => $generation_details['data']['markId'],
-        ]), 30);
-
         return [
-            'success' => true,
-            'generations' => [
-                ['generation_id' => $generation_details['data']['markId']],
+            'piclumen-default' => [
+                'is_nsfw' => false,
             ],
-            'message' => sprintf('Successfully generated. Params: %s', $params_urlencoded),
         ];
-    }
-
-    public function get_access_token($api_group_key)
-    {
-        return self::api_key()[$api_group_key]['token'] ?? '';
     }
 
     public function generate_image_init($params)
     {
         $token = $params['token'];
+        error_log(sprintf('Growtype Art - Piclumen Base: Token length: %d, Prefix: %s', strlen($token), substr($token, 0, 10)));
 
         $url = "https://api.piclumen.com/api/gen/create";
 
-// Request headers
         $headers = [
             "authorization: $token",
             "platform: Web",
-            "Content-Type: application/json",
-            "User-Agent: PostmanRuntime/7.43.0",
-            "Accept: */*",
+            "Content-Type: application/json;charset=UTF-8",
+            "Accept: application/json",
+            "Origin: https://www.piclumen.com",
+            "Referer: https://www.piclumen.com/",
+            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
             "Cache-Control: no-cache",
-            "Postman-Token: 70ff0a52-cc4b-422f-8692-3895eb81d0a1",
-            "Accept-Encoding: gzip, deflate, br",
-            ":path: /api/gen/create",
-            ":method: POST",
-            ":authority: api.piclumen.com",
-            ":scheme: https"
         ];
 
-// Request body
         $data = [
             "model_id" => "23887bba-507e-4249-a0e3-6951e4027f2b",
             "prompt" => $params['prompt'],
             "negative_prompt" => "",
             "resolution" => [
-                "width" => 768,
-                "height" => 1024,
+                "width" => $params['width'] ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
+                "height" => $params['height'] ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
                 "batch_size" => 1
             ],
             "seed" => Growtype_Art_Crud::generate_seed(),
@@ -149,215 +62,9 @@ class Piclumen_Base
             "denoise" => 1,
             "hires_fix_denoise" => 0.5,
             "hires_scale" => 2,
-//            "multi_img2img_info" => [
-//                "style_list" => [
-//                    [
-//                        'img_url' => 'https://content.nsfwspace.com/app/uploads/growtype-ai-uploads/models/6d3cf12137d8a969435c9a6922b1b303/65a4af279b5f5_3328277961554970979_64399143371.webp',
-//                        'style' => 'characterRefer',
-//                        'weight' => 0.9,
-//                    ]
-//                ]
-//            ],
         ];
 
-// Initialize cURL session
         $ch = curl_init($url);
-
-// Set cURL options
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
-
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        curl_close($ch);
-
-//        d([
-//            $params,
-//            $response,
-//            $error
-//        ]);
-
-// Output results
-        return json_decode($response, true);
-    }
-
-    public function retrieve_generations($model_id, $generations_ids, $args = [])
-    {
-        $token = $this->get_access_token($args['api_group_key']);
-
-        $generations = $this->get_generations($token, $generations_ids);
-
-        if (isset($generations['data']) && !empty($generations['data'])) {
-
-            error_log('retrieve_generations: ' . json_encode($generations));
-
-            $filtered_prompts = array_filter(array_pluck($generations['data'], 'promptId'), function ($value) {
-                return !is_null($value);
-            });
-
-            error_log('filtered_prompts: ' . json_encode($filtered_prompts));
-
-            if (empty($filtered_prompts)) {
-                throw new Exception('Not yet generated: ' . json_encode($generations));
-            }
-
-            /**
-             * Save generation
-             */
-            $saved_generations = $this->save_generations($generations['data'], $model_id);
-
-            /**
-             * Delete generation from Leonardo.ai
-             */
-            foreach ($saved_generations as $saved_generation) {
-                if (isset($saved_generation['success']) && !$saved_generation['success']) {
-                    $generate_details = growtype_art_generate_model_image($model_id, [
-                        'providers' => Growtype_Art_Crud::NSFW_PROVIDERS,
-                        'prompt' => $args['prompt']
-                    ]);
-
-                    error_log(sprintf('NSFW generating. Response: %s', print_r($generate_details, true)));
-                }
-
-                error_log('saved_generation: ' . json_encode($saved_generation));
-                $this->delete_external_generation($token, $saved_generation['promptId'], $saved_generation['imgName']);
-            }
-        }
-
-        return $generations;
-    }
-
-    function save_generations($generations, $model_id)
-    {
-        $saved_generations = [];
-        foreach ($generations as $generation) {
-
-            if (empty($generation['img_urls'])) {
-                continue;
-            }
-
-            foreach ($generation['img_urls'] as $img_url) {
-
-                if (isset($img_url['sensitive']) && $img_url['sensitive'] === 'NSFW') {
-                    $saved_generations[] = [
-                        'success' => false,
-                        'promptId' => $generation['promptId'],
-                        'imgName' => $img_url['imgName'],
-                    ];
-
-                    error_log(sprintf('piclumen generator. Sensitive image. %s', print_r($img_url, true)));
-                    continue;
-                }
-
-                $model = growtype_art_get_model_details($model_id);
-
-                $image_folder = $model['image_folder'];
-                $image_location = growtype_art_get_images_saving_location();
-
-                $image['imageWidth'] = $img_url['realWidth'];
-                $image['imageHeight'] = $img_url['realHeight'];
-                $image['folder'] = $image_folder;
-                $image['location'] = $image_location;
-                $image['url'] = $img_url['imgUrl'];
-
-                $image['meta_details'] = [
-                    [
-                        'key' => 'generation_id',
-                        'value' => $generation['markId']
-                    ],
-                    [
-                        'key' => 'provider',
-                        'value' => Growtype_Art_Crud::PICLUMEN_KEY
-                    ]
-                ];
-
-                foreach ($generation as $key => $value) {
-                    if (!in_array($key, ['realWidth', 'realHeight', 'status', 'index', 'info', 'markId'])) {
-                        array_push($image['meta_details'], [
-                            'key' => $key,
-                            'value' => is_array($value) ? json_encode($value) : (!empty($value) ? $value : '0')
-                        ]);
-                    }
-                }
-
-                $saved_image = Growtype_Art_Crud::save_image($image);
-
-                if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
-                    error_log('save_generations: ' . json_encode($saved_image));
-                    continue;
-                }
-
-                /**
-                 * Assign image to model
-                 */
-                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
-                    'model_id' => $model_id,
-                    'image_id' => $saved_image['id']
-                ]);
-
-                /**
-                 * Get image colors
-                 */
-//                Extract_Image_Colors_Job::update_image_colors_groups($saved_image['id']);
-
-                /**
-                 * Compress image
-                 */
-                growtype_art_compress_existing_image($saved_image['id']);
-
-                sleep(2);
-
-//                d([
-//                    $saved_image,
-//                    $image,
-//                    $model,
-//                    $generations,
-//                    $model_id,
-//                    $image
-//                ]);
-
-                $saved_generations[] = [
-                    'promptId' => $generation['promptId'],
-                    'imgName' => $img_url['imgName'],
-                ];
-            }
-
-            do_action('growtype_art_model_update', $model_id);
-        }
-
-        return $saved_generations;
-    }
-
-    function get_generations($token, $generations_ids)
-    {
-        $url = "https://api.piclumen.com/api/task/batch-process-task";
-
-// Request headers
-        $headers = [
-            "authorization: $token",
-            "platform: Web",
-            "Content-Type: application/json",
-            "User-Agent: PostmanRuntime/7.43.0",
-            "Accept: */*",
-            "Cache-Control: no-cache",
-            "Postman-Token: dbf2e2a8-5688-43f6-b81e-ea22b018025f",
-            "Host: api.piclumen.com",
-            "Accept-Encoding: gzip, deflate, br",
-            "Connection: keep-alive"
-        ];
-
-// Request body
-        $data = $generations_ids;
-
-// Initialize cURL session
-        $ch = curl_init($url);
-
-// Set cURL options
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -367,10 +74,120 @@ class Piclumen_Base
         $response = curl_exec($ch);
         $error = curl_error($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
         curl_close($ch);
 
-// Output results
+        error_log(sprintf('Growtype Art - Piclumen Base: HTTP Code: %s, Error: %s, Raw Response: %s', $http_code, $error, $response));
+
+        if ($http_code === 401) {
+            return [
+                'success' => false,
+                'message' => 'Unauthorized: Please check your Piclumen API token.',
+                'errors' => [['message' => 'Unauthorized: Please check your Piclumen API token.']]
+            ];
+        }
+
+        $result = json_decode($response, true);
+
+        if (isset($result['data']['markId'])) {
+            return [
+                'status' => 'pending',
+                'task_id' => $result['data']['markId'],
+                'message' => 'Generation started',
+                'original_response' => $result
+            ];
+        }
+
+        $error_message = $result['message'] ?? $result['error'] ?? 'Unknown error (HTTP ' . $http_code . ')';
+
+        return [
+            'success' => false,
+            'message' => $error_message,
+            'errors' => [['message' => $error_message]]
+        ];
+    }
+
+    public function retrieve_generations($model_id, $generations_ids, $args = [])
+    {
+        $token = $this->get_access_token($args['api_group_key'] ?? 'default');
+        $generations = $this->get_generations($token, $generations_ids);
+
+        if (isset($generations['data']) && !empty($generations['data'])) {
+            error_log('retrieve_generations: ' . json_encode($generations));
+
+            $generations_list = [];
+            foreach ($generations['data'] as $generation) {
+                if (empty($generation['img_urls'])) {
+                    continue;
+                }
+
+                foreach ($generation['img_urls'] as $img_data) {
+                    // Check for NSFW
+                    if (isset($img_data['sensitive']) && $img_data['sensitive'] === 'NSFW') {
+                        error_log(sprintf('Piclumen generator: NSFW detected. Prompt ID: %s, Img Name: %s', $generation['promptId'], $img_data['imgName']));
+                        
+                        // Retry with NSFW providers if needed
+                        growtype_art_generate_model_image($model_id, [
+                            'providers' => Growtype_Art_Crud::NSFW_PROVIDERS,
+                            'prompt' => $args['prompt'] ?? ''
+                        ]);
+
+                        $this->delete_external_generation($token, $generation['promptId'], $img_data['imgName']);
+                        continue;
+                    }
+
+                    // Map to standard format for base save_generations
+                    $mapped = array_merge($generation, $img_data);
+                    $mapped['url'] = $img_data['imgUrl'];
+                    $mapped['generation_id'] = $generation['markId'];
+                    $generations_list[] = $mapped;
+                }
+            }
+
+            if (empty($generations_list)) {
+                return [];
+            }
+
+            /**
+             * Save generations using base method
+             */
+            $saved_generations = $this->save_generations($generations_list, $model_id, $args);
+
+            /**
+             * Cleanup external images
+             */
+            foreach ($generations_list as $gen) {
+                $this->delete_external_generation($token, $gen['promptId'], $gen['imgName']);
+            }
+
+            return $saved_generations;
+        }
+
+        return [];
+    }
+
+    public function get_generations($token, $generations_ids)
+    {
+        $url = "https://api.piclumen.com/api/task/batch-process-task";
+
+        $headers = [
+            "authorization: $token",
+            "platform: Web",
+            "Content-Type: application/json",
+            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            "Accept: */*",
+            "Cache-Control: no-cache",
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($generations_ids));
+        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
         return json_decode($response, true);
     }
 
@@ -378,26 +195,21 @@ class Piclumen_Base
     {
         $url = "https://api.piclumen.com/api/img/delete";
 
-// Request headers
         $headers = [
             "authorization: $token",
             "platform: Web",
-            "User-Agent: PostmanRuntime/7.43.0",
+            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
             "Accept: */*",
             "Cache-Control: no-cache",
             "Content-Type: multipart/form-data"
         ];
 
-// Request body
         $fields = [
             "promptId" => $prompt_id,
             "imgName" => $img_name
         ];
 
-// Initialize cURL session
         $ch = curl_init($url);
-
-// Set cURL options
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -405,15 +217,13 @@ class Piclumen_Base
         curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
 
         $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
         curl_close($ch);
 
-//        error_log('delete_external_generation: ' . print_r([$fields, $response], true));
-
-// Output results
         return json_decode($response, true);
     }
-}
 
+    public function generate_image($params = [])
+    {
+        return $this->generate_image_sync($params);
+    }
+}

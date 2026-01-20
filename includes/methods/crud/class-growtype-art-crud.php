@@ -9,13 +9,18 @@ class Growtype_Art_Crud
     const FAL_KEY = 'fal';
     const SEGMIND_KEY = 'segmind';
     const GEMINI_KEY = 'gemini';
+    
     const POLLINATIONS_KEY = 'pollinations';
-    const REPLICATE_KEY = 'replicate';
-    const TOGETHERAI_KEY = 'togetherai';
-    const FREEFLUX_KEY = 'freeflux';
-    const PERCHANCE_KEY = 'perchance';
+    
     const FLATAI_KEY = 'flatai';
     const WRITECREAM_KEY = 'writecream';
+    const FREEFLUX_KEY = 'freeflux';
+    
+    const PERCHANCE_KEY = 'perchance';
+
+    const REPLICATE_KEY = 'replicate'; // not image
+
+    const TOGETHERAI_KEY = 'togetherai'; // Not implemented
 
     const NSFW_PROVIDERS = [
         self::RUNWARE_KEY,
@@ -27,16 +32,13 @@ class Growtype_Art_Crud
     ];
 
     const API_GENERATE_IMAGE_PROVIDERS = [
-//        self::LEONARDOAI_KEY,
-//        self::PICLUMEN_KEY,
-//        self::AIEASE_KEY,
-        self::RUNWARE_KEY,
-        self::POLLINATIONS_KEY,
         self::SEGMIND_KEY,
+        self::GEMINI_KEY,
+        self::RUNWARE_KEY,
         self::FAL_KEY,
-//        self::TOGETHERAI_KEY,
-//        self::FREEFLUX_KEY,
-//        self::WRITECREAM_KEY,
+        self::POLLINATIONS_KEY,
+        self::AIEASE_KEY,
+        self::PICLUMEN_KEY,
     ];
 
     const API_GENERATE_VIDEO_PROVIDERS = [
@@ -44,11 +46,11 @@ class Growtype_Art_Crud
     ];
 
     const PROVIDERS_TO_INSTANTLY_GENERATE_IMAGES = [
-        self::POLLINATIONS_KEY,
-        self::RUNWARE_KEY,
         self::SEGMIND_KEY,
-//        self::FREEFLUX_KEY,
-//        self::WRITECREAM_KEY,
+        self::GEMINI_KEY,
+        self::RUNWARE_KEY,
+        self::FAL_KEY,
+        self::POLLINATIONS_KEY
     ];
 
     const MODEL_GENERATE_IMAGE_PROVIDERS = [
@@ -57,12 +59,12 @@ class Growtype_Art_Crud
         Growtype_Art_Crud::AIEASE_KEY => Growtype_Art_Crud::AIEASE_KEY,
         Growtype_Art_Crud::POLLINATIONS_KEY => Growtype_Art_Crud::POLLINATIONS_KEY,
         Growtype_Art_Crud::TOGETHERAI_KEY => Growtype_Art_Crud::TOGETHERAI_KEY,
-//        Growtype_Art_Crud::FREEFLUX_KEY => Growtype_Art_Crud::FREEFLUX_KEY,
+        Growtype_Art_Crud::FREEFLUX_KEY => Growtype_Art_Crud::FREEFLUX_KEY,
         Growtype_Art_Crud::RUNWARE_KEY => Growtype_Art_Crud::RUNWARE_KEY,
         Growtype_Art_Crud::GEMINI_KEY => Growtype_Art_Crud::GEMINI_KEY,
         Growtype_Art_Crud::SEGMIND_KEY => Growtype_Art_Crud::SEGMIND_KEY,
         Growtype_Art_Crud::FAL_KEY => Growtype_Art_Crud::FAL_KEY,
-//        Growtype_Art_Crud::WRITECREAM_KEY => Growtype_Art_Crud::WRITECREAM_KEY,
+        Growtype_Art_Crud::WRITECREAM_KEY => Growtype_Art_Crud::WRITECREAM_KEY,
     ];
 
     const IMAGES_FOLDER_NAME = 'models';
@@ -618,5 +620,26 @@ class Growtype_Art_Crud
             $number .= mt_rand(0, 9);
         }
         return $number;
+    }
+
+    public static function get_providers_with_models()
+    {
+        $providers = self::API_GENERATE_IMAGE_PROVIDERS;
+        $data = [];
+
+        foreach ($providers as $provider) {
+            $provider_class_name = sprintf('\partials\%s_Base', ucfirst($provider));
+
+            if (class_exists($provider_class_name)) {
+                $crud = new $provider_class_name();
+                $models = $crud->get_models();
+                
+                if (!empty($models)) {
+                    $data[$provider] = $models;
+                }
+            }
+        }
+
+        return $data;
     }
 }

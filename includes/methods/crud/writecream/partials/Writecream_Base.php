@@ -2,38 +2,25 @@
 
 namespace partials;
 
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
+use Growtype_Art_Generator_Base;
 
-class Writecream_Base
+class Writecream_Base extends Growtype_Art_Generator_Base
 {
-    public function generate_model_image($model_id, $params = [])
+    public function get_provider_key()
     {
-        $model = growtype_art_get_model_details($model_id);
-
-        $prompt = isset($params['prompt']) && !empty($params['prompt']) ? $params['prompt'] : $model['prompt'];
-
-        $formatted_prompt = growtype_art_model_format_prompt($prompt, $model_id);
-
-        $params['prompt'] = $formatted_prompt;
-        $params['generation_id'] = wp_generate_password(52, false);
-
-        $generation_details = $this->generate_image_init($params);
-
-        if (empty($generation_details) || isset($generation_details['status']) && $generation_details['status'] === 'error') {
-            return [
-                'success' => false,
-                'message' => $generation_details['message'] ?? 'Something went wrong',
-            ];
-        }
-
-        $response = $this->save_generations($generation_details, $model_id, $params);
-
+        return Growtype_Art_Crud::WRITECREAM_KEY;
+    }
+    public function api_key()
+    {
         return [
-            'success' => true,
-            'generations' => $response,
-            'message' => sprintf('Successfully generated. Prompt: %s', $prompt)
+            'default' => [
+                'api_key' => 'not-needed'
+            ]
         ];
     }
 
@@ -87,6 +74,8 @@ class Writecream_Base
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
 
+        error_log(sprintf('Growtype Art - Writecream Response: Code: %s, Error: %s, Body: %s', $http_code, $error, $response));
+
         // Close cURL connection
         curl_close($ch);
 
@@ -116,107 +105,25 @@ class Writecream_Base
 
         // Decode JSON response (if applicable)
         $decoded_response = json_decode($response, true);
+        
+        // Standardize response for Base class
         if (json_last_error() === JSON_ERROR_NONE) {
-            return $decoded_response;
-        }
-
-        return $response;
-    }
-
-    function save_generations($generation, $model_id, $params)
-    {
-        $model = growtype_art_get_model_details($model_id);
-
-        $image_folder = $model['image_folder'];
-        $image_location = growtype_art_get_images_saving_location();
-
-        $image['folder'] = $image_folder;
-        $image['location'] = $image_location;
-        $image['url'] = $generation['image_link'];
-        $image['meta_details'] = [
-            [
-                'key' => 'generation_id',
-                'value' => $params['generation_id']
-            ],
-            [
-                'key' => 'provider',
-                'value' => Growtype_Art_Crud::WRITECREAM_KEY
-            ],
-            [
-                'key' => 'prompt',
-                'value' => $params['prompt']
-            ]
-        ];
-
-        if (isset($params['types'])) {
-            foreach ($params['types'] as $type) {
-                $image['meta_details'][] = [
-                    'key' => $type,
-                    'value' => 1
+            if (isset($decoded_response['image_link'])) {
+                return [
+                    'success' => true,
+                    'generations' => [
+                        ['imageURL' => $decoded_response['image_link']]
+                    ]
                 ];
             }
+             if (isset($decoded_response['status']) && $decoded_response['status'] === 'error') {
+                   // Fall through to allow error checking in Base class if needed or just return it
+             }
+             return $decoded_response;
         }
 
-        $saved_image = Growtype_Art_Crud::save_image($image);
-
-        if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
-            error_log('save_generations: ' . json_encode($saved_image));
-            return [];
-        }
-
-        /**
-         * Assign image to model
-         */
-        Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
-            'model_id' => $model_id,
-            'image_id' => $saved_image['id']
-        ]);
-
-        $saved_generations[] = [
-            'url' => $saved_image['details']['url'],
-            'image_id' => $saved_image['id'],
-            'generation_id' => $params['generation_id'],
-            'image_prompt' => $params['prompt'],
-        ];
-
-        do_action('growtype_art_model_update', $model_id);
-
-        return $saved_generations;
-    }
-
-    public function generate_image($params = [])
-    {
-        $prompt = $params['prompt'] ?? '';
-
-        $generation_details = $this->generate_image_init($params);
-
-        if (empty($generation_details) || isset($generation_details['error'])) {
-            return [
-                'success' => false,
-                'message' => $generation_details['message'] ?? 'Something went wrong',
-            ];
-        }
-
-        $response = $this->save_image_generations($generation_details, $params);
-
-        return [
-            'success' => true,
-            'generations' => $response,
-            'message' => sprintf('Successfully generated. Prompt: %s', $prompt)
-        ];
-    }
-
-    function save_image_generations($generation, $params)
-    {
-        $image_location = growtype_art_get_images_saving_location();
-
-        $image['folder'] = 'without_model';
-        $image['location'] = $image_location;
-        $image['url'] = $generation['image_link'];
-
-        $saved_image = Growtype_Art_Crud::save_image($image, false);
-
-        return $saved_image;
+        // If not JSON, it might be raw or error string? Unlikely given provided code.
+        return $response;
     }
 }
 

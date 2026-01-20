@@ -2,126 +2,29 @@
 
 namespace partials;
 
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
 use Exception;
 use Growtype_Cron_Jobs;
+use Growtype_Art_Generator_Base;
 
-class Flatai_Base
+class Flatai_Base extends Growtype_Art_Generator_Base
 {
-
-    public function generate_model_image($model_id, $params = [])
+    public function get_provider_key()
     {
-        if (!isset($params['prompt'])) {
-            $model = growtype_art_get_model_details($model_id);
-            $formatted_prompt = growtype_art_model_format_prompt($model['prompt'], $model_id);
-
-            $params['prompt'] = $formatted_prompt;
-        }
-
-        $params['generation_id'] = wp_generate_password(52, false);
-
-        $generation_details = $this->generate_image_init($params);
-
-        if ($generation_details['success'] === false) {
-            return [
-                'success' => false,
-                'message' => $generation_details['data']['message'],
-            ];
-        }
-
-//        error_log('generation_details: ' . json_encode($generation_details));
-
-        if (!isset($generation_details['data']['images'])) {
-            if (isset($_GET['page']) && !empty($_GET['page'])) {
-                Growtype_Cron_Jobs::create('generate-model', json_encode([
-                    'provider' => Growtype_Art_Crud::FLATAI_KEY,
-                    'model_id' => $model_id
-                ]), 30);
-
-                return [
-                    'success' => false,
-                    'message' => sprintf('Failed to generate image for model %s. Added to queue. Message: %s', $model_id, $generation_details['message'] ?? ''),
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'message' => sprintf('Image is still generating. Model %s. Message: %s.', $model_id, $generation_details['message'] ?? ''),
-                ];
-            }
-        }
-
-        $response = $this->save_generations($generation_details['data']['images'], $model_id, $params);
-
-        return [
-            'success' => true,
-            'generations' => $response
-        ];
+        return Growtype_Art_Crud::FLATAI_KEY;
     }
-
-    function save_generations($generations, $model_id, $params)
+    public function api_key()
     {
-        $saved_generations = [];
-        foreach ($generations as $generation) {
-
-//            error_log(sprintf('Generation %s', print_r($generation, true)));
-
-            $model = growtype_art_get_model_details($model_id);
-
-            $image_folder = $model['image_folder'];
-            $image_location = growtype_art_get_images_saving_location();
-
-            $image['folder'] = $image_folder;
-            $image['location'] = $image_location;
-            $image['url'] = $generation;
-            $image['meta_details'] = [
-                [
-                    'key' => 'generation_id',
-                    'value' => $params['generation_id']
-                ],
-                [
-                    'key' => 'provider',
-                    'value' => Growtype_Art_Crud::FLATAI_KEY
-                ],
-                [
-                    'key' => 'prompt',
-                    'value' => $params['prompt']
-                ]
-            ];
-
-            $saved_image = Growtype_Art_Crud::save_image($image);
-
-            if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
-                error_log('save_generations: ' . json_encode($saved_image));
-                continue;
-            }
-
-            /**
-             * Assign image to model
-             */
-            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
-                'model_id' => $model_id,
-                'image_id' => $saved_image['id']
-            ]);
-
-            /**
-             * Compress image
-             */
-            growtype_art_compress_existing_image($saved_image['id']);
-
-            sleep(2);
-
-            $saved_generations[] = [
-                'image_id' => $saved_image['id'],
-                'generation_id' => $params['generation_id'],
-            ];
-
-            do_action('growtype_art_model_update', $model_id);
-        }
-
-        return $saved_generations;
+        return [
+            'default' => [
+                'api_key' => 'not-needed'
+            ]
+        ];
     }
 
     public function generate_image_init($params)
@@ -230,7 +133,19 @@ class Flatai_Base
                 if ($decoded !== false) {
                     error_log(sprintf('Successfully decoded %s', $randomProxy));
 
-                    return json_decode($decoded, true);
+                    $json_decoded = json_decode($decoded, true);
+                    // Standardize result for base class
+                    if (isset($json_decoded['data']['images'])) {
+                        return [
+                            'success' => true,
+                            'generations' => array_map(function($img) { return ['url' => $img]; }, $json_decoded['data']['images'])
+                        ];
+                    }
+                     return [
+                        'success' => false,
+                        'message' => $json_decoded['data']['message'] ?? 'Unknown error'
+                    ];
+
                 } else {
                     throw new Exception('Failed to decode response');
                 }
@@ -244,7 +159,7 @@ class Flatai_Base
 
         // If all proxies fail, return an error
         return [
-            'error' => true,
+            'success' => false,
             'message' => 'All proxy attempts failed. Please try again later.',
         ];
     }

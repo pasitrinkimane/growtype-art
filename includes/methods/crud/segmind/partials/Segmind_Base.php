@@ -2,71 +2,83 @@
 
 namespace partials;
 
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
+use Growtype_Art_Generator_Base;
 
-class Segmind_Base
+class Segmind_Base extends Growtype_Art_Generator_Base
 {
-
-    public static function api_key()
+    public function get_provider_key()
     {
-        return \Growtype_Auth::credentials('segmind');
-    }
-
-    public function generate_model_image($model_id, $params = [])
-    {
-        $model = growtype_art_get_model_details($model_id);
-
-        $prompt = isset($params['prompt']) && !empty($params['prompt']) ? $params['prompt'] : $model['prompt'];
-
-        $formatted_prompt = growtype_art_model_format_prompt($prompt, $model_id);
-
-        $api_keys = self::api_key();
-
-        if (empty($api_keys)) {
-            return [
-                'success' => false,
-                'message' => sprintf('Empty API keys. Model %s.', $model_id),
-            ];
-        }
-
-        $api_group_key = array_keys($api_keys)[array_rand(array_keys(self::api_key()))];
-
-        $params['token'] = $this->get_access_token($api_group_key);
-        $params['prompt'] = $formatted_prompt;
-        $params['generation_id'] = wp_generate_password(52, false);
-        $params['model_id'] = $model_id;
-
-        $generation_details = $this->generate_image_init($params);
-
-        if (empty($generation_details) || isset($generation_details['error'])) {
-            return [
-                'success' => false,
-                'message' => $generation_details['error'] ?? 'Something went wrong',
-            ];
-        }
-
-        $response = $this->save_generations([$generation_details], $model_id, $params);
-
-        return [
-            'success' => true,
-            'generations' => $response,
-            'message' => sprintf('Successfully generated. Prompt: %s', $prompt)
-        ];
+        return Growtype_Art_Crud::SEGMIND_KEY;
     }
 
     public function get_access_token($api_group_key)
     {
-        return self::api_key()[$api_group_key]['api_key'] ?? '';
+        $api_keys = $this->api_key();
+        return $api_keys[$api_group_key]['x_api_key'] ?? $api_keys[$api_group_key]['api_key'] ?? '';
+    }
+
+    public function get_models()
+    {
+        return [
+            'seedream-4' => [
+                'url' => 'https://api.segmind.com/v1/seedream-4',
+                'is_nsfw' => false,
+            ],
+            'fast-flux-schnell' => [
+                'url' => 'https://api.segmind.com/v1/fast-flux-schnell',
+                'is_nsfw' => false,
+            ],
+            'p-image' => [
+                'url' => 'https://api.segmind.com/v1/p-image',
+                'is_nsfw' => false,
+            ],
+            'qwen-image-fast' => [
+                'url' => 'https://api.segmind.com/v1/qwen-image-fast',
+                'is_nsfw' => false,
+            ],
+            'ssd-1b' => [
+                'url' => 'https://api.segmind.com/v1/ssd-1b',
+                'is_nsfw' => false,
+            ],
+            'z-image-turbo' => [
+                'url' => 'https://api.segmind.com/v1/z-image-turbo',
+                'test_url' => 'https://www.segmind.com/models/z-image-turbo',
+                'is_nsfw' => true,
+            ],
+            'sdxl1.0-txt2img' => [
+                'url' => 'https://api.segmind.com/v1/sdxl1.0-txt2img',
+                'is_nsfw' => false,
+            ],
+        ];
+    }
+
+    public function get_model_url($model_slug)
+    {
+        $models = $this->get_models();
+        return $models[$model_slug]['url'] ?? "https://api.segmind.com/v1/$model_slug";
+    }
+
+    public function is_nsfw_model($model_slug)
+    {
+        $models = $this->get_models();
+        return $models[$model_slug]['is_nsfw'] ?? false;
     }
 
     public function generate_image_init($params)
     {
-        $model_id = $params['model_id'];
-        $model = growtype_art_get_model_details($model_id);
-        $model_images = growtype_art_get_model_images_grouped($model_id, 500)['original'] ?? [];
-        $formatted_prompt = isset($params['prompt']) && !empty($params['prompt']) ? $params['prompt'] : growtype_art_model_format_prompt($model['prompt'], $model_id);
+        $model_id = $params['model_id'] ?? null;
+        $model_details = (!empty($model_id)) ? growtype_art_get_model_details($model_id) : [];
+        $model_images = (!empty($model_id)) ? (growtype_art_get_model_images_grouped($model_id, 500)['original'] ?? []) : [];
+        
+        $formatted_prompt = isset($params['prompt']) && !empty($params['prompt']) ? $params['prompt'] : '';
+        if (empty($formatted_prompt) && !empty($model_details)) {
+            $formatted_prompt = growtype_art_model_format_prompt($model_details['prompt'], $model_id);
+        }
 
         $image_input = [];
         if (isset($params['reference_image_urls']) && !empty($params['reference_image_urls'])) {
@@ -79,7 +91,6 @@ class Segmind_Base
                     $image_url = growtype_art_get_image_url($model_image['id']);
                     $image_url = growtype_art_image_get_alternative_format($image_url, 'jpg', true);
                     array_push($image_input, $image_url);
-//                    break;
                 }
             }
 
@@ -91,19 +102,36 @@ class Segmind_Base
             }
         }
 
+        $model_slug = $params['model'] ?? $model_details['settings']['core_model'] ?? 'seedream-4';
+        $url = $this->get_model_url($model_slug);
+        $is_nsfw = $this->is_nsfw_model($model_slug);
+
         $generating_settings = [
-            "size" => "2K",
-            "width" => 1024,
-            "height" => 1024,
-            "max_images" => 1,
-            "seed" => -1,
-//            "aspect_ratio" => "match_input_image",
-            "sequential_image_generation" => "disabled",
-            "image_input" => $image_input,
             "prompt" => $formatted_prompt,
+            "width" => $params['width'] ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
+            "height" => $params['height'] ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
+            "seed" => $params['seed'] ?? -1,
+            "max_images" => 1,
+            "aspect_ratio" => $params['aspect_ratio'] ?? "3:4",
+            "disable_safety_checker" => $params['disable_safety_checker'] ?? $is_nsfw,
         ];
 
-        $url = "https://api.segmind.com/v1/seedream-4";
+        // Model specific settings
+        if ($model_slug === 'seedream-4') {
+            $generating_settings['size'] = $params['size'] ?? '1K';
+            $generating_settings['sequential_image_generation'] = 'disabled';
+            if (!empty($image_input)) {
+                $generating_settings['image_input'] = $image_input;
+            }
+        } elseif ($model_slug === 'qwen-image-fast') {
+            $generating_settings['steps'] = $params['steps'] ?? 8;
+            $generating_settings['guidance'] = $params['guidance'] ?? 1;
+            $generating_settings['image_format'] = $params['image_format'] ?? 'png';
+            $generating_settings['quality'] = $params['quality'] ?? 90;
+            $generating_settings['base64'] = $params['base64'] ?? false;
+            unset($generating_settings['max_images']);
+            unset($generating_settings['disable_safety_checker']);
+        }
 
         $token = $params['token'];
 
@@ -126,79 +154,26 @@ class Segmind_Base
 
         curl_close($ch);
 
+        error_log(sprintf('Growtype Art - Segmind (%s): Raw Response: %s', $model_slug, $response));
+
         if (!empty($response) && is_string($response)) {
             $response_decoded = json_decode($response, true);
 
             if (json_last_error() === JSON_ERROR_NONE) {
-                return $response_decoded;
+                 if (isset($response_decoded['error']) || isset($response_decoded['message'])) {
+                      return [
+                        'success' => false,
+                        'message' => $response_decoded['error'] ?? $response_decoded['message']
+                      ];
+                 }
+                 return ['data' => $response_decoded]; 
             }
         }
-
-        return $response;
-    }
-
-    function save_generations($generations, $model_id, $params)
-    {
-        $saved_generations = [];
-        foreach ($generations as $generation) {
-            $model = growtype_art_get_model_details($model_id);
-
-            $image_folder = $model['image_folder'];
-            $image_location = growtype_art_get_images_saving_location();
-
-            $image['folder'] = $image_folder;
-            $image['location'] = $image_location;
-            $image['content'] = $generation;
-            $image['meta_details'] = [
-                [
-                    'key' => 'generation_id',
-                    'value' => $params['generation_id']
-                ],
-                [
-                    'key' => 'provider',
-                    'value' => Growtype_Art_Crud::SEGMIND_KEY
-                ],
-                [
-                    'key' => 'prompt',
-                    'value' => $params['prompt']
-                ]
-            ];
-
-            if (isset($params['types'])) {
-                foreach ($params['types'] as $type) {
-                    $image['meta_details'][] = [
-                        'key' => $type,
-                        'value' => 1
-                    ];
-                }
-            }
-
-            $saved_image = Growtype_Art_Crud::save_image($image);
-
-            if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
-                error_log('save_generations: ' . json_encode($saved_image));
-                continue;
-            }
-
-            /**
-             * Assign image to model
-             */
-            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
-                'model_id' => $model_id,
-                'image_id' => $saved_image['id']
-            ]);
-
-            $saved_generations[] = [
-                'url' => $saved_image['details']['url'],
-                'image_id' => $saved_image['id'],
-                'generation_id' => $params['generation_id'],
-                'image_prompt' => $params['prompt'],
-            ];
-        }
-
-        do_action('growtype_art_model_update', $model_id);
-
-        return $saved_generations;
+        
+        return [
+            'success' => true,
+            'imageBase64' => base64_encode($response)
+        ];
     }
 }
 

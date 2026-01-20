@@ -2,115 +2,111 @@
 
 namespace partials;
 
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
+use Growtype_Art_Generator_Base;
 
-class Fal_Base
+class Fal_Base extends Growtype_Art_Generator_Base
 {
-    public static function api_key()
+    public function get_provider_key()
     {
-        return \Growtype_Auth::credentials('fal');
+        return Growtype_Art_Crud::FAL_KEY;
     }
 
-    public function generate_model_image($model_id, $params = [])
+    public function get_models()
     {
-//        dd([
-//            $model_id,
-//            $params
-//        ]);
+        return [
+            'flux-2/edit' => [
+                'is_nsfw' => true,
+            ],
+        ];
+    }
 
-        $model = growtype_art_get_model_details($model_id);
+    public function generate_image_init($params)
+    {
+        $apiKey = $params['token'];
+        $url = 'https://queue.fal.run/fal-ai/flux-2/edit';
 
-        $prompt = isset($params['prompt']) && !empty($params['prompt']) ? $params['prompt'] : $model['prompt'];
+        $postData = [
+            'prompt' => $params['prompt'],
+            'image_urls' => $params['image_urls'] ?? [],// Array of input image URLs
+            'image_size' => $params['image_size'] ?? self::DEFAULT_IMAGE_DIMENSIONS,
+            'num_images' => $params['num_images'] ?? 1,
+            'enable_safety_checker' => $params['enable_safety_checker'] ?? false,
+            'guidance_scale' => $params['guidance_scale'] ?? 7.5,
+            'num_inference_steps' => $params['num_inference_steps'] ?? 32
+        ];
 
-        $formatted_prompt = growtype_art_model_format_prompt($prompt, $model_id);
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "Authorization: Key $apiKey",
+            "Content-Type: application/json",
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
-        $api_keys = self::api_key();
-
-        if (empty($api_keys)) {
-            return [
-                'success' => false,
-                'message' => sprintf('Empty API keys. Model %s.', $model_id),
-            ];
+        $response = curl_exec($ch);
+        if (curl_errno($ch)) {
+            $error = curl_error($ch);
+            curl_close($ch);
+            return ['success' => false, 'message' => "CURL Error: $error"];
         }
 
-        $api_group_key = array_keys($api_keys)[array_rand(array_keys(self::api_key()))];
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        $params['token'] = $this->get_access_token($api_group_key);
-        $params['prompt'] = $formatted_prompt;
-        $params['generation_id'] = wp_generate_password(52, false);
-        $params['model_id'] = $model_id;
+        error_log('Growtype Art - Fal Base: Raw Response: ' . $response);
 
-        $model = growtype_art_get_model_details($model_id);
-        $model_images = growtype_art_get_model_images_grouped($model_id, 200)['original'] ?? [];
-
-        $image_input = [];
-        if (isset($params['reference_image_urls']) && !empty($params['reference_image_urls'])) {
-            $image_input = $params['reference_image_urls'];
+        if ($httpCode >= 400) {
+            return ['success' => false, 'message' => "HTTP Error: $httpCode"];
         }
 
-        if (empty($image_input) && !empty($model_images)) {
-            foreach ($model_images as $model_image) {
-                if (isset($model_image['settings']['is_cover']) && $model_image['settings']['is_cover']) {
-                    $image_url = growtype_art_get_image_url($model_image['id']);
-                    $image_url = growtype_art_image_get_alternative_format($image_url, 'jpg', true);
-                    array_push($image_input, $image_url);
-                    break;
+        $decoded = json_decode($response, true);
+        if (!$decoded) {
+            error_log('Growtype Art - Fal Base: Failed to decode API response: ' . $response);
+            return ['success' => false, 'message' => 'Failed to decode API response'];
+        }
+
+        if (isset($decoded['detail'])) {
+            return ['success' => false, 'message' => $decoded['detail']];
+        }
+
+        $requestId = $decoded['request_id'] ?? null;
+        error_log('Growtype Art - Fal Base: Request ID: ' . $requestId);
+
+        if (!$requestId) {
+             return ['success' => false, 'message' => 'No request_id returned'];
+        }
+
+        // Poll for results
+        $poll_result = $this->poll_fal_request($requestId);
+
+        if (!$poll_result['success']) {
+            return $poll_result;
+        }
+
+        // Standardize output
+        $generations = [];
+        if (isset($poll_result['images'])) {
+            foreach ($poll_result['images'] as $img) {
+                if (isset($img['url'])) {
+                    $generations[] = ['url' => $img['url']];
                 }
             }
-
-            if (empty($image_input)) {
-                $model_image = $model_images[0];
-                $image_url = growtype_art_get_image_url($model_image['id']);
-                $image_url = growtype_art_image_get_alternative_format($image_url, 'jpg', true);
-                array_push($image_input, $image_url);
-            }
         }
 
-//        $image_input_formatted = [];
-//        foreach ($image_input as $image_input_single) {
-//
-//            str_replace()
-//
-//            $image_input_formatted[] = $image_input_single;
-//        }
-
-        $params['image_urls'] = $image_input;
-
-        $generation_details = $this->generate_image_init($params);
-
-        $request_id = $generation_details['data']['request_id'] ?? '';
-
-        if (empty($request_id) || isset($generation_details['errors'])) {
-            return [
-                'success' => false,
-                'message' => 'Empty $request_id',
-            ];
+        if (empty($generations)) {
+            return ['success' => false, 'message' => 'No images generated'];
         }
-
-//        ddd($generation_details);
-//        ddd($request_id);
-
-        $generation_details = self::poll_fal_request($request_id);
-
-        if (!$generation_details['success']) {
-            return [
-                'success' => false,
-                'message' => 'Empty generations',
-            ];
-        }
-
-//        ddd($generation_details);
-
-        $response = $this->save_generations($generation_details['images'], $model_id, $params);
-
-//        d($response);
 
         return [
             'success' => true,
-            'generations' => $response,
-            'message' => sprintf('Successfully generated. Prompt: %s', $prompt)
+            'generations' => $generations
         ];
     }
 
@@ -137,7 +133,7 @@ class Fal_Base
             $body = wp_remote_retrieve_body($response);
             $data = json_decode($body, true);
 
-//            dd($data);
+            error_log('Growtype Art - Fal Base: Polling attempt ' . $i . ' for ' . $request_id . '. Response: ' . $body);
 
             // Completed
             if (!empty($data['images'])) {
@@ -162,123 +158,6 @@ class Fal_Base
     public function get_access_token($api_group_key)
     {
         return self::api_key()[$api_group_key]['api_key'] ?? '';
-    }
-
-    public function generate_image_init($params)
-    {
-        $apiKey = $params['token'];
-        $url = 'https://queue.fal.run/fal-ai/flux-2/edit';
-
-        $postData = [
-            'prompt' => $params['prompt'],
-            'image_urls' => $params['image_urls'] ?? [],// Array of input image URLs
-            'image_size' => $params['image_size'] ?? ['width' => 768, 'height' => 1024],
-            'num_images' => $params['num_images'] ?? 1,
-            'enable_safety_checker' => $params['enable_safety_checker'] ?? false,
-            'guidance_scale' => $params['guidance_scale'] ?? 7.5,
-            'num_inference_steps' => $params['num_inference_steps'] ?? 32
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Authorization: Key $apiKey",
-            "Content-Type: application/json",
-        ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            $error = curl_error($ch);
-            curl_close($ch);
-            return ['error' => true, 'message' => "CURL Error: $error"];
-        }
-
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode >= 400) {
-            return ['error' => true, 'message' => "HTTP Error: $httpCode"];
-        }
-
-        $decoded = json_decode($response, true);
-        if (!$decoded) {
-            return ['error' => true, 'message' => 'Failed to decode API response'];
-        }
-
-        $requestId = $decoded['request_id'] ?? null;
-
-        return [
-            'success' => true,
-            'data' => $decoded,
-            'request_id' => $requestId
-        ];
-    }
-
-    function save_generations($generations, $model_id, $params)
-    {
-        $saved_generations = [];
-        foreach ($generations as $generation) {
-            $model = growtype_art_get_model_details($model_id);
-
-            $image_folder = $model['image_folder'];
-            $image_location = growtype_art_get_images_saving_location();
-
-            $image['folder'] = $image_folder;
-            $image['location'] = $image_location;
-            $image['url'] = $generation['url'];
-            $image['meta_details'] = [
-                [
-                    'key' => 'generation_id',
-                    'value' => $params['generation_id']
-                ],
-                [
-                    'key' => 'provider',
-                    'value' => Growtype_Art_Crud::FAL_KEY
-                ],
-                [
-                    'key' => 'prompt',
-                    'value' => $params['prompt']
-                ]
-            ];
-
-            if (isset($params['types'])) {
-                foreach ($params['types'] as $type) {
-                    $image['meta_details'][] = [
-                        'key' => $type,
-                        'value' => 1
-                    ];
-                }
-            }
-
-            $saved_image = Growtype_Art_Crud::save_image($image);
-
-            if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
-                error_log('save_generations: ' . json_encode($saved_image));
-                continue;
-            }
-
-            /**
-             * Assign image to model
-             */
-            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
-                'model_id' => $model_id,
-                'image_id' => $saved_image['id']
-            ]);
-
-            $saved_generations[] = [
-                'url' => $saved_image['details']['url'],
-                'image_id' => $saved_image['id'],
-                'generation_id' => $params['generation_id'],
-                'image_prompt' => $params['prompt'],
-            ];
-        }
-
-        do_action('growtype_art_model_update', $model_id);
-
-        return $saved_generations;
     }
 }
 

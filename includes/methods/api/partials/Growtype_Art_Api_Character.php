@@ -530,6 +530,7 @@ class Growtype_Art_Api_Character
     function generate_image_callback($data)
     {
         $params = $data->get_params();
+        error_log('Growtype Art - API generate_image_callback. Params: ' . json_encode($params));
 
         $generate_details = growtype_art_generate_image($params);
 

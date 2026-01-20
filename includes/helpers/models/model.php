@@ -1,5 +1,27 @@
 <?php
 
+/**
+ * @param $params
+ * @return string
+ */
+function growtype_art_get_default_prompt_template($params)
+{
+    if (is_string($params)) {
+        $params = json_decode($params, true);
+    }
+
+    $style = $params['character_style'][0] ?? $params['character_style'] ?? 'realistic';
+
+    if ($style === 'anime') {
+        $template = "High quality, 8K Ultra HD, By Yves Di, anime, a beautiful {character_ethnicity} ethnicity {character_gender} {character_occupation} {character_age} years old who looks like {character_title}, light {character_eye_color} eyes, {character_hair_style} {character_hair_color} hair, {prompt_variables}, high quality, 8K Ultra HD, 3D effect, A digital illustration of {character_style} style, soft {character_style} tones, Atmosphere like Kyoto Animation, luminism, three dimensional effect, luminism, 3d render, octane render, Isometric, awesome full color, delicate and anime character expressions";
+    } else {
+        $template = "High quality, professional, {character_style} photograph of a {character_ethnicity} ethnicity {character_gender} {character_occupation} at {character_age} years old, {prompt_variables}, {character_hair_style} {character_hair_color} hair, {character_eye_color} eyes, a refined and proportionate nose, full and balanced lips, high and well-defined cheekbones, a gracefully sculpted jawline, narrow depth of field, film photography";
+    }
+
+    return $template;
+}
+
+
 function growtype_art_default_model_id_to_duplicate()
 {
     return '5581';
@@ -153,6 +175,78 @@ function growtype_art_model_format_prompt($prompt, $model_id)
 
 /**
  * @param $prompt
+ * @param $params
+ * @return array|mixed|string|string[]
+ */
+function growtype_art_format_prompt_with_params($prompt, $params)
+{
+    error_log('Growtype Art - Formatting prompt. Params: ' . (is_string($params) ? $params : json_encode($params)));
+    
+    if (empty($prompt) || empty($params)) {
+        return $prompt;
+    }
+
+    if (is_string($params)) {
+        $params = json_decode($params, true);
+    }
+
+    if (empty($params)) {
+        return $prompt;
+    }
+
+    $key_mapping = [
+        'gender' => 'character_gender',
+        'age' => 'character_age',
+        'ethnicity' => 'character_ethnicity',
+        'eye_color' => 'character_eye_color',
+        'eyes_color' => 'character_eye_color',
+        'hair_style' => 'character_hair_style',
+        'hair_color' => 'character_hair_color',
+        'body_shape' => 'character_body_type',
+        'body_type' => 'character_body_type',
+        'breast_size' => 'character_breast_size',
+        'butt_size' => 'character_butt_size',
+        'occupation' => 'character_occupation',
+        'character_style' => 'character_style',
+        'personality' => 'character_personality',
+        'hobbies' => 'character_hobbies',
+        'relationship' => 'character_relationship',
+        'marital_status' => 'character_relationship',
+    ];
+
+    $formatted_params = [];
+    foreach ($params as $key => $value) {
+        $adjusted_key = $key_mapping[$key] ?? $key;
+
+        $final_value = '';
+        if (is_array($value)) {
+            if ($key === 'age' && isset($value[0]) && strpos($value[0], '-') !== false) {
+                $age = explode('-', $value[0]);
+                $final_value = rand((int)$age[0], (int)$age[1]);
+            } else {
+                $final_value = $value[0]['value'] ?? $value[0] ?? '';
+            }
+        } else {
+            $final_value = $value;
+        }
+
+        if (is_string($final_value) || is_numeric($final_value)) {
+            $formatted_params[$adjusted_key] = (string)$final_value;
+        }
+    }
+
+    error_log('Growtype Art - Formatted params: ' . json_encode($formatted_params));
+
+    foreach ($formatted_params as $key => $value) {
+        error_log('Growtype Art - Replacing {' . $key . '} with ' . $value);
+        $prompt = str_ireplace('{' . $key . '}', $value, $prompt);
+    }
+
+    return $prompt;
+}
+
+/**
+ * @param $prompt
  * @param $model_id
  * @return array|mixed|string|string[]
  */
@@ -176,9 +270,7 @@ function growtype_art_generate_model_image($model_id, $params = [])
     ];
 
     foreach ($providers as $provider) {
-        if ($provider === 'writecream') {
-            $provider = 'runware';
-        }
+
 
         $provider_class_name = sprintf('\partials\%s_Base', ucfirst($provider));
 
@@ -243,31 +335,82 @@ function growtype_art_generate_model_video($model_id, $params = [])
 function growtype_art_generate_image($params = [])
 {
     $providers = $params['providers'] ?? [];
+    $models = $params['models'] ?? [];
 
     if (empty($providers)) {
-        $providers = Growtype_Art_Crud::API_GENERATE_IMAGE_PROVIDERS;
+        $providers = Growtype_Art_Crud::PROVIDERS_TO_INSTANTLY_GENERATE_IMAGES;
+    }
 
-        shuffle($providers);
+    if (isset($params['reference_image_url']) && !isset($params['reference_image_urls'])) {
+        $params['reference_image_urls'] = [$params['reference_image_url']];
     }
 
     $generate_details = [
         'success' => false
     ];
 
-    foreach ($providers as $provider) {
-        if ($provider === 'writecream') {
-            $provider = 'runware';
-        }
-
+    foreach ($providers as $provider_index => $provider) {
         $provider_class_name = sprintf('\partials\%s_Base', ucfirst($provider));
 
-        if (class_exists($provider_class_name)) {
-            $crud = new $provider_class_name();
+        if (!class_exists($provider_class_name)) {
+            continue;
+        }
 
-            $generate_details = $crud->generate_image($params);
+        $crud = new $provider_class_name();
+
+        // If single provider with multiple models, try each model
+        if (count($providers) === 1 && count($models) > 1) {
+            foreach ($models as $model) {
+                $params['model'] = $model;
+
+                try {
+                    $generate_details = $crud->generate_image($params);
+                } catch (Exception $e) {
+                    $generate_details = [
+                        'success' => false,
+                        'message' => $e->getMessage()
+                    ];
+                } catch (Error $e) {
+                    $generate_details = [
+                        'success' => false,
+                        'message' => $e->getMessage()
+                    ];
+                }
+
+                if ($generate_details['success']) {
+                    $generate_details['provider'] = $provider;
+                    $generate_details['model'] = $model;
+                    return $generate_details;
+                }
+            }
+        } else {
+            // Original behavior: match model by provider index
+            if (isset($models[$provider_index])) {
+                $params['model'] = $models[$provider_index];
+            } elseif (isset($models[0])) {
+                // Single model provided, use it for all providers
+                $params['model'] = $models[0];
+            }
+
+            try {
+                $generate_details = $crud->generate_image($params);
+            } catch (Exception $e) {
+                $generate_details = [
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ];
+            } catch (Error $e) {
+                $generate_details = [
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ];
+            }
 
             if ($generate_details['success']) {
                 $generate_details['provider'] = $provider;
+                if (isset($params['model'])) {
+                    $generate_details['model'] = $params['model'];
+                }
                 break;
             }
         }

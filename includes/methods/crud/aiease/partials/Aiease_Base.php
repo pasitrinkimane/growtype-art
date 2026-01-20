@@ -2,91 +2,27 @@
 
 namespace partials;
 
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
 use Exception;
 use Growtype_Cron_Jobs;
+use Growtype_Art_Generator_Base;
 
-class Aiease_Base
+class Aiease_Base extends Growtype_Art_Generator_Base
 {
-    public static function api_key()
+    public function get_provider_key()
     {
-        return \Growtype_Auth::credentials('aiease');
-    }
-
-    public function generate_model_image($model_id = null)
-    {
-        $model = growtype_art_get_model_details($model_id);
-
-        $formatted_prompt = growtype_art_model_format_prompt($model['prompt'], $model_id);
-
-        $api_keys = self::api_key();
-
-        if (empty($api_keys)) {
-            return [
-                'success' => false,
-                'message' => sprintf('Empty API keys. Model %s.', $model_id),
-            ];
-        }
-
-        $api_group_key = array_keys($api_keys)[array_rand(array_keys(self::api_key()))];
-
-        $token = $this->get_access_token($api_group_key);
-
-        $params = [
-            'prompt' => $formatted_prompt,
-            'token' => $token
-        ];
-
-        $generation_details = $this->generate_image_init($params);
-
-        $params_urlencoded = urlencode(json_encode($params));
-
-//        error_log(sprintf('Generating image. Details: %s. Group key: %s', json_encode($generation_details), $api_group_key));
-
-        if (!isset($generation_details['result']['task_id'])) {
-            if (isset($_GET['page']) && !empty($_GET['page'])) {
-                Growtype_Cron_Jobs::create('generate-model', json_encode([
-                    'provider' => Growtype_Art_Crud::AIEASE_KEY,
-                    'model_id' => $model_id
-                ]), 30);
-
-                return [
-                    'success' => false,
-                    'message' => sprintf('Failed to generate image for model %s. Params: %s. Message: %s', $model_id, $params_urlencoded, $generation_details['message'] ?? ''),
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'message' => sprintf('Image is still generating. Model %s. Params: %s. Message: %s.', $model_id, $params_urlencoded, $generation_details['message'] ?? ''),
-                ];
-            }
-        }
-
-        Growtype_Cron_Jobs::create_if_not_exists('retrieve-model', json_encode([
-            'provider' => Growtype_Art_Crud::AIEASE_KEY,
-            'api_group_key' => $api_group_key,
-            'model_id' => $model_id,
-            'generation_id' => $generation_details['result']['task_id'],
-            'prompt' => $formatted_prompt,
-        ]), 30);
-
-        return [
-            'success' => true,
-            'generations' => [
-                [
-                    'generation_id' => $generation_details['result']['task_id'] ?? ''
-                ]
-            ],
-            'message' => sprintf('Successfully generated. Params: %s', $params_urlencoded)
-        ];
+        return Growtype_Art_Crud::AIEASE_KEY;
     }
 
     public function get_access_token($api_group_key)
     {
-        return self::api_key()[$api_group_key]['jwt_token'] ?? '';
+        $api_keys = $this->api_key();
+        return $api_keys[$api_group_key]['jwt_token'] ?? $api_keys[$api_group_key]['api_key'] ?? '';
     }
 
     public function generate_image_init($params)
@@ -94,13 +30,11 @@ class Aiease_Base
         $url = "https://www.aiease.ai/api/api/gen/text2img";
         $token = $params['token'];
 
-// Request headers
         $headers = [
             "authorization: JWT $token",
             "Content-Type: application/json"
         ];
 
-// Request body
         $data = [
             "gen_type" => "art_v1",
             "art_v1_extra_data" => [
@@ -110,10 +44,7 @@ class Aiease_Base
             ]
         ];
 
-// Initialize cURL session
         $ch = curl_init($url);
-
-// Set cURL options
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -126,64 +57,75 @@ class Aiease_Base
 
         curl_close($ch);
 
-//        d([
-//            $params,
-//            $response,
-//            $error
-//        ]);
+        error_log('Growtype Art - Aiease Base: Raw Response: ' . $response);
 
-// Output results
-        return json_decode($response, true);
+        $result = json_decode($response, true);
+
+        if (isset($result['result']['task_id'])) {
+            return [
+                'status' => 'pending',
+                'task_id' => $result['result']['task_id'],
+                'message' => 'Generation started',
+                'original_response' => $result
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => $result['message'] ?? 'Unknown error',
+            'errors' => [['message' => $result['message'] ?? 'Unknown error']]
+        ];
     }
 
     public function retrieve_generations($model_id, $generations_ids, $args = [])
     {
+        // Fix: Use array if passed logical single ID, though typecast usually handles it?
+        // The Job passes `generation_id` as single string usually, but this method signature expects array or string?
+        // Base cron job logic: `retrieve_generations` called with ARRAY of IDs in `Retrieve_Model_Job`?
+        // Let's check `Retrieve_Model_Job.php`:
+        // $generations = $crud->retrieve_generations($job_payload['model_id'], [$job_payload['generation_id']], ...);
+        // It passes an ARRAY of 1 ID.
+
         $token = $this->get_access_token($args['api_group_key']);
 
         $generations = [];
         foreach ($generations_ids as $generations_id) {
             $generation = $this->get_generation($token, $generations_id);
 
-            $generations[] = $generation;
-
             if (isset($generation['result']['data']['results']) && !empty($generation['result']['data']['results'])) {
-
-                error_log('retrieve_generations: ' . json_encode($generation));
 
                 $args['generation_id'] = $generations_id;
 
-                /**
-                 * Save generation
-                 */
+                // Save using local override
                 $saved_generations = $this->save_generations($generation['result']['data']['results'], $model_id, $args);
 
-                /**
-                 * Delete generation from Leonardo.ai
-                 */
+                // External delete
                 foreach ($saved_generations as $saved_generation) {
-                    if (isset($saved_generation['success']) && !$saved_generation['success']) {
+                     // Check if NSFW failure
+                    if (isset($saved_generation['success']) && $saved_generation['success'] === false) {
+                         // NSFW detected, retry with NSFW providers?
+                         // This logic was in previous file, keeping it.
                         $generate_details = growtype_art_generate_model_image($model_id, [
                             'providers' => Growtype_Art_Crud::NSFW_PROVIDERS,
                             'prompt' => $args['prompt']
                         ]);
-
-                        error_log(sprintf('NSFW generating. Response: %s', print_r($generate_details, true)));
                     }
 
-                    $delete_external_generation = $this->delete_external_generation($token, $generations_id);
-
-                    error_log('delete_external_generation: ' . json_encode($delete_external_generation));
+                    $this->delete_external_generation($token, $generations_id);
                 }
+                
+                $generations[] = $saved_generations;
             }
         }
 
-        return [
-            'success' => true,
-            'generations' => $generations
-        ];
+        return $generations;
     }
 
-    function save_generations($generations, $model_id, $args)
+    // OVERRIDE Base save_generations to keep NSFW logic and custom meta
+    // Note: Signature should match Base if possible, but Base is: save_generations($generations, $model_id = null, $params)
+    // Original Aiease: save_generations($generations, $model_id, $args)
+    // We will align signature to Base: $params is $args
+    function save_generations($generations, $model_id = null, $params = [])
     {
         $saved_generations = [];
         foreach ($generations as $generation) {
@@ -194,16 +136,21 @@ class Aiease_Base
 
             if (isset($generation['nsfw']) && $generation['nsfw']) {
                 $saved_generations[] = [
-                    'success' => false
+                    'success' => false, // Marker for NSFW failure
+                    'nsfw' => true
                 ];
-
                 error_log(sprintf('aiease generator. Sensitive image. %s', print_r($generation, true)));
                 continue;
             }
 
-            $model = growtype_art_get_model_details($model_id);
-
-            $image_folder = $model['image_folder'];
+            // Standard logic
+            if ($model_id) {
+                $model = growtype_art_get_model_details($model_id);
+                $image_folder = $model['image_folder'];
+            } else {
+                $image_folder = Growtype_Art_Crud::IMAGES_FOLDER_NAME . '/public';
+            }
+            
             $image_location = growtype_art_get_images_saving_location();
 
             $image['folder'] = $image_folder;
@@ -213,7 +160,7 @@ class Aiease_Base
             $image['meta_details'] = [
                 [
                     'key' => 'generation_id',
-                    'value' => $args['generation_id']
+                    'value' => $params['generation_id'] ?? ''
                 ],
                 [
                     'key' => 'provider',
@@ -221,10 +168,11 @@ class Aiease_Base
                 ],
                 [
                     'key' => 'prompt',
-                    'value' => $args['prompt']
+                    'value' => $params['prompt'] ?? ''
                 ]
             ];
 
+            // Aiease specific meta extraction
             foreach ($generation as $key => $value) {
                 if (!in_array($key, ['realWidth', 'realHeight', 'status', 'index', 'info'])) {
                     array_push($image['meta_details'], [
@@ -241,31 +189,21 @@ class Aiease_Base
                 continue;
             }
 
-            /**
-             * Assign image to model
-             */
-            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
-                'model_id' => $model_id,
-                'image_id' => $saved_image['id']
-            ]);
-
-            /**
-             * Get image colors
-             */
-//            Extract_Image_Colors_Job::update_image_colors_groups($saved_image['id']);
-
-            /**
-             * Compress image
-             */
-            growtype_art_compress_existing_image($saved_image['id']);
-
-            sleep(2);
+            if ($model_id) {
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
+                    'model_id' => $model_id,
+                    'image_id' => $saved_image['id']
+                ]);
+                
+                growtype_art_compress_existing_image($saved_image['id']);
+                do_action('growtype_art_model_update', $model_id);
+            }
 
             $saved_generations[] = [
-                'image_id' => $saved_image['id']
+                'success' => true,
+                'image_id' => $saved_image['id'],
+                'url' => $saved_image['details']['url'] ?? '',
             ];
-
-            do_action('growtype_art_model_update', $model_id);
         }
 
         return $saved_generations;
@@ -274,57 +212,45 @@ class Aiease_Base
     function get_generation($token, $generation_id)
     {
         $url = "https://www.aiease.ai/api/api/id_photo/task-info?task_id=" . $generation_id;
-
-// Request headers
         $headers = [
             "authorization: JWT $token",
             "Content-Type: application/json"
         ];
-
-// Initialize cURL session
         $ch = curl_init($url);
-
-// Set cURL options
-        curl_setopt($ch, CURLOPT_HTTPGET, true); // Use GET instead of POST
+        curl_setopt($ch, CURLOPT_HTTPGET, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 
         $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
         curl_close($ch);
 
-// Output results
         return json_decode($response, true);
     }
 
     public function delete_external_generation($token, $prompt_id)
     {
         $prompt_id = (int)$prompt_id;
-
         $url = "https://www.aiease.ai/api/api/id_photo/history/$prompt_id/1";
-
         $headers = [
             "authorization: JWT $token",
             "Content-Type: application/json"
         ];
-
         $ch = curl_init($url);
-
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 
         $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
         curl_close($ch);
 
         return json_decode($response, true);
+    }
+
+    public function generate_image($params = [])
+    {
+        return $this->generate_image_sync($params);
     }
 }
 
