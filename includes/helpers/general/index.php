@@ -1099,11 +1099,9 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
 
         // Groups condition (featured_in)
         if (!empty($groups)) {
-            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS ON (MO.id = MS.model_id AND MS.meta_key = 'featured_in')";
             $group_conditions = [];
             foreach ($groups as $group) {
-                // Match against any value inside the JSON array
-                $group_conditions[] = "MS.meta_value LIKE %s";
+                $group_conditions[] = "EXISTS (SELECT 1 FROM {$wpdb->prefix}growtype_art_model_settings WHERE model_id = MO.id AND meta_key = 'featured_in' AND meta_value LIKE %s)";
                 $query_params[] = '%' . $group . '%';
             }
             $conditions[] = '(' . implode(' OR ', $group_conditions) . ')';
@@ -1111,29 +1109,26 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
 
         // Created by options condition
         if (!empty($created_by_options)) {
-            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS2 ON (MO.id = MS2.model_id AND MS2.meta_key = 'created_by')";
-            $created_by_placeholders = implode(',', array_fill(0, count($created_by_options), '%s'));
-            $conditions[] = "MS2.meta_value IN ($created_by_placeholders)";
-            $query_params = array_merge($query_params, $created_by_options);
+            $item_placeholders = implode(',', array_fill(0, count($created_by_options), '%s'));
+            $conditions[] = "EXISTS (SELECT 1 FROM {$wpdb->prefix}growtype_art_model_settings WHERE model_id = MO.id AND meta_key = 'created_by' AND meta_value IN ($item_placeholders))";
+            $query_params = array_merge($query_params, array_values($created_by_options));
         }
 
         // Unique hashes condition
         if (!empty($unique_hashes)) {
-            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS3 ON (MO.id = MS3.model_id AND MS3.meta_key = 'created_by_unique_hash')";
-            $unique_hashes_placeholders = implode(',', array_fill(0, count($unique_hashes), '%s'));
-            $conditions[] = "MS3.meta_value IN ($unique_hashes_placeholders)";
-            $query_params = array_merge($query_params, $unique_hashes);
+            $item_placeholders = implode(',', array_fill(0, count($unique_hashes), '%s'));
+            $conditions[] = "EXISTS (SELECT 1 FROM {$wpdb->prefix}growtype_art_model_settings WHERE model_id = MO.id AND meta_key = 'created_by_unique_hash' AND meta_value IN ($item_placeholders))";
+            $query_params = array_merge($query_params, array_values($unique_hashes));
         }
 
         // Character slugs condition
         if (!empty($characters_slugs)) {
-            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS4 ON (MO.id = MS4.model_id AND MS4.meta_key = 'slug')";
-            $characters_slugs_placeholders = implode(',', array_fill(0, count($characters_slugs), '%s'));
-            $conditions[] = "MS4.meta_value IN ($characters_slugs_placeholders)";
-            $query_params = array_merge($query_params, $characters_slugs);
+            $item_placeholders = implode(',', array_fill(0, count($characters_slugs), '%s'));
+            $conditions[] = "EXISTS (SELECT 1 FROM {$wpdb->prefix}growtype_art_model_settings WHERE model_id = MO.id AND meta_key = 'slug' AND meta_value IN ($item_placeholders))";
+            $query_params = array_merge($query_params, array_values($characters_slugs));
         }
 
-        // Models IDs condition
+        // Models IDs condition (on main table)
         if (!empty($models_ids)) {
             $models_ids_placeholders = implode(',', array_fill(0, count($models_ids), '%d'));
             $conditions[] = "MO.id IN ($models_ids_placeholders)";
@@ -1142,25 +1137,19 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
 
         // Occupation condition
         if (!empty($character_occupation)) {
-            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS5 ON (MO.id = MS5.model_id AND MS5.meta_key = 'character_occupation')";
-            $conditions[] = "MS5.meta_value = %s";
+            $conditions[] = "EXISTS (SELECT 1 FROM {$wpdb->prefix}growtype_art_model_settings WHERE model_id = MO.id AND meta_key = 'character_occupation' AND meta_value = %s)";
             $query_params[] = $character_occupation;
         }
 
         // Tags condition
         if (!empty($tags)) {
-            $joins[] = "LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS MS6 ON (MO.id = MS6.model_id AND MS6.meta_key = 'tags')";
             $tagConditions = [];
             foreach ($tags as $tag) {
-                // Prepare a condition that checks if MS6.meta_value JSON array contains the tag.
-                // Use JSON_ENCODE to ensure the tag is properly formatted as a JSON string.
-                $tagConditions[] = "JSON_CONTAINS(LOWER(MS6.meta_value), LOWER(%s)) = 1";
+                $tagConditions[] = "EXISTS (SELECT 1 FROM {$wpdb->prefix}growtype_art_model_settings WHERE model_id = MO.id AND meta_key = 'tags' AND JSON_CONTAINS(LOWER(meta_value), LOWER(%s)) = 1)";
                 $query_params[] = json_encode($tag);
             }
-            // Join the individual JSON_CONTAINS conditions with OR (adjust as needed)
             $conditions[] = '(' . implode(' OR ', $tagConditions) . ')';
         }
-
 
         // Combine constraints
         $profile_keys = growtype_art_get_model_character_default_data();
@@ -1174,31 +1163,35 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
             'priority_level',
         ]);
 
-        $joins_sql = implode(' ', $joins);
+        $joins_sql = ''; // No longer needed for filters
         $where_sql = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
         // Base query for fetching models
         $query_settings = "
-        SELECT ST.*, MO.*
-        FROM {$wpdb->prefix}growtype_art_models AS MO
-        INNER JOIN (
-            SELECT MO.id
+            SELECT ST.*, MO.*
             FROM {$wpdb->prefix}growtype_art_models AS MO
-            $joins_sql
-            $where_sql
-            ORDER BY MO.id DESC
-            LIMIT %d OFFSET %d
-        ) AS limited_models ON MO.id = limited_models.id
-        LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS ST ON MO.id = ST.model_id
-        WHERE ST.meta_key IN (" . implode(',', array_fill(0, count($required_keys), '%s')) . ")
-    ";
+            INNER JOIN (
+                SELECT MO.id
+                FROM {$wpdb->prefix}growtype_art_models AS MO
+                $joins_sql
+                $where_sql
+                ORDER BY MO.id DESC
+                LIMIT %d OFFSET %d
+            ) AS limited_models ON MO.id = limited_models.id
+            LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS ST ON MO.id = ST.model_id
+            WHERE ST.meta_key IN (" . implode(',', array_fill(0, count($required_keys), '%s')) . ")
+        ";
 
-        $query_params[] = $limit;
-        $query_params[] = $offset;
-        $query_params = array_merge($query_params, $required_keys);
+        // Sanitize all params - force strings for %s, ensure no NULLs
+        $query_params = array_map(function($p) { return (is_null($p) ? '' : $p); }, $query_params);
+        $query_params[] = (int)$limit;
+        $query_params[] = (int)$offset;
+        
+        $sanitized_keys = array_map(function($k) { return (string)$k; }, $required_keys);
+        $query_params = array_merge($query_params, $sanitized_keys);
 
-
-        $models_settings = $wpdb->get_results($wpdb->prepare($query_settings, $query_params), ARRAY_A);
+        $prepared_query = $wpdb->prepare($query_settings, $query_params);
+        $models_settings = $wpdb->get_results($prepared_query, ARRAY_A);
 
         $image_query_params = !empty($models_settings) ? array_unique(array_column($models_settings, 'model_id')) : [];
 
@@ -1206,29 +1199,53 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
             return [];
         }
 
-        $image_query_placeholders = implode(',', array_fill(0, count($image_query_params), '%d'));
-        $query_image_with_settings = "
-        SELECT MI.model_id, MI.image_id, IM.folder, IM.name, IM.extension, IM.width, IM.height,
-               MAX(CASE WHEN IMGS.meta_key = 'nsfw' THEN IMGS.meta_value END) AS nsfw,
-               MAX(CASE WHEN IMGS.meta_key = 'is_featured' THEN IMGS.meta_value END) AS is_featured,
-               MAX(CASE WHEN IMGS.meta_key = 'is_cover' THEN IMGS.meta_value END) AS is_cover,
-               MAX(CASE WHEN IMGS.meta_key = 'private' THEN IMGS.meta_value END) AS private,
-               MAX(CASE WHEN IMGS.meta_key = 'generation_id' THEN IMGS.meta_value END) AS generation_id,
-               MAX(CASE WHEN IMGS.meta_key = 'nudity' THEN IMGS.meta_value END) AS nudity,
-        GROUP_CONCAT(
-            CASE WHEN IMGS.meta_key LIKE 'video_url%' 
-            THEN CONCAT(IMGS.meta_key, ':', IMGS.meta_value) 
-            END 
-            SEPARATOR '||'
-        ) AS video_urls
-        FROM wp_growtype_art_model_image AS MI
-        LEFT JOIN wp_growtype_art_images AS IM ON MI.image_id = IM.id
-        LEFT JOIN wp_growtype_art_image_settings AS IMGS ON MI.image_id = IMGS.image_id
-        WHERE MI.model_id IN ($image_query_placeholders)
-        GROUP BY MI.model_id, MI.image_id
-    ";
+        // Process in batches to avoid memory issues
+        $images_with_settings = [];
+        $batch_size = 250;
+        $image_query_batches = array_chunk(array_values($image_query_params), $batch_size);
 
-        $images_with_settings = $wpdb->get_results($wpdb->prepare($query_image_with_settings, $image_query_params), ARRAY_A);
+        foreach ($image_query_batches as $batch) {
+            $batch_placeholders = implode(',', array_fill(0, count($batch), '%d'));
+            $query_image_with_settings = "
+                SELECT MI.model_id, MI.image_id, IM.folder, IM.name, IM.extension, IM.width, IM.height,
+                       MAX(CASE WHEN IMGS.meta_key = 'nsfw' THEN IMGS.meta_value END) AS nsfw,
+                       MAX(CASE WHEN IMGS.meta_key = 'is_featured' THEN IMGS.meta_value END) AS is_featured,
+                       MAX(CASE WHEN IMGS.meta_key = 'is_cover' THEN IMGS.meta_value END) AS is_cover,
+                       MAX(CASE WHEN IMGS.meta_key = 'private' THEN IMGS.meta_value END) AS private,
+                       MAX(CASE WHEN IMGS.meta_key = 'generation_id' THEN IMGS.meta_value END) AS generation_id,
+                       MAX(CASE WHEN IMGS.meta_key = 'nudity' THEN IMGS.meta_value END) AS nudity,
+                GROUP_CONCAT(
+                    CASE WHEN IMGS.meta_key LIKE 'video_url%'
+                    THEN CONCAT(IMGS.meta_key, ':', IMGS.meta_value)
+                    END
+                    SEPARATOR '||'
+                ) AS video_urls
+                FROM {$wpdb->prefix}growtype_art_model_image AS MI
+                LEFT JOIN {$wpdb->prefix}growtype_art_images AS IM ON MI.image_id = IM.id
+                LEFT JOIN {$wpdb->prefix}growtype_art_image_settings AS IMGS ON MI.image_id = IMGS.image_id
+                    AND (IMGS.meta_key IN ('nsfw', 'is_featured', 'is_cover', 'private', 'generation_id', 'nudity') OR IMGS.meta_key LIKE 'video_url%')
+                WHERE MI.model_id IN ($batch_placeholders)
+                GROUP BY MI.model_id, MI.image_id
+            ";
+
+            if (empty($query_image_with_settings)) {
+                error_log('Growtype Art - DEBUG: $query_image_with_settings is empty on line ' . __LINE__);
+            }
+
+            // Sanitize batch for safety
+            $batch = array_map(function($id) { return (int)($id ?? 0); }, $batch);
+            if (empty($batch)) continue;
+
+            $prepared_image_query = $wpdb->prepare($query_image_with_settings, $batch);
+
+            if ($prepared_image_query) {
+                $batch_results = $wpdb->get_results($prepared_image_query, ARRAY_A);
+
+                if (!empty($batch_results)) {
+                    $images_with_settings = array_merge($images_with_settings, $batch_results);
+                }
+            }
+        }
 
         $upload_dir_public = growtype_art_get_upload_dir_public();
 

@@ -1202,7 +1202,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
 
     public static function render_textarea($name, $value)
     {
-        echo '<textarea class="large-text code" rows="5" name="' . $name . '">' . $value . '</textarea>';
+        echo '<textarea class="large-text code" rows="5" name="' . $name . '">' . esc_textarea($value) . '</textarea>';
     }
 
     public static function render_select($name, $value, $options = [], $multiple = false)

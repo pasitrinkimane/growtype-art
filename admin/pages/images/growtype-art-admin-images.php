@@ -266,19 +266,22 @@ class Growtype_Art_Admin_Images
     public static function preview_image($image_id)
     {
         $image = growtype_art_get_image_details($image_id);
-        return self::preview_image_from_data($image);
+        return self::preview_image_from_data($image, $image_id);
     }
 
-    public static function preview_image_from_data($image)
+    public static function preview_image_from_data($image, $image_id = null)
     {
-        if (empty($image)) {
+        if (empty($image) || !is_array($image)) {
+            $image_id = $image_id !== null ? (int)$image_id : null;
             ob_start();
 
             ?>
-            <div class="image" data-id="<?= $image['id'] ?>">
+            <div class="image" <?= $image_id !== null ? 'data-id="' . $image_id . '"' : '' ?>>
                 Image doesnt exist
                 <div style="display:flex;flex-wrap: wrap;gap: 15px;flex-direction: column;">
-                    <a href="#" class="button button-primary button-delete" data-id="<?= $image_id ?>"><?= __('Delete', 'growtype-art') ?></a>
+                    <?php if ($image_id !== null) { ?>
+                        <a href="#" class="button button-primary button-delete" data-id="<?= $image_id ?>"><?= __('Delete', 'growtype-art') ?></a>
+                    <?php } ?>
                 </div>
             </div>
             <?php
@@ -526,5 +529,3 @@ class Growtype_Art_Admin_Images
         <?php
     }
 }
-
-

@@ -16,6 +16,8 @@ class Growtype_Art_Admin_Models
 
     function update_model_callback()
     {
+        $_POST = stripslashes_deep($_POST);
+
         $model_id = $_POST['model_id'];
         $value = $_POST['value'];
         $name = $_POST['name'];
@@ -30,13 +32,14 @@ class Growtype_Art_Admin_Models
         $update_key = isset($property_to_update[1]) ? str_replace('"', '', stripslashes($property_to_update[1])) : '';
 
         if ($update_type === 'settings' && in_array($update_key, ['featured_in', 'tags'])) {
-            $sanitized_value = sanitize_text_field($value);
+            $sanitized_value = sanitize_textarea_field($value);
 
             if ($update_key === 'tags') {
+                $sanitized_value = str_replace(["\r", "\n"], ',', $sanitized_value);
                 $sanitized_value = preg_replace('/\s*,\s*/', ',', trim($sanitized_value, ','));
 
                 if (!empty($sanitized_value)) {
-                    $sanitized_value = explode(',', $sanitized_value);
+                    $sanitized_value = array_values(array_unique(array_filter(explode(',', $sanitized_value))));
                     $sanitized_value = !empty($sanitized_value) ? json_encode($sanitized_value) : '';
                 }
             }
@@ -121,12 +124,12 @@ class Growtype_Art_Admin_Models
     {
         $message = $this->show_message();
 
-        $id = isset($_GET['model']) ? $_GET['model'] : '';
+        $id = isset($_GET['model']) && !is_array($_GET['model']) ? $_GET['model'] : '';
         $action = isset($_GET['action']) ? $_GET['action'] : '';
         $offset = isset($_GET['offset']) ? $_GET['offset'] : 0;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
 
-        $total_images = growtype_art_get_model_total_images_amount($id);
+        $total_images = $action === 'edit' ? growtype_art_get_model_total_images_amount($id) : 0;
 
         $title = $action === 'edit' ? (__('Edit records id', 'growtype-art') . ': ' . $id) : __('Models', 'growtype-art') . ' ' . sprintf('<a href="?page=%s&action=%s" class="page-title-action">' . __('Add new', 'growtype-art') . '</a>', $_REQUEST['page'], 'create-model');
         ?>
@@ -201,11 +204,10 @@ class Growtype_Art_Admin_Models
                 <?php } ?>
 
                 <?= Growtype_Art_Admin_Images::image_delete_ajax() ?>
+                <?php echo Growtype_Art_Admin_Pages::render_pagination('growtype-art-models', $total_images, $offset, $limit); ?>
             <?php } ?>
         </div>
-
         <?php
-        echo Growtype_Art_Admin_Pages::render_pagination('growtype-art-models', $total_images, $offset, $limit);
     }
 
     function show_message()

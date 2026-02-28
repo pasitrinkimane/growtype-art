@@ -27,12 +27,13 @@ class Fal_Base extends Growtype_Art_Generator_Base
 
     public function generate_image_init($params)
     {
+        error_log('Fal_Base params: ' . print_r($params, true));
         $apiKey = $params['token'];
         $url = 'https://queue.fal.run/fal-ai/flux-2/edit';
 
         $postData = [
             'prompt' => $params['prompt'],
-            'image_urls' => $params['image_urls'] ?? [],// Array of input image URLs
+            'image_urls' => !empty($params['image_urls']) ? $params['image_urls'] : ($params['reference_image_urls'] ?? []),// Array of input image URLs
             'image_size' => $params['image_size'] ?? self::DEFAULT_IMAGE_DIMENSIONS,
             'num_images' => $params['num_images'] ?? 1,
             'enable_safety_checker' => $params['enable_safety_checker'] ?? false,
@@ -136,6 +137,24 @@ class Fal_Base extends Growtype_Art_Generator_Base
             error_log('Growtype Art - Fal Base: Polling attempt ' . $i . ' for ' . $request_id . '. Response: ' . $body);
 
             // Completed
+            // Completed
+            if (isset($data['detail'])) {
+                $detail = is_array($data['detail']) ? json_encode($data['detail']) : $data['detail'];
+
+                if (strpos($detail, 'still in progress') !== false) {
+                    // fall through to sleep
+                } else {
+                    $message = $detail;
+                    if (is_array($data['detail']) && isset($data['detail'][0]['msg'])) {
+                        $message = $data['detail'][0]['msg'];
+                    }
+                    return [
+                        'success' => false,
+                        'message' => $message,
+                    ];
+                }
+            }
+
             if (!empty($data['images'])) {
                 return [
                     'success' => true,

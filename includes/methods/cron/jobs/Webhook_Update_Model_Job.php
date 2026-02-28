@@ -18,7 +18,8 @@ class Webhook_Update_Model_Job
 
             $characters = array_values($characters);
 
-            $featured_in_domains = json_decode($model_details['settings']['featured_in'], true);
+            $featured_in_json = isset($model_details['settings']['featured_in']) ? $model_details['settings']['featured_in'] : null;
+            $featured_in_domains = $featured_in_json ? json_decode($featured_in_json, true) : [];
             $featured_in_domains = !empty($featured_in_domains) ? $featured_in_domains : [];
 
             foreach ($featured_in_domains as $featured_in_domain) {

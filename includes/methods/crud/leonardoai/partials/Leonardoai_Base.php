@@ -778,7 +778,7 @@ class Leonardoai_Base extends Growtype_Art_Generator_Base
                 'grouped',
                 $generation['modelId'],
                 $generation['guidanceScale'],
-                preg_replace('/\s+/', '_', trim(substr($generation['prompt'], 0, 100))),
+                preg_replace('/\s+/', '_', trim(substr((string)($generation['prompt'] ?? ''), 0, 100))),
                 $generation['inferenceSteps'],
                 $generation['scheduler'],
                 $generation['coreModel'],

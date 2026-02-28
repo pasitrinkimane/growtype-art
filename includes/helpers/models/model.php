@@ -151,7 +151,12 @@ function growtype_art_model_format_prompt($prompt, $model_id)
         return '';
     }
 
-    $model_details = growtype_art_get_model_details($model_id);
+    $model_details = !empty($model_id) ? growtype_art_get_model_details($model_id) : [];
+
+    if (empty($model_details)) {
+        return $prompt;
+    }
+
     $prompt_variables = isset($model_details['settings']['prompt_variables']) ? $model_details['settings']['prompt_variables'] : null;
     $prompt_variables = !empty($prompt_variables) ? explode('|', $prompt_variables) : null;
 
@@ -180,8 +185,6 @@ function growtype_art_model_format_prompt($prompt, $model_id)
  */
 function growtype_art_format_prompt_with_params($prompt, $params)
 {
-    error_log('Growtype Art - Formatting prompt. Params: ' . (is_string($params) ? $params : json_encode($params)));
-    
     if (empty($prompt) || empty($params)) {
         return $prompt;
     }
@@ -235,10 +238,7 @@ function growtype_art_format_prompt_with_params($prompt, $params)
         }
     }
 
-    error_log('Growtype Art - Formatted params: ' . json_encode($formatted_params));
-
     foreach ($formatted_params as $key => $value) {
-        error_log('Growtype Art - Replacing {' . $key . '} with ' . $value);
         $prompt = str_ireplace('{' . $key . '}', $value, $prompt);
     }
 
@@ -246,9 +246,122 @@ function growtype_art_format_prompt_with_params($prompt, $params)
 }
 
 /**
- * @param $prompt
- * @param $model_id
- * @return array|mixed|string|string[]
+ * Helper to find image ID by its URL in our custom table.
+ */
+function growtype_art_get_image_id_by_url($url)
+{
+    if (empty($url)) {
+        return null;
+    }
+
+    global $wpdb;
+    $table_name = $wpdb->prefix . Growtype_Art_Database::IMAGES_TABLE;
+
+    // Try to find the image by URL. URL usually contains the name and extension.
+    $image_name = pathinfo($url, PATHINFO_FILENAME);
+    
+    // We can also try a direct match if we store the full URL or a relative path.
+    // However, looking at the schema, we store 'name', 'extension', 'folder'.
+    // A better way would be to query by the filename if it's unique enough or use a more robust lookup.
+    
+    // For now, let's try to match by name as it's often unique in our system.
+    $image_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $table_name WHERE name = %s LIMIT 1",
+        $image_name
+    ));
+
+    return $image_id;
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * PROVIDER LOOP REFACTORING
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * Helper to parse a provider entry and prepare generator data.
+ */
+function growtype_art_get_provider_executor_data($entry, $params, $global_models = [])
+{
+    $name = is_string($entry) ? $entry : ($entry['provider'] ?? '');
+    if (empty($name)) return null;
+
+    $class_name = sprintf('\partials\%s_Base', ucfirst($name));
+    if (!class_exists($class_name)) return null;
+
+    $models = [];
+    if (is_array($entry) && (isset($entry['model']) || isset($entry['models']))) {
+        $models_raw = $entry['models'] ?? $entry['model'];
+        $models = is_array($models_raw) ? $models_raw : [$models_raw];
+    } else {
+        $models = !empty($global_models) ? $global_models : [null];
+    }
+
+    $iteration_params = $params;
+    if (is_array($entry)) {
+        foreach ($entry as $key => $val) {
+            if ($key !== 'provider' && $key !== 'model' && $key !== 'models') {
+                $iteration_params[$key] = $val;
+            }
+        }
+    }
+
+    return [
+        'name' => $name,
+        'class_name' => $class_name,
+        'models' => $models,
+        'params' => $iteration_params
+    ];
+}
+
+/**
+ * Standard loop to try multiple providers/models.
+ */
+function growtype_art_execute_with_fallback($providers, $params, $callback, $global_models = [])
+{
+    $generate_details = ['success' => false];
+
+    foreach ($providers as $entry) {
+        $executor = growtype_art_get_provider_executor_data($entry, $params, $global_models);
+        if (!$executor) continue;
+
+        $crud = new $executor['class_name']();
+
+        foreach ($executor['models'] as $model_slug) {
+            $iteration_params = $executor['params'];
+            if ($model_slug !== null) {
+                $iteration_params['segmind_model'] = $model_slug;
+                $iteration_params['model'] = $model_slug;
+            }
+
+            try {
+                $current_details = $callback($crud, $iteration_params, $model_slug);
+            } catch (Exception $e) {
+                $current_details = ['success' => false, 'message' => $e->getMessage()];
+            } catch (Error $e) {
+                $current_details = ['success' => false, 'message' => $e->getMessage()];
+            }
+
+            if ($current_details['success']) {
+                $current_details['provider'] = $executor['name'];
+                $current_details['model_used'] = $model_slug;
+                return $current_details;
+            }
+
+            if (empty($generate_details['message']) || !$generate_details['success']) {
+                $generate_details = $current_details;
+                $generate_details['provider'] = $executor['name'];
+                $generate_details['failed_model'] = $model_slug;
+            }
+        }
+    }
+
+    return $generate_details;
+}
+
+/**
+ * Generate image for a model.
  */
 function growtype_art_generate_model_image($model_id, $params = [])
 {
@@ -258,79 +371,34 @@ function growtype_art_generate_model_image($model_id, $params = [])
     if (empty($providers)) {
         $providers = Growtype_Art_Crud::API_GENERATE_IMAGE_PROVIDERS;
         shuffle($providers);
-
         if (in_array($model_provider, $providers)) {
             $providers = array_diff($providers, [$model_provider]);
             array_unshift($providers, $model_provider);
         }
     }
 
-    $generate_details = [
-        'success' => false
-    ];
-
-    foreach ($providers as $provider) {
-
-
-        $provider_class_name = sprintf('\partials\%s_Base', ucfirst($provider));
-
-        if (class_exists($provider_class_name)) {
-            $crud = new $provider_class_name();
-
-            $generate_details = $crud->generate_model_image($model_id, $params);
-
-//            error_log(sprintf('GENERATING MODEL IMAGE for provider: %s. Details are: %s', strtoupper($provider), print_r($generate_details, true)));
-
-            if ($generate_details['success']) {
-                $generate_details['provider'] = $provider;
-                break;
-            }
-        }
-    }
-
-    return $generate_details;
+    return growtype_art_execute_with_fallback($providers, $params, function ($crud, $p) use ($model_id) {
+        return $crud->generate_model_image($model_id, $p);
+    });
 }
 
 /**
- * @param $prompt
- * @param $model_id
- * @return array|mixed|string|string[]
+ * Generate video for a model.
  */
 function growtype_art_generate_model_video($model_id, $params = [])
 {
     $providers = $params['providers'] ?? [];
-    $model_provider = growtype_art_get_model_details($model_id)['provider'] ?? '';
-
     if (empty($providers)) {
         $providers = Growtype_Art_Crud::API_GENERATE_VIDEO_PROVIDERS;
     }
 
-    $generate_details = [
-        'success' => false
-    ];
-
-    foreach ($providers as $provider) {
-        $provider_class_name = sprintf('\partials\%s_Base', ucfirst($provider));
-
-        if (class_exists($provider_class_name)) {
-            $crud = new $provider_class_name();
-
-            $generate_details = $crud->generate_model_video($model_id, $params);
-
-            if ($generate_details['success']) {
-                $generate_details['provider'] = $provider;
-                break;
-            }
-        }
-    }
-
-    return $generate_details;
+    return growtype_art_execute_with_fallback($providers, $params, function ($crud, $p) use ($model_id) {
+        return $crud->generate_model_video($model_id, $p);
+    });
 }
 
 /**
- * @param $prompt
- * @param $model_id
- * @return array|mixed|string|string[]
+ * Generate general image without specific model.
  */
 function growtype_art_generate_image($params = [])
 {
@@ -345,76 +413,7 @@ function growtype_art_generate_image($params = [])
         $params['reference_image_urls'] = [$params['reference_image_url']];
     }
 
-    $generate_details = [
-        'success' => false
-    ];
-
-    foreach ($providers as $provider_index => $provider) {
-        $provider_class_name = sprintf('\partials\%s_Base', ucfirst($provider));
-
-        if (!class_exists($provider_class_name)) {
-            continue;
-        }
-
-        $crud = new $provider_class_name();
-
-        // If single provider with multiple models, try each model
-        if (count($providers) === 1 && count($models) > 1) {
-            foreach ($models as $model) {
-                $params['model'] = $model;
-
-                try {
-                    $generate_details = $crud->generate_image($params);
-                } catch (Exception $e) {
-                    $generate_details = [
-                        'success' => false,
-                        'message' => $e->getMessage()
-                    ];
-                } catch (Error $e) {
-                    $generate_details = [
-                        'success' => false,
-                        'message' => $e->getMessage()
-                    ];
-                }
-
-                if ($generate_details['success']) {
-                    $generate_details['provider'] = $provider;
-                    $generate_details['model'] = $model;
-                    return $generate_details;
-                }
-            }
-        } else {
-            // Original behavior: match model by provider index
-            if (isset($models[$provider_index])) {
-                $params['model'] = $models[$provider_index];
-            } elseif (isset($models[0])) {
-                // Single model provided, use it for all providers
-                $params['model'] = $models[0];
-            }
-
-            try {
-                $generate_details = $crud->generate_image($params);
-            } catch (Exception $e) {
-                $generate_details = [
-                    'success' => false,
-                    'message' => $e->getMessage()
-                ];
-            } catch (Error $e) {
-                $generate_details = [
-                    'success' => false,
-                    'message' => $e->getMessage()
-                ];
-            }
-
-            if ($generate_details['success']) {
-                $generate_details['provider'] = $provider;
-                if (isset($params['model'])) {
-                    $generate_details['model'] = $params['model'];
-                }
-                break;
-            }
-        }
-    }
-
-    return $generate_details;
+    return growtype_art_execute_with_fallback($providers, $params, function ($crud, $p) {
+        return $crud->generate_image($p);
+    }, $models);
 }

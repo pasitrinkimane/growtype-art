@@ -58,6 +58,14 @@ class Replicate_Base
         }
 
         $params['token'] = $access_token;
+
+        if (is_string($params['reference_image'])) {
+            $params['reference_image'] = ['url' => $params['reference_image']];
+        }
+
+        if (isset($params['reference_image']['url']) && !isset($params['reference_image']['id'])) {
+            $params['reference_image']['id'] = growtype_art_get_image_id_by_url($params['reference_image']['url']);
+        }
         $params['prompt'] = $formatted_prompt;
         $params['generation_id'] = wp_generate_password(52, false);
         $params['model_id'] = $model_id;
@@ -187,17 +195,24 @@ class Replicate_Base
                 'image_prompt' => $params['prompt'],
             ];
 
-            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
-                'image_id' => $params['reference_image']['id'],
-                'meta_key' => 'video_url_image_id_' . $saved_image['id'],
-                'meta_value' => $saved_image['details']['url'],
-            ]);
+            $reference_image_id = $params['reference_image']['id'] ?? null;
+            if (empty($reference_image_id) && !empty($params['reference_image']['url'])) {
+                $reference_image_id = growtype_art_get_image_id_by_url($params['reference_image']['url']);
+            }
 
-            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
-                'image_id' => $saved_image['id'],
-                'meta_key' => 'parent_image_id',
-                'meta_value' => $params['reference_image']['id'],
-            ]);
+            if (!empty($reference_image_id)) {
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
+                    'image_id' => $reference_image_id,
+                    'meta_key' => 'video_url_image_id_' . $saved_image['id'],
+                    'meta_value' => $saved_image['details']['url'],
+                ]);
+
+                Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
+                    'image_id' => $saved_image['id'],
+                    'meta_key' => 'parent_image_id',
+                    'meta_value' => $reference_image_id,
+                ]);
+            }
         }
 
         do_action('growtype_art_model_update', $model_id);

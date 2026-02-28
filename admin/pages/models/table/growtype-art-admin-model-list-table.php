@@ -161,7 +161,7 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
         $hidden = $this->get_hidden_columns();
         $sortable = $this->get_sortable_columns();
 
-        $search_value = isset($_REQUEST['s']) ? $_REQUEST['s'] : '';
+        $search_value = isset($_REQUEST['s']) && is_scalar($_REQUEST['s']) ? $_REQUEST['s'] : '';
 
         $paged = $this->get_pagenum();
 
@@ -192,7 +192,7 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
             $args['values'] = $bundle_ids;
         }
 
-        if (empty($search_value) && isset($_REQUEST['filter_models_action']) && !empty($_REQUEST['filter_models_action'])) {
+        if (empty($search_value) && isset($_REQUEST['filter_models_action']) && is_scalar($_REQUEST['filter_models_action']) && !empty($_REQUEST['filter_models_action'])) {
             $take_all_records = false;
             $args['search'] = $_REQUEST['filter_models_action'];
         }
@@ -217,12 +217,9 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
 //        }
 
         if (!$take_all_records) {
-            $query_args = $args;
-            $query_args['limit'] = null;
-            $query_args['offset'] = 0;
-            $total_items = count(Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODELS_TABLE, [$query_args]));
+            $total_items = Growtype_Art_Database_Crud::count_records(Growtype_Art_Database::MODELS_TABLE, [$args]);
         } else {
-            $total_items = count(Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODELS_TABLE));
+            $total_items = Growtype_Art_Database_Crud::count_records(Growtype_Art_Database::MODELS_TABLE);
         }
 
         $this->items = $items;
@@ -453,17 +450,19 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
     public function column_images($row = null)
     {
         $model_images = growtype_art_get_model_images_grouped($row['id'])['original'] ?? [];
-        $model_images = array_filter($model_images, function ($file) {
-            return strtolower($file['extension']) !== 'mp4';
-        });
         $model_images = array_slice(array_reverse($model_images), 0, 3);
         ?>
-        <div style="display: flex;flex-wrap: wrap;">
+        <div style="display: flex;flex-wrap: wrap;gap: 5px;">
             <?php foreach ($model_images as $image) {
                 $image_url = growtype_art_get_image_url($image['id']);
+                $is_video = strtolower($image['extension']) === 'mp4';
                 ?>
                 <div style="max-width: 200px;">
-                    <img src="<?php echo $image_url ?>" alt="" style="max-width: 100%;" loading="lazy">
+                    <?php if ($is_video) : ?>
+                        <video src="<?php echo $image_url ?>" style="max-width: 100%;" autoplay muted loop playsinline></video>
+                    <?php else : ?>
+                        <img src="<?php echo $image_url ?>" alt="" style="max-width: 100%;" loading="lazy">
+                    <?php endif; ?>
                 </div>
             <?php } ?>
         </div>

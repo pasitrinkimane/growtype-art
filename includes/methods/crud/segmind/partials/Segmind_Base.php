@@ -25,34 +25,41 @@ class Segmind_Base extends Growtype_Art_Generator_Base
     public function get_models()
     {
         return [
-            'seedream-4' => [
-                'url' => 'https://api.segmind.com/v1/seedream-4',
-                'is_nsfw' => false,
-            ],
-            'fast-flux-schnell' => [
-                'url' => 'https://api.segmind.com/v1/fast-flux-schnell',
-                'is_nsfw' => false,
-            ],
-            'p-image' => [
-                'url' => 'https://api.segmind.com/v1/p-image',
-                'is_nsfw' => false,
-            ],
-            'qwen-image-fast' => [
-                'url' => 'https://api.segmind.com/v1/qwen-image-fast',
-                'is_nsfw' => false,
-            ],
-            'ssd-1b' => [
-                'url' => 'https://api.segmind.com/v1/ssd-1b',
-                'is_nsfw' => false,
-            ],
             'z-image-turbo' => [
                 'url' => 'https://api.segmind.com/v1/z-image-turbo',
                 'test_url' => 'https://www.segmind.com/models/z-image-turbo',
                 'is_nsfw' => true,
+                'rating' => 9
+            ],
+            'p-image' => [
+                'url' => 'https://api.segmind.com/v1/p-image',
+                'is_nsfw' => false,
+                'rating' => 9
+            ],
+            'seedream-4' => [
+                'url' => 'https://api.segmind.com/v1/seedream-4',
+                'is_nsfw' => false,
+                'rating' => 8
+            ],
+            'fast-flux-schnell' => [
+                'url' => 'https://api.segmind.com/v1/fast-flux-schnell',
+                'is_nsfw' => false,
+                'rating' => 7
+            ],
+            'ssd-1b' => [
+                'url' => 'https://api.segmind.com/v1/ssd-1b',
+                'is_nsfw' => false,
+                'rating' => 6
             ],
             'sdxl1.0-txt2img' => [
                 'url' => 'https://api.segmind.com/v1/sdxl1.0-txt2img',
                 'is_nsfw' => false,
+                'rating' => 5
+            ],
+            'qwen-image-fast' => [
+                'url' => 'https://api.segmind.com/v1/qwen-image-fast',
+                'is_nsfw' => false,
+                'rating' => 5
             ],
         ];
     }
@@ -112,7 +119,7 @@ class Segmind_Base extends Growtype_Art_Generator_Base
             "height" => $params['height'] ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
             "seed" => $params['seed'] ?? -1,
             "max_images" => 1,
-            "aspect_ratio" => $params['aspect_ratio'] ?? "3:4",
+            "aspect_ratio" => $params['aspect_ratio'] ?? "9:16",
             "disable_safety_checker" => $params['disable_safety_checker'] ?? $is_nsfw,
         ];
 
@@ -153,8 +160,6 @@ class Segmind_Base extends Growtype_Art_Generator_Base
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         curl_close($ch);
-
-        error_log(sprintf('Growtype Art - Segmind (%s): Raw Response: %s', $model_slug, $response));
 
         if (!empty($response) && is_string($response)) {
             $response_decoded = json_decode($response, true);

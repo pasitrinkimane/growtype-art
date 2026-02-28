@@ -214,14 +214,14 @@ class Growtype_Art_Api_Character
         }
 
         $characters = [];
-        if (empty($unique_hashes) && !$ignore_transient) {
+        $is_cacheable = ($limit <= 1000);
+
+        if ($is_cacheable && empty($unique_hashes) && !$ignore_transient) {
             $characters = get_transient($transient_key);
 
-            if (is_array($characters) && empty($characters)) {
-                return wp_send_json([
-                    'success' => false,
-                    'message' => 'Empty characters'
-                ], 200);
+            if (is_array($characters) && !empty($characters)) {
+            } elseif (is_array($characters)) {
+                $characters = []; // Treat empty as "not found" to force DB check
             }
         }
 
@@ -245,6 +245,7 @@ class Growtype_Art_Api_Character
                 ];
 
                 $return_data = growtype_art_get_featured_in_group_models($group_params);
+                $return_data = growtype_art_get_featured_in_group_models($group_params);
             } catch (Exception $e) {
                 return wp_send_json([
                     'success' => false,
@@ -254,7 +255,13 @@ class Growtype_Art_Api_Character
 
             $characters = [];
             foreach ($return_data as $return_data_single) {
-                $total_images = array_merge($return_data_single['cover_images'] ?? [], $return_data_single['featured_images'] ?? [], $return_data_single['public_images'] ?? [], $return_data_single['naked_images'] ?? [], $return_data_single['erotic_images'] ?? []);
+                $total_images = array_merge(
+                    $return_data_single['cover_images'] ?? [],
+                    $return_data_single['featured_images'] ?? [],
+                    $return_data_single['public_images'] ?? [],
+                    $return_data_single['naked_images'] ?? [],
+                    $return_data_single['erotic_images'] ?? []
+                );
 
                 if (!$include_with_empty_images && count($total_images) < 2) {
                     continue;
@@ -263,18 +270,21 @@ class Growtype_Art_Api_Character
                 array_push($characters, $return_data_single);
             }
 
-            if (!empty($transient_key)) {
-                set_transient($transient_key, $characters, 60 * 60 * 24);
+
+            if ($is_cacheable && !empty($transient_key)) {
+                $expiration = !empty($characters) ? (60 * 60 * 24) : 60;
+                set_transient($transient_key, $characters, $expiration);
             }
         }
 
         if (empty($characters)) {
             return wp_send_json([
-                'success' => false,
-                'message' => 'Empty characters',
-                'transient_key' => $transient_key,
-                'params' => $params,
-            ], 400);
+                'success' => true,
+                'params' => [
+                    'characters' => [],
+                ],
+                'message' => 'No more characters found',
+            ], 200);
         }
 
         if (!empty($model_ids)) {
@@ -530,7 +540,21 @@ class Growtype_Art_Api_Character
     function generate_image_callback($data)
     {
         $params = $data->get_params();
-        error_log('Growtype Art - API generate_image_callback. Params: ' . json_encode($params));
+        
+        $reference_image_urls = [];
+        if (isset($params['reference_files']) && is_array($params['reference_files'])) {
+            foreach ($params['reference_files'] as $file) {
+                if (isset($file['url'])) {
+                    $reference_image_urls[] = $file['url'];
+                }
+            }
+        }
+        
+        if (!empty($reference_image_urls)) {
+             $params['reference_image_urls'] = $reference_image_urls;
+        }
+
+        $params['save_to_db'] = false;
 
         $generate_details = growtype_art_generate_image($params);
 
@@ -891,7 +915,18 @@ class Growtype_Art_Api_Character
             return in_array($type, ['nsfw', 'nudity', 'porn', 'private']);
         });
         $user_id = isset($params['user_id']) ? $params['user_id'] : null;
-        $reference_image_urls = isset($params['reference_image_urls']) ? $params['reference_image_urls'] : [];
+        $reference_image_urls = [];
+        if (isset($params['reference_files']) && is_array($params['reference_files'])) {
+            foreach ($params['reference_files'] as $file) {
+                if (isset($file['url'])) {
+                    $reference_image_urls[] = $file['url'];
+                }
+            }
+        }
+        
+        if (empty($reference_image_urls)) {
+             $reference_image_urls = isset($params['reference_image_urls']) ? $params['reference_image_urls'] : ($params['image_urls'] ?? []);
+        }
 
 //        shuffle($providers);
 
@@ -999,7 +1034,6 @@ class Growtype_Art_Api_Character
     {
         $params = $data->get_params();
         $files = $data->get_file_params();
-        error_log(sprintf('Upload character content callback: %s', print_r($params, true)));
         $model_id = isset($params['model_id']) ? $params['model_id'] : null;
         $slug = isset($params['slug']) ? $params['slug'] : null;
         $character_name = isset($params['character_name']) ? $params['character_name'] : null;

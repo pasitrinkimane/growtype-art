@@ -54,10 +54,11 @@ class Pollinations_Base extends Growtype_Art_Generator_Base
 
     public function generate_image_init($params)
     {
-        // Define base API URL
         $base_url = "https://image.pollinations.ai/prompt/";
 
-        // Default query parameters
+        // Pollinations recently started returning Cloudflare 530 errors for any query parameters.
+        // We still build the full URL first, but fallback to a minimal URL without query params
+        // if the response is not an image.
         $default_query_data = [
             "model" => "flux",
             "seed" => (int)Growtype_Art_Crud::generate_seed(),
@@ -70,64 +71,76 @@ class Pollinations_Base extends Growtype_Art_Generator_Base
             "safe" => "false",
         ];
 
-        // Merge user-provided parameters with defaults
         $query_data = array_merge($default_query_data, $params['data'] ?? []);
 
-        // Construct final URL
-        $url = $base_url . urlencode($params['prompt']) . "?" . http_build_query($query_data);
+        $urls_to_try = [];
+        $urls_to_try[] = $base_url . urlencode($params['prompt']) . '?' . http_build_query($query_data);
+        // Fallback without any query parameters – current public endpoint still serves an image this way.
+        $urls_to_try[] = $base_url . urlencode($params['prompt']);
 
-        // Set headers
         $headers = [
             "Content-Type: application/json",
             "User-Agent: PHP-cURL"
         ];
 
-        // Initialize cURL
-        $ch = curl_init();
+        foreach ($urls_to_try as $url) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_HTTPGET, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_HTTPGET, true); // Explicitly set GET request
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $content_type = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            $error = curl_error($ch);
 
-        // Execute the request
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
+            curl_close($ch);
 
-        // Close cURL connection
-        curl_close($ch);
+            if ($error) {
+                // Try next URL on network errors
+                continue;
+            }
 
-        // Handle timeout or other cURL errors
-        if ($error) {
-            return [
-                'success' => false,
-                'errors' => [
-                    [
-                        'message' => "cURL Error: " . $error,
-                        'http_code' => $http_code
+            // If we didn't get a 200, try next URL before failing
+            if ($http_code !== 200) {
+                continue;
+            }
+
+            // If response is JSON, treat it as an error payload
+            $decoded = json_decode($response, true);
+            if ($decoded !== null) {
+                return [
+                    'success' => false,
+                    'errors' => [
+                        [
+                            'message' => $decoded['error'] ?? $decoded['message'] ?? 'Pollinations returned JSON instead of an image',
+                            'http_code' => $http_code,
+                        ]
                     ]
-                ]
-            ];
+                ];
+            }
+
+            // Accept only image content types
+            if ($content_type && strpos($content_type, 'image/') === 0) {
+                return [
+                    'success' => true,
+                    'imageBase64' => base64_encode($response)
+                ];
+            }
         }
 
-        // Check if response is valid JSON (error or metadata), otherwise it's image data
-        $decoded = json_decode($response, true);
-        if ($decoded !== null) {
-            // It's likely an error message or JSON response, not image data
-             return [
-                 'success' => true, // Or false if it's an error? Assuming success for now but normally Pollinations returns raw image.
-                 'data' => $decoded
-             ];
-        } else {
-             // It's raw image data.
-             return [
-                 'success' => true,
-                 'imageBase64' => base64_encode($response)
-             ];
-        }
+        // If all attempts failed, return a clear error instead of invalid base64
+        return [
+            'success' => false,
+            'errors' => [
+                [
+                    'message' => 'Pollinations did not return an image (HTTP ' . ($http_code ?? 'n/a') . ').',
+                    'http_code' => $http_code ?? 0
+                ]
+            ]
+        ];
     }
 }
-
