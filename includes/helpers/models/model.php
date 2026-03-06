@@ -110,7 +110,7 @@ function growtype_art_admin_update_bundle_keys($keys, $action)
 
 function growtype_art_get_model_images_group_stats($model_id, $type = 'original')
 {
-    $images = growtype_art_get_model_images_grouped($model_id)[$type] ?? [];
+    $images = growtype_art_get_model_images_grouped($model_id, 1000)[$type] ?? [];
 
     $nsfw = 0;
     $is_featured = 0;

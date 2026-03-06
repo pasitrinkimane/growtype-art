@@ -205,7 +205,7 @@ if (!function_exists('growtype_art_get_external_folder_url')) {
  * Save image
  */
 if (!function_exists('growtype_art_get_model_images_grouped')) {
-    function growtype_art_get_model_images_grouped($model_id, $limit = 10, $offset = 0)
+    function growtype_art_get_model_images_grouped($model_id, $limit = 10, $offset = 0, $params = [])
     {
         global $wpdb;
 
@@ -214,16 +214,40 @@ if (!function_exists('growtype_art_get_model_images_grouped')) {
         $images_table = $wpdb->prefix . 'growtype_art_images';
         $settings_table = $wpdb->prefix . 'growtype_art_image_settings';
 
-        // Step 1: Get 10 distinct image IDs ordered by created_at DESC
+        $filter = $params['filter'] ?? '';
+        $filter_query = "";
+        $query_args = [$model_id];
+
+        if (!empty($filter)) {
+            $map = [
+                'erotic' => 'nsfw',
+                'nsfw' => 'nsfw',
+                'nudity' => 'nudity',
+                'featured' => 'is_featured',
+                'cover' => 'is_cover',
+                'porn' => 'porn',
+                'private' => 'private'
+            ];
+
+            $meta_key = $map[strtolower($filter)] ?? $filter;
+            $filter_query = "INNER JOIN {$settings_table} AS fs ON fs.image_id = i.id AND fs.meta_key = %s AND fs.meta_value = '1'";
+            $query_args = [$meta_key, $model_id];
+        }
+
+        $query_args[] = (int)$limit;
+        $query_args[] = (int)$offset;
+
+        // Step 1: Get distinct image IDs ordered by created_at DESC
         $image_ids_query = Growtype_Art_Database_Crud::custom_query("
         SELECT i.id
         FROM {$models_table} AS m
         INNER JOIN {$pivot_table} AS mi ON mi.model_id = m.id
         INNER JOIN {$images_table} AS i ON i.id = mi.image_id
+        {$filter_query}
         WHERE m.id = %d
         ORDER BY i.created_at DESC
         LIMIT %d OFFSET %d
-    ", [$model_id, $limit, $offset]);
+    ", $query_args);
 
         $image_ids = array_column($image_ids_query, 'id');
 
@@ -364,16 +388,37 @@ if (!function_exists('growtype_art_get_model_details')) {
     }
 }
 
-function growtype_art_get_model_total_images_amount($model_id)
+function growtype_art_get_model_total_images_amount($model_id, $params = [])
 {
     global $wpdb;
 
+    $filter = $params['filter'] ?? '';
+    $filter_query = "";
+    $query_args = [$model_id];
+
+    if (!empty($filter)) {
+        $map = [
+            'erotic' => 'nsfw',
+            'nsfw' => 'nsfw',
+            'nudity' => 'nudity',
+            'featured' => 'is_featured',
+            'cover' => 'is_cover',
+            'porn' => 'porn',
+            'private' => 'private'
+        ];
+
+        $meta_key = $map[strtolower($filter)] ?? $filter;
+        $filter_query = "INNER JOIN {$wpdb->prefix}growtype_art_image_settings AS fs ON fs.image_id = mi.image_id AND fs.meta_key = %s AND fs.meta_value = '1'";
+        $query_args = [$meta_key, $model_id];
+    }
+
     return (int)$wpdb->get_var(
         $wpdb->prepare("
-        SELECT COUNT(*) 
-        FROM {$wpdb->prefix}growtype_art_model_image 
-        WHERE model_id = %d
-    ", $model_id)
+        SELECT COUNT(DISTINCT mi.image_id) 
+        FROM {$wpdb->prefix}growtype_art_model_image AS mi
+        {$filter_query}
+        WHERE mi.model_id = %d
+    ", $query_args)
     );
 }
 

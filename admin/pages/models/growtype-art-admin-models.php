@@ -128,8 +128,9 @@ class Growtype_Art_Admin_Models
         $action = isset($_GET['action']) ? $_GET['action'] : '';
         $offset = isset($_GET['offset']) ? $_GET['offset'] : 0;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+        $filter = isset($_GET['filter']) ? $_GET['filter'] : '';
 
-        $total_images = $action === 'edit' ? growtype_art_get_model_total_images_amount($id) : 0;
+        $total_images = $action === 'edit' ? growtype_art_get_model_total_images_amount($id, ['filter' => $filter]) : 0;
 
         $title = $action === 'edit' ? (__('Edit records id', 'growtype-art') . ': ' . $id) : __('Models', 'growtype-art') . ' ' . sprintf('<a href="?page=%s&action=%s" class="page-title-action">' . __('Add new', 'growtype-art') . '</a>', $_REQUEST['page'], 'create-model');
         ?>
@@ -156,7 +157,7 @@ class Growtype_Art_Admin_Models
             <?php } ?>
 
             <?php if ($action === 'edit') {
-                $grouped_images = growtype_art_get_model_images_grouped($id, 1000, 0);
+                $grouped_images = growtype_art_get_model_images_grouped($id, 1000, 0, ['filter' => $filter]);
 
                 $grouped_by_basename = [];
 
@@ -174,6 +175,24 @@ class Growtype_Art_Admin_Models
                         $grouped_by_basename[$group_key][$group_id][] = $group_image;
                     }
                 }
+
+                ?>
+                <div class="filter-select" style="margin-bottom: 20px;">
+                    <strong>Filter:</strong>
+                    <select onchange="window.location.href=this.value">
+                        <option value="<?= remove_query_arg('filter') ?>" <?= empty($filter) ? 'selected' : '' ?>>All</option>
+                        <option value="<?= add_query_arg('filter', 'erotic') ?>" <?= $filter === 'erotic' ? 'selected' : '' ?>>EROTIC</option>
+                        <option value="<?= add_query_arg('filter', 'nudity') ?>" <?= $filter === 'nudity' ? 'selected' : '' ?>>Nudity</option>
+                        <option value="<?= add_query_arg('filter', 'cover') ?>" <?= $filter === 'cover' ? 'selected' : '' ?>>Cover</option>
+                        <option value="<?= add_query_arg('filter', 'featured') ?>" <?= $filter === 'featured' ? 'selected' : '' ?>>Featured</option>
+                        <option value="<?= add_query_arg('filter', 'porn') ?>" <?= $filter === 'porn' ? 'selected' : '' ?>>Porn</option>
+                        <option value="<?= add_query_arg('filter', 'private') ?>" <?= $filter === 'private' ? 'selected' : '' ?>>Private</option>
+                    </select>
+                </div>
+
+                <?php if (empty($grouped_by_basename)) { ?>
+                    <p>No images found matching this filter.</p>
+                <?php }
 
                 foreach ($grouped_by_basename as $group_key => $images_group) {
                     if (empty($images_group)) {
