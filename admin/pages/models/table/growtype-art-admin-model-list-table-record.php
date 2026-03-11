@@ -863,7 +863,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
     {
         $model_details = growtype_art_get_model_details($id);
 
-        $character_details = [];
+        $character_details = growtype_art_get_model_character_default_data();
         foreach ($model_details['settings'] as $key => $model_setting) {
             if (strpos($key, 'character_') === false || $key === 'data_for_generating_character_details') {
                 continue;
@@ -879,8 +879,8 @@ class Growtype_Art_Admin_Model_List_Table_Record
             $models_settings[$key] = $model_setting;
         }
 
-        $model_slug = $models_settings['slug'];
-        $featured_in = $models_settings['featured_in'];
+        $model_slug = $models_settings['slug'] ?? '';
+        $featured_in = $models_settings['featured_in'] ?? [];
 
         $model_settings_collected_keys = [
             'tags',
@@ -916,8 +916,12 @@ class Growtype_Art_Admin_Model_List_Table_Record
         $models_settings_reordered += $models_settings;
 
         if (!empty($model_slug)) {
-            $featured_in_values = json_decode($featured_in, true);
-            $featured_in_values = !empty($featured_in_values) ? $featured_in_values : [];
+            if (is_array($featured_in)) {
+                $featured_in_values = $featured_in;
+            } else {
+                $featured_in_values = json_decode((string)$featured_in, true);
+                $featured_in_values = is_array($featured_in_values) ? $featured_in_values : [];
+            }
 
             foreach ($featured_in_values as $featured_in_value) {
                 $profile_url = sprintf('https://' . $featured_in_value . '.com/profile/%s', $model_slug);
@@ -1003,6 +1007,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
                                     'character_gpt_personality_extension',
                                     'character_intro_message',
                                     'character_can_answer_to_questions',
+                                    'character_intro_actions_message',
                                     'character_popular_topics_to_discuss',
                                     'character_dreams',
                                 ])) { ?>
@@ -1218,4 +1223,3 @@ class Growtype_Art_Admin_Model_List_Table_Record
         <?php
     }
 }
-

@@ -141,8 +141,8 @@ if (!function_exists('growtype_art_save_external_file')) {
                     curl_setopt($ch, CURLOPT_FILE, $fp);
                     curl_setopt($ch, CURLOPT_HEADER, 0);
                     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Follow redirects
-                    curl_setopt($ch, CURLOPT_MAXREDIRS, 5);         // Maximum redirects to follow
-                    curl_setopt($ch, CURLOPT_TIMEOUT, 30);          // Set timeout limit
+                    curl_setopt($ch, CURLOPT_MAXREDIRS, 5); // Maximum redirects to follow
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Set timeout limit
 
                     // Custom Headers
                     curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -989,6 +989,7 @@ if (!function_exists('growtype_art_get_model_character_default_data')) {
             'character_gpt_personality_extension' => '',
             'character_intro_message' => "",
             'character_can_answer_to_questions' => "",
+            'character_intro_actions_message' => "",
             'character_popular_topics_to_discuss' => "",
             'character_title' => "Olivia Wright",
             'character_description' => "A traveler with an insatiable wanderlust for both the world and the senses.",
@@ -1228,11 +1229,15 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
         ";
 
         // Sanitize all params - force strings for %s, ensure no NULLs
-        $query_params = array_map(function($p) { return (is_null($p) ? '' : $p); }, $query_params);
+        $query_params = array_map(function ($p) {
+            return (is_null($p) ? '' : $p);
+        }, $query_params);
         $query_params[] = (int)$limit;
         $query_params[] = (int)$offset;
-        
-        $sanitized_keys = array_map(function($k) { return (string)$k; }, $required_keys);
+
+        $sanitized_keys = array_map(function ($k) {
+            return (string)$k;
+        }, $required_keys);
         $query_params = array_merge($query_params, $sanitized_keys);
 
         $prepared_query = $wpdb->prepare($query_settings, $query_params);
@@ -1259,6 +1264,7 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
                        MAX(CASE WHEN IMGS.meta_key = 'private' THEN IMGS.meta_value END) AS private,
                        MAX(CASE WHEN IMGS.meta_key = 'generation_id' THEN IMGS.meta_value END) AS generation_id,
                        MAX(CASE WHEN IMGS.meta_key = 'nudity' THEN IMGS.meta_value END) AS nudity,
+                       MAX(CASE WHEN IMGS.meta_key = 'is_intro_asset' THEN IMGS.meta_value END) AS is_intro_asset,
                 GROUP_CONCAT(
                     CASE WHEN IMGS.meta_key LIKE 'video_url%'
                     THEN CONCAT(IMGS.meta_key, ':', IMGS.meta_value)
@@ -1268,7 +1274,7 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
                 FROM {$wpdb->prefix}growtype_art_model_image AS MI
                 LEFT JOIN {$wpdb->prefix}growtype_art_images AS IM ON MI.image_id = IM.id
                 LEFT JOIN {$wpdb->prefix}growtype_art_image_settings AS IMGS ON MI.image_id = IMGS.image_id
-                    AND (IMGS.meta_key IN ('nsfw', 'is_featured', 'is_cover', 'private', 'generation_id', 'nudity') OR IMGS.meta_key LIKE 'video_url%')
+                    AND (IMGS.meta_key IN ('nsfw', 'is_featured', 'is_cover', 'private', 'generation_id', 'nudity', 'is_intro_asset') OR IMGS.meta_key LIKE 'video_url%')
                 WHERE MI.model_id IN ($batch_placeholders)
                 GROUP BY MI.model_id, MI.image_id
             ";
@@ -1278,8 +1284,12 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
             }
 
             // Sanitize batch for safety
-            $batch = array_map(function($id) { return (int)($id ?? 0); }, $batch);
-            if (empty($batch)) continue;
+            $batch = array_map(function ($id) {
+                return (int)($id ?? 0);
+            }, $batch);
+            if (empty($batch)) {
+                continue;
+            }
 
             $prepared_image_query = $wpdb->prepare($query_image_with_settings, $batch);
 
@@ -1310,6 +1320,8 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
                 $group_name = 'private_images';
             } elseif (str_contains($image_name, 'thumbnail')) {
                 $group_name = 'thumbnail_images';
+            } elseif ($image['is_intro_asset']) {
+                $group_name = 'intro_asset_images';
             } elseif ($image['is_cover']) {
                 $group_name = 'cover_images';
             } elseif ($image['is_featured']) {
@@ -1452,6 +1464,8 @@ if (!function_exists('growtype_art_get_featured_in_group_models')) {
                          'naked_images',
                          'naked_videos',
                          'thumbnail_images',
+                         'intro_asset_images',
+                         'intro_asset_videos',
                      ] as $type) {
                 if (!isset($return_data[$model_id][$type]) && isset($images_grouped[$model_id][$type])) {
                     $return_data[$model_id][$type] = array_values($images_grouped[$model_id][$type]);

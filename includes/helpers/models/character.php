@@ -578,6 +578,7 @@ function growtype_art_generate_character_details($character_title)
             "character_hair_color" => "Dark brown",
             "character_breast_size" => "medium",
             "character_butt_size" => "medium",
+            "character_intro_actions_message" => "Feeling a bit shy? 🫦 Pick one of these and let’s get into trouble...",
             "character_popular_topics_to_discuss" => "Music and vocal techniques 🎶🎤 \r\nEvolution of pop music 🎤🎵 \r\nActing and performance 🎬⭐ \r\nConnecting with fans 💓💜 \r\nNavigating the entertainment industry 🎤📺 \r\nInfluence of personal experiences on art 📝💗 \r\nBalancing multiple careers 🎬🎤 \r\nImpact of social media on fame 📱💌 \r\nBuilding a lasting career in entertainment 🎤💌"
         ))
     );

@@ -23,6 +23,10 @@
     border: 10px solid red;
 }
 
+.wrap .image.is-intro-asset {
+    border: 10px solid pink;
+}
+
 .wrap .image.is-private {
     background: #00afff;
 }

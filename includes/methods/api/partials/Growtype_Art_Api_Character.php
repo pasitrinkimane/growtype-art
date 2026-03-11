@@ -245,7 +245,6 @@ class Growtype_Art_Api_Character
                 ];
 
                 $return_data = growtype_art_get_featured_in_group_models($group_params);
-                $return_data = growtype_art_get_featured_in_group_models($group_params);
             } catch (Exception $e) {
                 return wp_send_json([
                     'success' => false,
@@ -263,7 +262,7 @@ class Growtype_Art_Api_Character
                     $return_data_single['erotic_images'] ?? []
                 );
 
-                if (!$include_with_empty_images && count($total_images) < 2) {
+                if (!$include_with_empty_images && count($total_images) < 1) {
                     continue;
                 }
 
@@ -463,6 +462,7 @@ class Growtype_Art_Api_Character
                 'character_gpt_personality_extension',
                 'character_intro_message',
                 'character_can_answer_to_questions',
+                'character_intro_actions_message',
                 'character_popular_topics_to_discuss',
                 'face_swap_photos',
                 'faceswap_new_uploads',
