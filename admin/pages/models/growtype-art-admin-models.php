@@ -187,6 +187,7 @@ class Growtype_Art_Admin_Models
                         <option value="<?= add_query_arg('filter', 'featured') ?>" <?= $filter === 'featured' ? 'selected' : '' ?>>Featured</option>
                         <option value="<?= add_query_arg('filter', 'porn') ?>" <?= $filter === 'porn' ? 'selected' : '' ?>>Porn</option>
                         <option value="<?= add_query_arg('filter', 'private') ?>" <?= $filter === 'private' ? 'selected' : '' ?>>Private</option>
+                        <option value="<?= add_query_arg('filter', 'is_intro_asset') ?>" <?= $filter === 'is_intro_asset' ? 'selected' : '' ?>>Intro Asset</option>
                     </select>
                 </div>
 
