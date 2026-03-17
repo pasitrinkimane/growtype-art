@@ -22,10 +22,13 @@ class Growtype_Art_Crud
 
     const TOGETHERAI_KEY = 'togetherai'; // Not implemented
 
+    const XAI_KEY = 'xai';
+
     const NSFW_PROVIDERS = [
         self::RUNWARE_KEY,
         self::POLLINATIONS_KEY,
         self::FAL_KEY,
+        self::XAI_KEY,
 //        self::SEGMIND_KEY,
 //        self::FREEFLUX_KEY,
 //        self::WRITECREAM_KEY,
@@ -39,6 +42,7 @@ class Growtype_Art_Crud
         self::POLLINATIONS_KEY,
         self::AIEASE_KEY,
         self::PICLUMEN_KEY,
+        self::XAI_KEY,
     ];
 
     const API_GENERATE_VIDEO_PROVIDERS = [
@@ -50,6 +54,7 @@ class Growtype_Art_Crud
         self::GEMINI_KEY,
         self::RUNWARE_KEY,
         self::FAL_KEY,
+        self::XAI_KEY,
         self::POLLINATIONS_KEY
     ];
 
@@ -65,6 +70,7 @@ class Growtype_Art_Crud
         Growtype_Art_Crud::SEGMIND_KEY => Growtype_Art_Crud::SEGMIND_KEY,
         Growtype_Art_Crud::FAL_KEY => Growtype_Art_Crud::FAL_KEY,
         Growtype_Art_Crud::WRITECREAM_KEY => Growtype_Art_Crud::WRITECREAM_KEY,
+        Growtype_Art_Crud::XAI_KEY => Growtype_Art_Crud::XAI_KEY,
     ];
 
     const IMAGES_FOLDER_NAME = 'models';
@@ -126,6 +132,9 @@ class Growtype_Art_Crud
 
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/replicate/Replicate_Crud.php';
         new Replicate_Crud();
+
+        require_once GROWTYPE_ART_PATH . 'includes/methods/crud/xai/Xai_Crud.php';
+        new Xai_Crud();
 
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/cloudinary/Cloudinary_Crud.php';
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/tinypng/TinyPng_Crud.php';
