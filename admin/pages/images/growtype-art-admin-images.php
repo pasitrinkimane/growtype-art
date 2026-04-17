@@ -146,6 +146,7 @@ class Growtype_Art_Admin_Images
         $random = isset($_GET['random']) ? true : false;
         $limit = isset($_GET['limit']) ? $_GET['limit'] : 200;
         $mode = isset($_GET['mode']) ? $_GET['mode'] : 'grid';
+        $content_type = isset($_GET['content_type']) ? $_GET['content_type'] : '';
 
         $query_args = [
             [
@@ -154,6 +155,22 @@ class Growtype_Art_Admin_Images
                 'orderby' => 'id',
             ]
         ];
+
+        if (!empty($content_type)) {
+            $extensions = [];
+            if ($content_type === 'image') {
+                $extensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+            } elseif ($content_type === 'video') {
+                $extensions = ['mp4', 'webm', 'mov', 'm4v'];
+            } elseif ($content_type === 'audio') {
+                $extensions = ['mp3', 'wav', 'ogg', 'm4a'];
+            }
+
+            if (!empty($extensions)) {
+                $query_args[0]['key'] = 'extension';
+                $query_args[0]['values'] = $extensions;
+            }
+        }
 
         if ($random) {
             $query_args[0]['orderby'] = 'rand()';
@@ -203,15 +220,26 @@ class Growtype_Art_Admin_Images
         ?>
 
         <div class="wp-filter" style="display: flex;align-items: center;">
-            <div class="filter-items">
+            <div class="filter-items" style="display: flex; gap: 20px; align-items: center;">
                 <input type="hidden" name="mode" value="list">
                 <div class="view-switch">
                     <a href="<?= add_query_arg(['mode' => 'list']) ?>" class="view-list <?= $mode === 'list' ? 'current' : '' ?>" id="view-switch-list" aria-current="page"><span class="screen-reader-text">List view</span></a>
                     <a href="<?= add_query_arg(['mode' => 'grid']) ?>" class="view-grid <?= $mode === 'grid' ? 'current' : '' ?>" id="view-switch-grid"><span class="screen-reader-text">Grid view</span></a>
                 </div>
+
+                <div class="content-type-filter" style="display: flex; gap: 10px;">
+                    <a href="<?= remove_query_arg('content_type') ?>" class="button <?= empty($content_type) ? 'button-primary' : 'button-secondary' ?>">All</a>
+                    <a href="<?= add_query_arg(['content_type' => 'image']) ?>" class="button <?= $content_type === 'image' ? 'button-primary' : 'button-secondary' ?>">Images</a>
+                    <a href="<?= add_query_arg(['content_type' => 'video']) ?>" class="button <?= $content_type === 'video' ? 'button-primary' : 'button-secondary' ?>">Videos</a>
+                    <a href="<?= add_query_arg(['content_type' => 'audio']) ?>" class="button <?= $content_type === 'audio' ? 'button-primary' : 'button-secondary' ?>">Audio</a>
+                </div>
             </div>
 
-            <div class="bulk-actions" style="display: flex;gap: 10px;margin-left: 10px;">
+            <div style="display: flex;gap:10px;margin-left: auto;margin-left: 10px;margin-right: auto;">
+                <a href="/wp/wp-admin/admin.php?page=growtype-art&offset=500&random=1">RANDOM</a>
+            </div>
+
+            <div class="bulk-actions" style="display: flex;gap: 10px;margin-left: 10px;align-items: center;">
                 <div class="checkbox-group" style="display: flex;gap: 10px;">
                     <div class="checkbox-item">
                         <input type="checkbox" id="all_nsfw" name="all_nsfw">
@@ -226,29 +254,34 @@ class Growtype_Art_Admin_Images
                         <label for="all_porn">All Porn</label>
                     </div>
                 </div>
+                <button type="button" class="button button-primary bulk-apply">Apply</button>
             </div>
 
             <script>
-                jQuery('.bulk-actions input[type="checkbox"]').click(function (e) {
-                    let name = jQuery(this).attr('name');
-                    let isChecked = jQuery(this).is(':checked');
-                    let selected_key = name.replace('all_', '');
+                jQuery('.bulk-apply').click(function (e) {
+                    if (!confirm('Are you sure you want to change the status for these images?')) {
+                        return;
+                    }
 
-                    // Collect all the checkboxes that need to be clicked
-                    let checkboxes = jQuery('input[name^="settings[' + selected_key + ']"]');
+                    let totalDelay = 0;
+                    
+                    jQuery('.bulk-actions input[type="checkbox"]:checked').each(function() {
+                        let name = jQuery(this).attr('name');
+                        let selected_key = name.replace('all_', '');
 
-                    // Iterate over each checkbox with a delay between each click
-                    checkboxes.each(function (index, element) {
-                        setTimeout(function () {
-                            jQuery(element).click();
-                        }, index * 300); // 500ms delay for each checkbox
+                        // Collect all the checkboxes that need to be clicked
+                        let checkboxes = jQuery('input[name^="settings[' + selected_key + ']"]');
+
+                        // Iterate over each checkbox with a delay between each click
+                        checkboxes.each(function (index, element) {
+                            setTimeout(function () {
+                                jQuery(element).click();
+                            }, totalDelay);
+                            totalDelay += 300;
+                        });
                     });
                 });
             </script>
-
-            <div style="display: flex;gap:10px;margin-left: auto;">
-                <a href="/wp/wp-admin/admin.php?page=growtype-art&offset=500&random=1">RANDOM</a>
-            </div>
         </div>
 
         <?php
@@ -262,7 +295,13 @@ class Growtype_Art_Admin_Images
 
         $current_offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
-        $total_items = Growtype_Art_Database_Crud::table_total_records_amount('wp_growtype_art_images');
+
+        $count_params = null;
+        if (!empty($content_type)) {
+            $count_params = $query_args;
+        }
+
+        $total_items = Growtype_Art_Database_Crud::count_records(Growtype_Art_Database::IMAGES_TABLE, $count_params);
 
         echo Growtype_Art_Admin_Pages::render_pagination('growtype-art', $total_items, $current_offset, $limit);
 
@@ -352,8 +391,12 @@ class Growtype_Art_Admin_Images
         if (!empty($img_url)) { ?>
             <div class="image-preview">
                 <a href="<?php echo growtype_art_image_get_alternative_format($img_url) ?>?v=<?php echo self::IMAGE_VERSION ?>" target="_blank" style="min-height: 100px;width: 100%;display: flex;margin-bottom: 10px;">
-                    <?php if (in_array($image['extension'], ['jpg', 'jpeg', 'png', 'webp'])) { ?>
+                    <?php if (in_array($image['extension'], ['jpg', 'jpeg', 'png', 'webp', 'gif'])) { ?>
                         <img src="<?php echo growtype_art_image_get_alternative_format($img_url) ?>?v=<?php echo self::IMAGE_VERSION ?>" alt="" style="max-width: 100%;" loading="lazy">
+                    <?php } elseif (in_array($image['extension'], ['mp3', 'wav', 'ogg', 'm4a'])) { ?>
+                        <audio controls preload="none" style="width: 100%;">
+                            <source src="<?php echo $img_url ?>" type="audio/<?= $image['extension'] ?>">
+                        </audio>
                     <?php } else { ?>
                         <video width="100%" height="100%" controls loop muted preload="none" class="lazy-video">
                             <source type="video/mp4" data-src="<?php echo $img_url ?>">

@@ -312,7 +312,8 @@ class Growtype_Art_Api_Character
     {
         $params = $data->get_params();
 
-        $character_id = isset($params['id']) ? $params['id'] : null;
+        $character_id = isset($params['id']) ? (int)$params['id'] : null;
+        $featured_in  = isset($params['featured_in']) ? $params['featured_in'] : 'talkiemate';
 
         if (empty($character_id)) {
             return wp_send_json([
@@ -321,7 +322,44 @@ class Growtype_Art_Api_Character
             ], 400);
         }
 
-        d($character_id);
+        $options = growtype_art_get_model_featured_in_options();
+        if (!array_key_exists($featured_in, $options)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Invalid featured_in group',
+            ], 400);
+        }
+
+        try {
+            $return_data = growtype_art_get_featured_in_group_models([
+                'groups'     => [$featured_in],
+                'models_ids' => [$character_id],
+                'limit'      => 1,
+                'offset'     => 0,
+            ]);
+        } catch (Exception $e) {
+            return wp_send_json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+
+        $character = !empty($return_data) ? array_values($return_data)[0] : null;
+
+        if (empty($character)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Character not found',
+            ], 404);
+        }
+
+        return wp_send_json([
+            'success' => true,
+            'params'  => [
+                'character' => $character,
+            ],
+            'message' => 'Character retrieved successfully',
+        ], 200);
     }
 
     function generate_character_callback($data)
