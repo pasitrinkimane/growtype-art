@@ -34,10 +34,16 @@ class Xai_Base extends Growtype_Art_Generator_Base
             $image_url = $params['image_url'];
         }
 
+        if (!empty($image_url)) {
+            $url = 'https://api.x.ai/v1/images/edits';
+        } else {
+            $url = 'https://api.x.ai/v1/images/generations';
+        }
+
         $payload = [
             'model' => $params['model'] ?? 'grok-imagine-image',
             'prompt' => $params['prompt'] ?? '',
-            'aspect_ratio' => "2:3"
+            'aspect_ratio' => $params['aspect_ratio'] ?? "2:3"
         ];
 
         if (!empty($image_url)) {
@@ -52,59 +58,119 @@ class Xai_Base extends Growtype_Art_Generator_Base
             "Content-Type: application/json"
         ];
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        $max_retries = 0;
+        $retry_count = 0;
 
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
+//        var_dump($payload);
+//        die();
 
-        curl_close($ch);
+        do {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
 
-        if ($error) {
-            return [
-                'success' => false,
-                'message' => "cURL Error: " . $error
-            ];
-        }
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
 
-        $decoded = json_decode($response, true);
+            curl_close($ch);
 
-        if (json_last_error() === JSON_ERROR_NONE) {
-            if ($http_code >= 400) {
+            if ($error) {
+                error_log("XAI - cURL Error: " . $error);
                 return [
                     'success' => false,
-                    'message' => $decoded['error']['message'] ?? $decoded['error'] ?? "HTTP Error: $http_code"
+                    'message' => "cURL Error: " . $error
                 ];
             }
 
-            if (isset($decoded['data']) && is_array($decoded['data'])) {
-                $generations = [];
-                foreach ($decoded['data'] as $item) {
-                    if (isset($item['url'])) {
-                        $generations[] = ['url' => $item['url']];
-                    } elseif (isset($item['b64_json'])) {
-                        $generations[] = ['imageBase64' => $item['b64_json']];
+//                    var_dump($response);
+//        die();
+
+            $decoded = json_decode($response, true);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                if ($http_code >= 400) {
+                    $error_message = $decoded['error']['message'] ?? $decoded['error'] ?? 'Unknown error';
+                    error_log("XAI - API Error: HTTP $http_code - " . $error_message);
+                    error_log("XAI - Request URL: " . $url);
+                    error_log("XAI - Request Payload: " . json_encode($payload));
+
+                    // If moderation error and we have retries left, try again
+                    if ($http_code == 400 && strpos($error_message, 'content moderation') !== false && $retry_count < $max_retries) {
+                        $retry_count++;
+                        error_log("XAI - Content moderation error. Cleaning prompt and retrying ($retry_count/$max_retries)...");
+                        
+                        // Clean the prompt for the second try
+                        $payload['prompt'] = $this->clean_prompt($payload['prompt']);
+                        continue;
+                    }
+
+                    return [
+                        'success' => false,
+                        'message' => $error_message
+                    ];
+                }
+
+                if (isset($decoded['data']) && is_array($decoded['data'])) {
+                    $generations = [];
+                    foreach ($decoded['data'] as $item) {
+                        if (isset($item['url'])) {
+                            $generations[] = ['url' => $item['url']];
+                        } elseif (isset($item['b64_json'])) {
+                            $generations[] = ['imageBase64' => $item['b64_json']];
+                        }
+                    }
+                    if (!empty($generations)) {
+                        return ['success' => true, 'generations' => $generations];
                     }
                 }
-                if (!empty($generations)) {
-                    return ['success' => true, 'generations' => $generations];
-                }
+
+                $decoded['success'] = true;
+                return $decoded;
             }
 
-            $decoded['success'] = true;
-            return $decoded;
+            error_log("XAI - JSON Decode Error: " . json_last_error_msg() . " - Response: " . $response);
+
+            return [
+                'success' => false,
+                'raw_response' => $response,
+                'message' => 'Invalid JSON response from API'
+            ];
+        } while ($retry_count <= $max_retries);
+    }
+
+    /**
+     * Clean prompt by removing potentially problematic words that trigger moderation.
+     */
+    private function clean_prompt($prompt)
+    {
+        if (empty($prompt)) {
+            return $prompt;
         }
 
-        return [
-            'success' => false,
-            'raw_response' => $response,
-            'message' => 'Invalid JSON response from API'
+        // Common words that might trigger moderation in strict environments
+        $risky_words = [
+            'naked', 'nude', 'nsfw', 'porn', 'sex', 'erotic', 'sexy', 'hot',
+            'lingerie', 'underwear', 'bra', 'panties', 'bikini', 'thong',
+            'blood', 'gore', 'violent', 'death', 'kill',
+            'breast', 'breasts', 'butt', 'buttocks', 'vagina', 'penis', 'cock', 'pussy',
+            'curves', 'curvy', 'teasing', 'sensual', 'suggestive', 'arching', 'bedroom',
+            'cleavage', 'ass', 'thigh', 'pose', 'lingerie', 'thong'
         ];
+
+        foreach ($risky_words as $word) {
+            // Case-insensitive removal of the word (including common suffixes)
+            $prompt = preg_replace('/\b' . preg_quote($word, '/') . '(s|ing|y|ie|ies)?\b/i', '', $prompt);
+        }
+
+        // Clean up double spaces resulting from removals
+        $prompt = preg_replace('/\s+/', ' ', $prompt);
+        $prompt = trim($prompt);
+
+        return $prompt;
     }
 }
