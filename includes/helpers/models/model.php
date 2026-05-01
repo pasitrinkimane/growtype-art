@@ -65,16 +65,18 @@ function growtype_art_admin_update_model_settings($model_id, $model_settings, $a
     foreach ($model_settings as $meta_key => $meta_value) {
         $existing_content = growtype_art_get_model_single_setting($model_id, $meta_key);
 
-        if (!empty($allowed_keys)) {
-            if (empty($existing_content) && !in_array($meta_key, $allowed_keys)) {
-                continue;
-            }
+        if (!empty($allowed_keys) && !in_array($meta_key, $allowed_keys)) {
+            continue;
         }
 
         if ($meta_value === "true") {
             $meta_value = 1;
         } elseif ($meta_value === "false") {
             $meta_value = 0;
+        }
+
+        if (is_array($meta_value) || is_object($meta_value)) {
+            $meta_value = json_encode($meta_value);
         }
 
         if (isset($existing_content['id'])) {

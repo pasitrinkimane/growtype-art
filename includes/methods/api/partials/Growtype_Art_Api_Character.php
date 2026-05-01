@@ -85,6 +85,12 @@ class Growtype_Art_Api_Character
             'permission_callback' => array ($this, 'permission_check_callback')
         ));
 
+        register_rest_route('growtype-art/v1', 'update/character', array (
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array ($this, 'update_character_callback'),
+            'permission_callback' => array ($this, 'permission_check_callback')
+        ));
+
         register_rest_route('growtype-art/v1', 'upload/character/content', array (
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array ($this, 'upload_character_content_callback'),
@@ -94,9 +100,7 @@ class Growtype_Art_Api_Character
 
     function permission_check_callback(WP_REST_Request $request)
     {
-        $current_user = wp_get_current_user();
-
-        if ($current_user->ID === 0) {
+        if (!is_user_logged_in()) {
             return new WP_Error(
                 'rest_not_authenticated',
                 __('You are not authenticated.'),
@@ -104,7 +108,7 @@ class Growtype_Art_Api_Character
             );
         }
 
-        if (!in_array($current_user->user_login, ['admin'])) {
+        if (!current_user_can('administrator')) {
             return new WP_Error(
                 'rest_forbidden',
                 __('You are not authorized to access this resource.'),
@@ -362,216 +366,226 @@ class Growtype_Art_Api_Character
         ], 200);
     }
 
-    function generate_character_callback($data)
+    /**
+     * Parse and normalise raw params (from REST request or direct array) into a
+     * clean set of typed variables used by character creation.
+     *
+     * @param array $params Raw input params.
+     * @return array Parsed values keyed by variable name.
+     */
+    public static function parse_character_params(array $params): array
     {
-        $params = $data->get_params();
+        $character_details = isset($params['character_details'])
+            ? (is_array($params['character_details']) ? $params['character_details'] : json_decode($params['character_details'], true))
+            : [];
 
-        $dublicated_character_id = isset($params['dublicated_model_id']) ? $params['dublicated_model_id'] : growtype_art_default_model_id_to_duplicate();
-        $unique_hash = isset($params['unique_hash']) ? $params['unique_hash'] : null;
-        $featured_in = isset($params['featured_in']) ? explode(',', $params['featured_in']) : [];
-        $faceswap_new_uploads = filter_var($params['faceswap_new_uploads'] ?? false, FILTER_VALIDATE_BOOLEAN);
-        $faceswap_type = isset($params['faceswap_type']) ? $params['faceswap_type'] : '';
-        $leonardoai_settings_user_nr = isset($params['leonardoai_settings_user_nr']) ? $params['leonardoai_settings_user_nr'] : '';
-        $generatable_images_limit = isset($params['generatable_images_limit']) ? $params['generatable_images_limit'] : '';
-        $created_by = isset($params['created_by']) ? $params['created_by'] : 'external_user';
-        $add_to_bundle = filter_var($params['add_to_bundle'] ?? true, FILTER_VALIDATE_BOOLEAN);
-        $generate_images_initially = filter_var($params['generate_images_initially'] ?? true, FILTER_VALIDATE_BOOLEAN);
-        $custom_assets = isset($params['custom_assets']) ? $params['custom_assets'] : [];
-        $crop_percent = isset($params['crop_percent']) ? $params['crop_percent'] : null;
-        $slug = isset($params['slug']) ? $params['slug'] : null;
-        $character_title = isset($params['character_title']) ? $params['character_title'] : null;
-        $generate_character_details = isset($params['generate_character_details']) ? $params['generate_character_details'] : false;
-        $character_details = isset($params['character_details']) ? json_decode($params['character_details'], true) : [];
+        $tags = isset($params['tags'])
+            ? (is_array($params['tags']) ? $params['tags'] : explode(',', $params['tags']))
+            : [];
+        if (!empty($tags)) {
+            $character_details['tags'] = array_map('trim', $tags);
+        }
+
+        $generate_character_details = !empty($params['generate_character_details']);
+        $character_title            = $params['character_title'] ?? null;
 
         if ($generate_character_details) {
-            $generate_character_details = growtype_art_generate_character_details($character_title);
-            $character_details = array_merge($character_details, $generate_character_details);
+            $generated = growtype_art_generate_character_details($character_title);
+            if (!empty($generated)) {
+                // Explicit params take priority over AI-generated values.
+                $character_details = array_merge($generated, $character_details);
+            }
+        }
+
+        return [
+            'dublicated_character_id'     => $params['dublicated_model_id'] ?? growtype_art_default_model_id_to_duplicate(),
+            'unique_hash'                 => $params['unique_hash'] ?? null,
+            'featured_in'                 => isset($params['featured_in'])
+                ? (is_array($params['featured_in']) ? $params['featured_in'] : explode(',', $params['featured_in']))
+                : [],
+            'faceswap_new_uploads'        => filter_var($params['faceswap_new_uploads'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'faceswap_type'               => $params['faceswap_type'] ?? '',
+            'leonardoai_settings_user_nr' => $params['leonardoai_settings_user_nr'] ?? '',
+            'generatable_images_limit'    => $params['generatable_images_limit'] ?? '',
+            'created_by'                  => $params['created_by'] ?? 'external_user',
+            'in_bundle'                   => filter_var($params['in_bundle'] ?? $params['add_to_bundle'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'generate_images_initially'   => filter_var($params['generate_images_initially'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'custom_assets'               => $params['custom_assets'] ?? [],
+            'crop_percent'                => $params['crop_percent'] ?? null,
+            'slug'                        => $params['slug'] ?? null,
+            'prompt'                      => $params['prompt'] ?? null,
+            'character_title'             => $character_title,
+            'character_details'           => $character_details,
+            'use_cloned_post'             => filter_var($params['use_cloned_post'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'provider'                    => strtolower(trim($params['provider'] ?? Growtype_Art_Crud::DEFAULT_IMAGE_PROVIDER)),
+            'assets_amount'               => max(1, min(10, (int) ($params['assets_amount'] ?? 1))),
+            'asset_type'                  => strtolower(trim($params['asset_type'] ?? 'image')),
+        ];
+    }
+
+    /**
+     * Create a character directly without going through the HTTP REST API.
+     * Reuses the same logic as generate_character_callback.
+     *
+     * @param array $params Same keys as the REST endpoint accepts.
+     * @return array{success: bool, model_id?: int, character_details?: array, message?: string}
+     */
+    public static function create_character(array $params): array
+    {
+        $p = self::parse_character_params($params);
+        extract($p);
+
+        $character_details['faceswap_new_uploads'] = $faceswap_new_uploads;
+        $character_details['faceswap_type']        = $faceswap_type;
+
+        if (!empty($leonardoai_settings_user_nr)) {
+            $character_details['leonardoai_settings_user_nr'] = $leonardoai_settings_user_nr;
+        }
+
+        $character_details = self::adjust_character_details($character_details);
+
+        if (isset($character_details['character_id']) && !empty($character_details['character_id'])) {
+            $dublicated_character_id = $character_details['character_id'];
+        }
+
+        if (!empty($character_title)) {
+            $character_details['character_title'] = $character_title;
+        }
+
+        $character_details['created_by_unique_hash']   = $unique_hash;
+        $character_details['featured_in']              = json_encode($featured_in);
+        $character_details['created_by']               = $created_by;
+        $character_details['generatable_images_limit'] = !empty($generatable_images_limit) ? $generatable_images_limit : ($faceswap_new_uploads ? '2' : '3');
+        $character_details['generatable_images_limit'] = $character_details['generatable_images_limit'] < 50 ? $character_details['generatable_images_limit'] : '50';
+        $character_details['priority_level']           = 0;
+
+        $model_id = $params['model_id'] ?? null;
+
+        if (empty($model_id)) {
+            if ($use_cloned_post) {
+                $model_id = growtype_art_admin_duplicate_model($dublicated_character_id);
+            } else {
+                $reference_id = growtype_art_generate_reference_id();
+                $model_id     = Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODELS_TABLE, [
+                    'prompt'          => $prompt ?? $character_details['prompt'] ?? growtype_art_get_default_prompt_template($character_details),
+                    'negative_prompt' => '',
+                    'reference_id'    => $reference_id,
+                    'provider'        => $provider,
+                    'image_folder'    => Growtype_Art_Crud::IMAGES_FOLDER_NAME . '/' . $reference_id,
+                ]);
+            }
+        }
+
+        if (empty($model_id)) {
+            return ['success' => false, 'message' => 'Failed to create model.'];
         }
 
         if (!empty($slug)) {
-            $existing_model = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
-                [
-                    'key' => 'meta_key',
-                    'value' => 'slug',
-                ],
-                [
-                    'key' => 'meta_value',
-                    'value' => $slug,
-                ]
-            ], 'where');
-
-            $model_id = $existing_model[0]['model_id'] ?? null;
+            $character_details['slug'] = $slug;
         }
 
-        if (!isset($model_id) || empty($model_id)) {
-            /**
-             * Set character details
-             */
-            $character_details['faceswap_new_uploads'] = $faceswap_new_uploads;
-            $character_details['faceswap_type'] = $faceswap_type;
+        $details_to_update = [
+            'auto_check_for_nsfw', 'categories', 'tags', 'leonardoai_settings_user_nr',
+            'created_by_unique_hash', 'created_by', 'generatable_images_limit', 'featured_in',
+            'model_id', 'prompt_variables', 'character_style', 'character_age', 'character_gender',
+            'character_hair_color', 'character_hair_style', 'character_eye_color', 'character_ethnicity',
+            'character_breast_size', 'character_butt_size', 'character_body_type', 'character_body_shape',
+            'character_title', 'character_occupation', 'character_nationality', 'character_location',
+            'character_height', 'character_weight', 'character_hobbies', 'character_dreams',
+            'character_description', 'character_personality', 'character_introduction',
+            'character_intro_message', 'character_intro_actions_message',
+            'character_can_answer_to_questions', 'character_popular_topics_to_discuss',
+            'character_gpt_personality_extension', 'face_swap_photos', 'faceswap_new_uploads',
+            'faceswap_type', 'priority_level', 'tags', 'slug',
+        ];
 
-            if (!empty($leonardoai_settings_user_nr)) {
-                $character_details['leonardoai_settings_user_nr'] = $leonardoai_settings_user_nr;
+        growtype_art_admin_update_model_settings($model_id, $character_details, $details_to_update);
+
+        $final_prompt = $prompt ?? $character_details['prompt'] ?? null;
+        if (!empty($final_prompt)) {
+            Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODELS_TABLE, ['prompt' => $final_prompt], $model_id);
+        }
+
+        if ($use_cloned_post) {
+            Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODELS_TABLE, ['provider' => $provider], $model_id);
+        }
+
+        if ($in_bundle) {
+            growtype_art_admin_update_bundle_keys([$model_id], 'add');
+        }
+
+        if ($generate_images_initially) {
+            $gen_fn = 'growtype_art_generate_model_' . preg_replace('/[^a-z0-9_]/', '', $asset_type);
+            if (!function_exists($gen_fn)) {
+                $gen_fn = 'growtype_art_generate_model_image';
             }
-
-            /**
-             * Adjust
-             */
-            $character_details = self::adjust_character_details($character_details);
-
-            /**
-             * Check if model id is set
-             */
-            if (isset($character_details['character_id']) && !empty($character_details['character_id'])) {
-                $dublicated_character_id = $character_details['character_id'];
-            }
-
-            $character_details['created_by_unique_hash'] = $unique_hash;
-            $character_details['featured_in'] = json_encode($featured_in);
-            $character_details['created_by'] = $created_by;
-            $character_details['generatable_images_limit'] = !empty($generatable_images_limit) ? $generatable_images_limit : ($faceswap_new_uploads ? '2' : '3');
-            $character_details['generatable_images_limit'] = $character_details['generatable_images_limit'] < 50 ? $character_details['generatable_images_limit'] : '50';
-            $character_details['priority_level'] = 0;
-
-            if (!empty($character_title)) {
-                $character_details['character_title'] = $character_title;
-            }
-
-            if (empty($character_details)) {
-                return wp_send_json([
-                    'success' => false,
-                    'message' => 'Missing data',
-                ], 400);
-            }
-
-            if (!empty($unique_hash)) {
-                $settings = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
-                    [
-                        'key' => 'meta_key',
-                        'values' => ['created_by_unique_hash'],
-                    ],
-                    [
-                        'key' => 'meta_value',
-                        'values' => [$unique_hash],
-                    ]
-                ]);
-
-                /**
-                 * Check if unique hash already exists
-                 */
-                if (!empty($settings)) {
-                    $existing_hashes = array_pluck($settings, 'meta_value');
-
-                    if (in_array($unique_hash, $existing_hashes)) {
-                        return wp_send_json([
-                            'success' => false,
-                            'message' => 'Already created',
-                        ], 501);
-                    }
-                }
-            }
-
-            /**
-             * Clone model
-             */
-            $model_id = growtype_art_admin_duplicate_model($dublicated_character_id);
-
-            $details_to_update = [
-                'auto_check_for_nsfw',
-                'categories',
-                'tags',
-                'leonardoai_settings_user_nr',
-                'created_by_unique_hash',
-                'created_by',
-                'generatable_images_limit',
-                'featured_in',
-                'model_id',
-                'prompt_variables',
-                'character_style',
-                'character_hair_color',
-                'character_hair_style',
-                'character_eye_color',
-                'character_ethnicity',
-                'character_breast_size',
-                'character_butt_size',
-                'character_title',
-                'character_occupation',
-                'character_location',
-                'character_gpt_personality_extension',
-                'character_intro_message',
-                'character_can_answer_to_questions',
-                'character_intro_actions_message',
-                'character_popular_topics_to_discuss',
-                'face_swap_photos',
-                'faceswap_new_uploads',
-                'priority_level',
-            ];
-
-            if (!empty($slug)) {
-                $character_details['slug'] = $slug;
-                $details_to_update[] = 'slug';
-            }
-
-            growtype_art_admin_update_model_settings($model_id, $character_details, $details_to_update);
-
-            /**
-             * Update prompt
-             */
-            if (isset($character_details['prompt']) && !empty($character_details['prompt'])) {
-                Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODELS_TABLE, [
-                    "prompt" => $character_details['prompt']
-                ], $model_id);
-            }
-
-            Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODELS_TABLE, [
-                "provider" => Growtype_Art_Crud::NSFW_PROVIDERS[array_rand(Growtype_Art_Crud::NSFW_PROVIDERS)]
-            ], $model_id);
-
-            /**
-             * Add to bundle
-             */
-            if ($add_to_bundle) {
-                growtype_art_admin_update_bundle_keys([$model_id], 'add');
-            }
-
-            if ($generate_images_initially) {
-                $crud = new Leonardoai_Base();
-                for ($i = 0; $i < 2; $i++) {
-                    $generate_details = $crud->generate_model_image($model_id);
-                    sleep(2);
-                }
+            for ($i = 0; $i < $assets_amount; $i++) {
+                $gen_fn($model_id, ['providers' => [$provider]]);
+                if ($i < $assets_amount - 1) sleep(2);
             }
         }
 
         if (!empty($custom_assets)) {
             $model = growtype_art_get_model_details($model_id);
-
-            foreach ($custom_assets as $key => $value) {
-                $saved_image = Growtype_Art_Crud::save_image([
-                    'url' => $value,
-                    'folder' => $model['image_folder'],
-                ], true, $crop_percent);
-
+            foreach ($custom_assets as $value) {
+                $saved_image = Growtype_Art_Crud::save_image(['url' => $value, 'folder' => $model['image_folder']], true, $crop_percent);
                 if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
-                    error_log('save_generations: ' . json_encode($saved_image));
+                    error_log('create_character save_image: ' . json_encode($saved_image));
                     continue;
                 }
-
-                /**
-                 * Assign image to model
-                 */
                 Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
                     'model_id' => $model_id,
-                    'image_id' => $saved_image['id']
+                    'image_id' => $saved_image['id'],
                 ]);
             }
         }
 
+        return [
+            'success'           => true,
+            'model_id'          => $model_id,
+            'character_details' => $character_details,
+        ];
+    }
+
+    function generate_character_callback($data)
+    {
+        $params = $data->get_params();
+        $p = self::parse_character_params($params);
+
+        // Slug duplicate guard (REST-only concern)
+        if (!empty($p['slug'])) {
+            global $wpdb;
+            $existing_model_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT model_id FROM " . $wpdb->prefix . Growtype_Art_Database::MODEL_SETTINGS_TABLE . " WHERE meta_key = 'slug' AND meta_value = %s LIMIT 1",
+                $p['slug']
+            ));
+            if (!empty($existing_model_id)) {
+                return wp_send_json(['success' => false, 'message' => 'Already created (slug exists)'], 501);
+            }
+        }
+
+        // Unique hash duplicate guard (REST-only concern)
+        if (!empty($p['unique_hash'])) {
+            $settings = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
+                ['key' => 'meta_key',   'values' => ['created_by_unique_hash']],
+                ['key' => 'meta_value', 'values' => [$p['unique_hash']]],
+            ]);
+            if (!empty($settings) && in_array($p['unique_hash'], array_pluck($settings, 'meta_value'))) {
+                return wp_send_json(['success' => false, 'message' => 'Already created'], 501);
+            }
+        }
+
+        $result = self::create_character($params);
+
+        if (empty($result['success'])) {
+            return wp_send_json(['success' => false, 'message' => $result['message'] ?? 'Failed'], 400);
+        }
+
         return wp_send_json([
-            'success' => true,
-            'message' => 'Model updated',
-            'model_id' => $model_id,
-            'character_details' => isset($character_details) ? json_encode($character_details) : [],
+            'success'           => true,
+            'message'           => 'Model updated',
+            'model_id'          => $result['model_id'],
+            'character_details' => json_encode($result['character_details']),
         ], 200);
     }
 
@@ -658,6 +672,8 @@ class Growtype_Art_Api_Character
                     if (!empty($character_title)) {
                         $character_details[$adjusted_key] = self::sanitize_character_title($character_title);
                     }
+                } elseif ($key === 'tags' || $key === 'categories') {
+                    $character_details[$adjusted_key] = $user_detail;
                 } else {
                     $character_details[$adjusted_key] = $user_detail[0] ?? '';
                 }
@@ -665,7 +681,7 @@ class Growtype_Art_Api_Character
                 $character_details[$adjusted_key] = $user_detail;
             }
 
-            if (isset($character_details[$adjusted_key]) && !empty($character_details[$adjusted_key])) {
+            if (isset($character_details[$adjusted_key]) && !empty($character_details[$adjusted_key]) && is_string($character_details[$adjusted_key])) {
                 $character_details[$adjusted_key] = trim($character_details[$adjusted_key]);
             }
 
@@ -706,18 +722,51 @@ class Growtype_Art_Api_Character
             $character_details['character_title'] = $first_name . ' ' . $last_name;
         }
 
+        // Slug: always derive from title (cannot be passed directly through adjust)
         $character_details['slug'] = growtype_art_format_character_slug($character_details['character_title']);
-        $character_details['character_nationality'] = growtype_art_get_random_character_nationality();
-        $character_details['character_occupation'] = isset($character_details['character_occupation']) && !empty($character_details['character_occupation']) ? $character_details['character_occupation'] : growtype_art_get_character_ocupation();
-        $character_details['character_hobbies'] = implode(', ', growtype_art_get_random_amount_of_character_hobies(mt_rand(1, 3)));
-        $character_details['character_height'] = $character_details['character_gender'] === 'male' ? rand(170, 200) : rand(160, 190);
-        $character_details['character_weight'] = $character_details['character_gender'] === 'male' ? rand(60, 90) : rand(40, 60);
-        $character_details['character_dreams'] = growtype_art_get_random_character_dream();
-        $character_details['character_description'] = growtype_art_get_random_character_description();
-        $character_details['character_introduction'] = '';
-        $character_details['character_intro_message'] = '';
-        $character_details['character_location'] = growtype_art_get_character_location();
-        $character_details['tags'] = [];
+
+        // Fields below: use caller-supplied value if present, otherwise fall back to a random value
+        $character_details['character_nationality'] = !empty($character_external_details['character_nationality'])
+            ? $character_external_details['character_nationality']
+            : growtype_art_get_random_character_nationality();
+
+        $character_details['character_occupation'] = isset($character_details['character_occupation']) && !empty($character_details['character_occupation'])
+            ? $character_details['character_occupation']
+            : growtype_art_get_character_ocupation();
+
+        $character_details['character_hobbies'] = !empty($character_external_details['character_hobbies'])
+            ? $character_external_details['character_hobbies']
+            : implode(', ', growtype_art_get_random_amount_of_character_hobies(mt_rand(1, 3)));
+
+        $character_details['character_height'] = !empty($character_external_details['character_height'])
+            ? $character_external_details['character_height']
+            : ($character_details['character_gender'] === 'male' ? rand(170, 200) : rand(160, 190));
+
+        $character_details['character_weight'] = !empty($character_external_details['character_weight'])
+            ? $character_external_details['character_weight']
+            : ($character_details['character_gender'] === 'male' ? rand(60, 90) : rand(40, 60));
+
+        $character_details['character_dreams'] = !empty($character_external_details['character_dreams'])
+            ? $character_external_details['character_dreams']
+            : growtype_art_get_random_character_dream();
+
+        $character_details['character_description'] = !empty($character_external_details['character_description'])
+            ? $character_external_details['character_description']
+            : growtype_art_get_random_character_description();
+
+        $character_details['character_introduction'] = !empty($character_external_details['character_introduction'])
+            ? $character_external_details['character_introduction']
+            : '';
+
+        $character_details['character_intro_message'] = !empty($character_external_details['character_intro_message'])
+            ? $character_external_details['character_intro_message']
+            : '';
+
+        $character_details['character_location'] = !empty($character_external_details['character_location'])
+            ? $character_external_details['character_location']
+            : growtype_art_get_character_location();
+
+        $character_details['tags'] = $character_details['tags'] ?? [];
 
         /**
          * Set main identification
@@ -934,6 +983,98 @@ class Growtype_Art_Api_Character
         return wp_send_json([
             'success' => true,
             'message' => 'Character settings updated',
+        ], 200);
+    }
+
+    /**
+     * POST update/character
+     *
+     * Updates all character_details fields for an existing model.
+     * Accepts model_id (required) + any combination of character_details keys.
+     * Optionally updates slug, prompt, and featured_in on the base model record.
+     *
+     * Required params:
+     *   model_id          (integer)  – ID of the model to update.
+     *   character_details (JSON str) – Key/value pairs to save as model settings.
+     *
+     * Optional params:
+     *   slug         (string) – New URL slug.
+     *   prompt       (string) – Override the Leonardo AI prompt.
+     *   featured_in  (string) – Comma-separated group slugs.
+     */
+    function update_character_callback($data)
+    {
+        $params = $data->get_params();
+
+        $model_id = isset($params['model_id']) ? (int) $params['model_id'] : null;
+
+        if (empty($model_id)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Missing model_id',
+            ], 400);
+        }
+
+        $model = growtype_art_get_model_details($model_id);
+
+        if (empty($model)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Character not found',
+            ], 404);
+        }
+
+        $character_details = isset($params['character_details'])
+            ? json_decode($params['character_details'], true)
+            : [];
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'Invalid JSON in character_details: ' . json_last_error_msg(),
+            ], 400);
+        }
+
+        // ── Optional top-level overrides ─────────────────────────────────────
+        $slug        = isset($params['slug'])      ? sanitize_title($params['slug'])       : null;
+        $prompt      = isset($params['prompt'])    ? $params['prompt']                     : null;
+        $provider    = isset($params['provider'])  ? strtolower(trim($params['provider'])) : null;
+        $featured_in = isset($params['featured_in']) ? explode(',', $params['featured_in']) : null;
+        $in_bundle   = isset($params['in_bundle']) ? filter_var($params['in_bundle'], FILTER_VALIDATE_BOOLEAN) : null;
+
+        if (!empty($slug)) {
+            $character_details['slug'] = $slug;
+        }
+
+        if (!empty($featured_in)) {
+            $character_details['featured_in'] = json_encode($featured_in);
+        }
+
+        // ── Persist all character_details as model settings ──────────────────
+        if (!empty($character_details)) {
+            growtype_art_admin_update_model_settings($model_id, $character_details);
+        }
+
+        // ── Update base models table (prompt, provider) ───────────────────────
+        $base_update = [];
+        if (!empty($prompt))   { $base_update['prompt']   = $prompt; }
+        if (!empty($provider)) { $base_update['provider'] = $provider; }
+        if (!empty($base_update)) {
+            Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODELS_TABLE, $base_update, $model_id);
+        }
+
+        // ── Handle bundle membership ─────────────────────────────────────────
+        if ($in_bundle !== null) {
+            growtype_art_admin_update_bundle_keys([$model_id], $in_bundle ? 'add' : 'remove');
+        }
+
+        // ── Bust the featured_in transient cache ─────────────────────────────
+        self::growtype_art_character_delete_featured_in_transient();
+
+        return wp_send_json([
+            'success'  => true,
+            'message'  => 'Character updated',
+            'model_id' => $model_id,
         ], 200);
     }
 

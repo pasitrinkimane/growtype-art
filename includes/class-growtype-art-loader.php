@@ -56,6 +56,8 @@ class Growtype_Art_Loader
         $this->filters = array ();
 
         $this->load_methods();
+
+        $this->load_documentation();
     }
 
     /**
@@ -179,5 +181,13 @@ class Growtype_Art_Loader
          * Socket
          */
 //        require_once GROWTYPE_ART_PATH . 'includes/methods/socket/class-growtype-art-socket.php';
+    }
+
+    public function load_documentation(){
+        /**
+         * Documentation
+         */
+        require_once GROWTYPE_ART_PATH . 'includes/documentation/Growtype_Art_Documentation.php';
+        new Growtype_Art_Documentation();
     }
 }

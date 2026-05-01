@@ -252,6 +252,7 @@ class Growtype_Art_Admin_Models
     function process_actions()
     {
         require_once GROWTYPE_ART_PATH . 'admin/pages/models/table/growtype-art-admin-model-list-table-record.php';
+        require_once GROWTYPE_ART_PATH . 'admin/pages/models/table/growtype-art-admin-model-generator.php';
 
         $this->item_obj = new Growtype_Art_Admin_Model_List_Table_Record();
 

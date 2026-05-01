@@ -45,8 +45,9 @@ class Growtype_Art_Database_Crud
                         LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims ON (aimo.id = aims.model_id AND aims.meta_key='created_by_unique_hash')
                         LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims2 ON (aimo.id = aims2.model_id AND aims2.meta_key='created_by')
                         LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims3 ON (aimo.id = aims3.model_id AND aims3.meta_key='character_title')
-                        WHERE aimo.id LIKE %s OR aimo.prompt LIKE %s OR aimo.negative_prompt LIKE %s OR aimo.reference_id LIKE %s OR aims.meta_value LIKE %s OR aims2.meta_value LIKE %s OR aims3.meta_value LIKE %s",
-                        $search_like, $search_like, $search_like, $search_like, $search_like, $search_like, $search_like);
+                        LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims4 ON (aimo.id = aims4.model_id AND aims4.meta_key='slug')
+                        WHERE aimo.id LIKE %s OR aimo.prompt LIKE %s OR aimo.negative_prompt LIKE %s OR aimo.reference_id LIKE %s OR aims.meta_value LIKE %s OR aims2.meta_value LIKE %s OR aims3.meta_value LIKE %s OR aims4.meta_value LIKE %s",
+                        $search_like, $search_like, $search_like, $search_like, $search_like, $search_like, $search_like, $search_like);
                     $count += (int)$wpdb->get_var($query);
                 } else {
                     $query = $wpdb->prepare("SELECT COUNT(*) FROM " . esc_sql($table) . " WHERE id LIKE %s OR prompt LIKE %s", $search_like, $search_like);
@@ -133,6 +134,7 @@ class Growtype_Art_Database_Crud
                                 LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims ON (aimo.id = aims.model_id AND aims.meta_key='created_by_unique_hash')
                                 LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims2 ON (aimo.id = aims2.model_id AND aims2.meta_key='created_by')
                                 LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims3 ON (aimo.id = aims3.model_id AND aims3.meta_key='character_title')
+                                LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims4 ON (aimo.id = aims4.model_id AND aims4.meta_key='slug')
                                 WHERE aimo.id LIKE %s
                                     OR aimo.prompt LIKE %s
                                     OR aimo.negative_prompt LIKE %s
@@ -140,13 +142,14 @@ class Growtype_Art_Database_Crud
                                     OR aims.meta_value LIKE %s
                                     OR aims2.meta_value LIKE %s
                                     OR aims3.meta_value LIKE %s
+                                    OR aims4.meta_value LIKE %s
                                 GROUP BY aimo.id
                                 ORDER BY {$orderby} {$order}
                                 LIMIT %d OFFSET %d";
                                 
                             $query = $wpdb->prepare($query_raw, 
                                 $search_like, $search_like, $search_like, $search_like,
-                                $search_like, $search_like, $search_like,
+                                $search_like, $search_like, $search_like, $search_like,
                                 $limit, $offset
                             );
                             break;

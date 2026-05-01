@@ -1026,6 +1026,7 @@ if (!function_exists('growtype_art_get_model_featured_in_options')) {
             'artdecorio' => 'artdecorio.com',
             'talkiemate' => 'talkiemate.com',
             'chataigirl' => 'chataigirl.com',
+            'talkiehaven' => 'talkiehaven.com',
             'aiwinbig' => 'aiwinbig.com',
             'liamcompanion' => 'liamcompanion.com',
         ];
@@ -1072,10 +1073,9 @@ if (!function_exists('growtype_art_compress_existing_image')) {
             $image_details = growtype_art_get_image_details($image_id);
             $extension = strtolower($image_details['extension'] ?? '');
 
-            if (!in_array($extension, ['jpg', 'png'])) {
+            if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'])) {
                 error_log("Unsupported image format: $extension for image ID: $image_id");
-                throw new Exception("Unsupported image format.");
-                return;
+                throw new Exception("Unsupported image format ($extension).");
             }
 
             $is_compressed = $image_details['settings']['compressed'] ?? false;

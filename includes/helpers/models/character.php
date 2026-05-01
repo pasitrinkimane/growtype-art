@@ -5,16 +5,49 @@ function growtype_art_format_character_slug($inputString, $model_id = null)
     $clean_string = preg_replace('/[^\w\s-]/', '', $inputString);
     $final_string = str_replace(' ', '-', $clean_string);
     $final_string = strtolower($final_string);
+    $base_slug = $final_string;
 
-    $existing_settings = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
-        [
-            'key' => 'meta_value',
-            'values' => [$final_string],
-        ]
-    ]);
+    // Check if the base slug exists for another model
+    $existing = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
+        ['key' => 'meta_key', 'value' => 'slug'],
+        ['key' => 'meta_value', 'value' => $base_slug]
+    ], 'where');
 
-    if (isset($existing_settings[0]['model_id']) && $existing_settings[0]['model_id'] !== $model_id) {
-        $final_string = $final_string . '-' . strtolower(wp_generate_password(12, false, false));
+    $conflict = false;
+    if (!empty($existing)) {
+        foreach ($existing as $row) {
+            if (isset($row['model_id']) && (int)$row['model_id'] !== (int)$model_id) {
+                $conflict = true;
+                break;
+            }
+        }
+    }
+
+    if ($conflict) {
+        $i = 2;
+        while (true) {
+            $new_slug = $base_slug . '-' . $i;
+            $check = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODEL_SETTINGS_TABLE, [
+                ['key' => 'meta_key', 'value' => 'slug'],
+                ['key' => 'meta_value', 'value' => $new_slug]
+            ], 'where');
+
+            $inner_conflict = false;
+            if (!empty($check)) {
+                foreach ($check as $row) {
+                    if (isset($row['model_id']) && (int)$row['model_id'] !== (int)$model_id) {
+                        $inner_conflict = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!$inner_conflict) {
+                $final_string = $new_slug;
+                break;
+            }
+            $i++;
+        }
     }
 
     return $final_string;
@@ -588,3 +621,84 @@ function growtype_art_generate_character_details($character_title)
     return $generate;
 }
 
+if (!function_exists('growtype_art_generate_character_params_from_prompt')) {
+    /**
+     * Given a raw user prompt (e.g. "Aria in a realistic art style…"),
+     * ask the LLM to derive a complete create_character() params array.
+     *
+     * @param string $prompt      Raw generation prompt.
+     * @param string $style       Character style (realistic|anime|…).
+     * @param array  $featured_in Sites to feature the character in.
+     * @param string $provider    Image provider slug.
+     * @return array|null         Parsed params array or null on failure.
+     */
+    function growtype_art_generate_character_params_from_prompt(
+        string $prompt,
+        string $style = 'realistic',
+        array  $featured_in = [],
+        string $provider = 'xai',
+        string $prompt_focus = 'single',
+        string $theme_hint = ''
+    ): ?array {
+        $focus_context = $prompt_focus === 'multiple' ? "The user is generating multiple characters or a group. However, if the input prompt refers to a SPECIFIC INDIVIDUAL (e.g., 'Jesus Christ', 'Marie', 'John'), you MUST generate a single character profile for that person. Only use a group/team composition if the prompt itself is a collective noun (e.g., 'The Apostles') or if it explicitly asks for multiple people in one image." : "This is a SINGLE character.";
+        $theme_context = !empty($theme_hint) ? "The theme for this generation is: \"$theme_hint\". Ensure tags and visual details are aligned with this theme." : "";
+
+        $example = [
+            'character_title'                    => 'Aria Witherspoon',
+            'character_description'              => 'A charismatic performer who captivates every room she enters.',
+            'character_personality'              => 'Confident, Playful, Seductive',
+            'character_occupation'               => 'Model',
+            'character_hobbies'                  => 'Dancing, Cooking',
+            'character_body_shape'               => 'Curvy',
+            'character_age'                      => '28',
+            'character_height'                   => '170',
+            'character_weight'                   => '60',
+            'character_nationality'              => 'American',
+            'character_location'                 => 'Los Angeles',
+            'character_gender'                   => 'Female',
+            'character_dreams'                   => 'To inspire people through art and beauty.',
+            'character_introduction'             => 'Hey! I\'m Aria — your favorite conversation partner.',
+            'character_gpt_personality_extension'=> 'You are charming and witty, always keeping the conversation exciting.',
+            'character_intro_message'            => 'So, shall we dive in?',
+            'character_intro_actions_message'    => 'Pick something and let\'s get started...',
+            'character_can_answer_to_questions'  => "What is your favorite place to travel?\nHow do you stay inspired?",
+            'character_popular_topics_to_discuss'=> "Style and fashion\nTravel adventures\nLifestyle tips",
+            'character_style'                    => 'realistic',
+            'character_ethnicity'                => 'American',
+            'character_eye_color'                => 'Blue',
+            'character_hair_style'               => 'Straight',
+            'character_hair_color'               => 'Blonde',
+            'character_breast_size'              => 'Medium',
+            'character_butt_size'                => 'Medium',
+            'character_tags'                     => 'curvy, model, performer, blonde',
+            'prompt'                             => 'A realistic portrait of Aria Witherspoon...',
+        ];
+
+        $content = sprintf(
+            'From the following character prompt, generate a JSON object with character details. %s %s ' .
+            'The prompt is: "%s". ' .
+            'The artistic style is: "%s". ' .
+            'Return ONLY a valid JSON object (no markdown, no extra text) matching this structure: %s. ' .
+            'Keep character_style as "%s". ' .
+            'Make all fields realistic and consistent with the prompt. ' .
+            'The "prompt" field should be an optimised image generation prompt derived from the input.',
+            $focus_context,
+            $theme_context,
+            $prompt,
+            $style,
+            json_encode($example),
+            $style
+        );
+
+        $result = Openai_Base::generate($content);
+
+        if (empty($result) || !is_array($result)) {
+            return null;
+        }
+
+        // Ensure style is not overridden by LLM.
+        $result['character_style'] = $style;
+
+        return $result;
+    }
+}

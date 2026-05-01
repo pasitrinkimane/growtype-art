@@ -24,6 +24,10 @@ class Growtype_Art_Crud
 
     const XAI_KEY = 'xai';
 
+    const DEFAULT_IMAGE_PROVIDER = self::XAI_KEY;
+
+    const DEFAULT_GENERATABLE_IMAGES_LIMIT = 5;
+
     const NSFW_PROVIDERS = [
         self::RUNWARE_KEY,
         self::POLLINATIONS_KEY,

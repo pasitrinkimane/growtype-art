@@ -587,95 +587,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
 
                     break;
                 case 'generate-models':
-                    if (isset($_POST['models-to-generate']) && !empty($_POST['models-to-generate'])) {
-                        $models_to_generate = explode(",", trim($_POST['models-to-generate']));
-                        $models_to_generate = array_map('trim', $models_to_generate);
-                        $provider = $_POST['model']['provider'][0] ?? '';
-                        $style = $_POST['model']['style'][0] ?? '';
-
-                        $info_message = '';
-
-                        foreach ($models_to_generate as $model_to_generate) {
-                            $model_slug = growtype_art_format_character_slug($model_to_generate);
-
-                            if (strlen($model_to_generate) + 5 < strlen($model_slug)) {
-                                $info_message .= sprintf(__('Model "%s" already exists.', 'growtype-art'), $model_to_generate) . " | ";
-                                continue;
-                            }
-
-                            $character_details = growtype_art_generate_character_details($model_to_generate);
-
-                            if (empty($character_details)) {
-                                $info_message .= sprintf(__('Model "%s" GPT details are empty.', 'growtype-art'), $model_to_generate) . "\r\n";
-                                continue;
-                            }
-
-                            $character_details['character_title'] = ucwords(strtolower($character_details['character_title']));
-
-                            $new_model_id = growtype_art_admin_duplicate_model(growtype_art_default_model_id_to_duplicate());
-
-                            Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODELS_TABLE, [
-                                'prompt' => '((({character_style} style))) Generate ((full body)) image in {character_style} style of {character_title} {character_age} years old {character_ethnicity} {character_gender} {character_occupation}, {character_eye_color} eyes, {character_hair_style} {character_hair_color} hair, natural lighting, 35mm, f/2, 8K. Ensure visible skin texture for a {character_style} style portrayal. Utilize a {character_style} style with a 50mm lens for a balanced composition.',
-                            ], $new_model_id);
-
-                            if (!empty($provider)) {
-                                Growtype_Art_Database_Crud::update_record(Growtype_Art_Database::MODELS_TABLE, [
-                                    'provider' => $_POST['model']['provider'][0]
-                                ], $new_model_id);
-                            }
-
-                            if (!empty($style)) {
-                                $character_details['character_style'] = $style;
-                                if ($style === 'realistic') {
-                                    $character_details['categories'] = '{"People":{}}';
-                                } else {
-                                    $character_details['categories'] = '{"Anime & Manga":{}}';
-                                }
-                            }
-
-                            Openai_Base_Image::update_character_details($new_model_id, $character_details);
-
-                            growtype_art_admin_update_model_settings($new_model_id, [
-                                'generatable_images_limit' => '5',
-                                'slug' => growtype_art_format_character_slug($character_details['character_title'], $new_model_id),
-                            ]);
-
-                            growtype_art_admin_update_bundle_keys([$new_model_id], 'add');
-                        }
-
-                        if (!empty($info_message)) {
-                            $this->redirect_index([
-                                'message_type' => 'custom',
-                                'message' => $info_message,
-                                'status' => 'error',
-                            ]);
-                        }
-
-                        $this->redirect_index([
-                            'message_type' => 'custom',
-                            'message' => __('Characters generated', 'growtype-art'),
-                        ]);
-                    }
-
-                    ?>
-                    <form method="post">
-                        <h1>Generate models</h1>
-                        <div>
-                            <label>Provider</label>
-                            <?= self::render_provider_select() ?>
-                        </div>
-                        <div>
-                            <label>Style</label>
-                            <?= self::render_select('name="model[style][]"', '', [
-                                'realistic' => 'realistic',
-                                'anime' => 'anime'
-                            ]) ?>
-                        </div>
-                        <textarea id="models-to-generate" name="models-to-generate" rows="20" style="width: 100%;"></textarea>
-                        <button type="submit" class="button button-primary" style="margin-top: 20px;">Generate</button>
-                    </form>
-                    <?php
-
+                    Growtype_Art_Admin_Model_Generator::handle($this);
                     exit();
             }
         }
@@ -864,7 +776,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
         $model_details = growtype_art_get_model_details($id);
 
         $character_details = growtype_art_get_model_character_default_data();
-        foreach ($model_details['settings'] as $key => $model_setting) {
+        foreach ($model_details['settings'] ?? [] as $key => $model_setting) {
             if (strpos($key, 'character_') === false || $key === 'data_for_generating_character_details') {
                 continue;
             }
@@ -872,7 +784,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
         }
 
         $models_settings = [];
-        foreach ($model_details['settings'] as $key => $model_setting) {
+        foreach ($model_details['settings'] ?? [] as $key => $model_setting) {
             if (strpos($key, 'character_') !== false) {
                 continue;
             }
@@ -938,7 +850,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
             <div class="tab-content">
                 <table class="form-table">
                     <tbody>
-                    <?php foreach ($model_details as $key => $item) {
+                    <?php foreach ($model_details ?? [] as $key => $item) {
                         if (in_array($key, [
                             'id',
                             'created_at',
@@ -1199,10 +1111,10 @@ class Growtype_Art_Admin_Model_List_Table_Record
         self::render_select('name="settings[featured_in][]"', $value, $options, true);
     }
 
-    public static function render_provider_select($value = null)
+    public static function render_provider_select($value = null, $args = [])
     {
         $options = growtype_art_get_model_provider_options();
-        echo self::render_select('name="model[provider][]"', $value, $options);
+        echo self::render_select('name="model[provider][]"', $value, $options, false, $args);
     }
 
     public static function render_textarea($name, $value)
@@ -1210,11 +1122,12 @@ class Growtype_Art_Admin_Model_List_Table_Record
         echo '<textarea class="large-text code" rows="5" name="' . $name . '">' . esc_textarea($value) . '</textarea>';
     }
 
-    public static function render_select($name, $value, $options = [], $multiple = false)
+    public static function render_select($name, $value, $options = [], $multiple = false, $args = [])
     {
         $value = is_array($value) ? $value : [$value];
+        $class = isset($args['class']) ? 'class="' . esc_attr($args['class']) . '"' : '';
         ?>
-        <select <?php echo $name ?> <?php echo $multiple ? 'multiple' : '' ?>>
+        <select <?php echo $name ?> <?php echo $multiple ? 'multiple' : '' ?> <?php echo $class ?>>
             <option value="">-</option>
             <?php foreach ($options as $key => $option) { ?>
                 <option value="<?php echo $key ?>" <?= selected(in_array($key, $value)) ?>><?php echo $option ?></option>

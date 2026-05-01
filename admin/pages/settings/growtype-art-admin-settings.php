@@ -73,16 +73,16 @@ class Growtype_Art_Admin_Settings
                             echo '</table>';
 
                             break;
-                        case 'openai':
-                            settings_fields('growtype_art_settings_openai');
+                        // case 'openai':
+                        //     settings_fields('growtype_art_settings_openai');
 
-                            echo '<h3>Openai settings</h3>';
+                        //     echo '<h3>Openai settings</h3>';
 
-                            echo '<table class="form-table">';
-                            do_settings_fields(Growtype_Art_Admin::SETTINGS_PAGE_NAME, 'growtype_art_openai_settings');
-                            echo '</table>';
+                        //     echo '<table class="form-table">';
+                        //     do_settings_fields(Growtype_Art_Admin::SETTINGS_PAGE_NAME, 'growtype_art_openai_settings');
+                        //     echo '</table>';
 
-                            break;
+                        //     break;
                         case 'leonardo':
                             settings_fields('growtype_art_settings_leonardo');
 
