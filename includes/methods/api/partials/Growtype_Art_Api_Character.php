@@ -386,6 +386,13 @@ class Growtype_Art_Api_Character
             $character_details['tags'] = array_map('trim', $tags);
         }
 
+        $categories = isset($params['categories'])
+            ? (is_array($params['categories']) ? $params['categories'] : json_decode($params['categories'], true))
+            : [];
+        if (!empty($categories)) {
+            $character_details['categories'] = $categories;
+        }
+
         $generate_character_details = !empty($params['generate_character_details']);
         $character_title            = $params['character_title'] ?? null;
 

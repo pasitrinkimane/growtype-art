@@ -31,14 +31,50 @@ class Growtype_Art_Database_Crud
             $search = isset($param['search']) ? $param['search'] : null;
             $values = isset($param['values']) ? $param['values'] : null;
             $key = isset($param['key']) ? esc_sql($param['key']) : null;
+            $filters = isset($param['filters']) ? $param['filters'] : [];
 
             if (!empty($values) && !empty($key)) {
                 $placeholders = implode(', ', array_fill(0, count($values), '%s'));
                 $query = $wpdb->prepare("SELECT COUNT(*) FROM " . esc_sql($table) . " WHERE " . $key . " IN($placeholders)", ...$values);
                 $count += (int)$wpdb->get_var($query);
-            } elseif (!empty($search) && is_scalar($search)) {
-                $search_like = '%' . $wpdb->esc_like((string)$search) . '%';
+            } elseif ((!empty($search) && is_scalar($search)) || !empty($filters)) {
                 if ($table === $wpdb->prefix . 'growtype_art_models') {
+                    $where_clauses = ["1=1"];
+                    $prepare_values = [];
+
+                    if (!empty($search)) {
+                        $search_like = '%' . $wpdb->esc_like((string)$search) . '%';
+                        $where_clauses[] = "(aimo.id LIKE %s OR aimo.prompt LIKE %s OR aimo.negative_prompt LIKE %s OR aimo.reference_id LIKE %s OR aims.meta_value LIKE %s OR aims2.meta_value LIKE %s OR aims3.meta_value LIKE %s OR aims4.meta_value LIKE %s OR aims5.meta_value LIKE %s)";
+                        for ($i = 0; $i < 9; $i++) $prepare_values[] = $search_like;
+                    }
+
+                    if (!empty($filters)) {
+                        foreach ($filters as $filter_key => $filter_value) {
+                            if (empty($filter_value)) continue;
+                            switch ($filter_key) {
+                                case 'created_by':
+                                    $where_clauses[] = "aims2.meta_value = %s";
+                                    $prepare_values[] = $filter_value;
+                                    break;
+                                case 'featured_in':
+                                    if (is_array($filter_value)) {
+                                        $or_clauses = [];
+                                        foreach ($filter_value as $val) {
+                                            $or_clauses[] = "aims5.meta_value LIKE %s";
+                                            $prepare_values[] = '%' . $wpdb->esc_like($val) . '%';
+                                        }
+                                        if (!empty($or_clauses)) {
+                                            $where_clauses[] = "(" . implode(" OR ", $or_clauses) . ")";
+                                        }
+                                    } else {
+                                        $where_clauses[] = "aims5.meta_value LIKE %s";
+                                        $prepare_values[] = '%' . $wpdb->esc_like($filter_value) . '%';
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+
                     $query = $wpdb->prepare("
                         SELECT COUNT(DISTINCT aimo.id)
                         FROM " . esc_sql($table) . " AS aimo
@@ -46,10 +82,12 @@ class Growtype_Art_Database_Crud
                         LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims2 ON (aimo.id = aims2.model_id AND aims2.meta_key='created_by')
                         LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims3 ON (aimo.id = aims3.model_id AND aims3.meta_key='character_title')
                         LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims4 ON (aimo.id = aims4.model_id AND aims4.meta_key='slug')
-                        WHERE aimo.id LIKE %s OR aimo.prompt LIKE %s OR aimo.negative_prompt LIKE %s OR aimo.reference_id LIKE %s OR aims.meta_value LIKE %s OR aims2.meta_value LIKE %s OR aims3.meta_value LIKE %s OR aims4.meta_value LIKE %s",
-                        $search_like, $search_like, $search_like, $search_like, $search_like, $search_like, $search_like, $search_like);
+                        LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims5 ON (aimo.id = aims5.model_id AND aims5.meta_key='featured_in')
+                        WHERE " . implode(' AND ', $where_clauses),
+                        ...$prepare_values);
                     $count += (int)$wpdb->get_var($query);
                 } else {
+                    $search_like = '%' . $wpdb->esc_like((string)$search) . '%';
                     $query = $wpdb->prepare("SELECT COUNT(*) FROM " . esc_sql($table) . " WHERE id LIKE %s OR prompt LIKE %s", $search_like, $search_like);
                     $count += (int)$wpdb->get_var($query);
                 }
@@ -120,12 +158,45 @@ class Growtype_Art_Database_Crud
                     }, (array)$values);
                     $prepare_values = array_merge($sanitized_values, [$limit, $offset]);
                     $query = $wpdb->prepare($query_raw, $prepare_values);
-                } elseif (!empty($search) && is_scalar($search)) {
-                    $search_like = '%' . $wpdb->esc_like((string)$search) . '%';
+                } elseif ((!empty($search) && is_scalar($search)) || !empty($param['filters'])) {
+                    if ($table === $wpdb->prefix . 'growtype_art_models') {
+                        $where_clauses = ["1=1"];
+                        $prepare_values = [];
 
-                    switch ($table) {
-                        case $wpdb->prefix . 'growtype_art_models':
-                            $query_raw = "SELECT aimo.id AS id,
+                        if (!empty($search)) {
+                            $search_like = '%' . $wpdb->esc_like((string)$search) . '%';
+                            $where_clauses[] = "(aimo.id LIKE %s OR aimo.prompt LIKE %s OR aimo.negative_prompt LIKE %s OR aimo.reference_id LIKE %s OR aims.meta_value LIKE %s OR aims2.meta_value LIKE %s OR aims3.meta_value LIKE %s OR aims4.meta_value LIKE %s OR aims5.meta_value LIKE %s)";
+                            for ($i = 0; $i < 9; $i++) $prepare_values[] = $search_like;
+                        }
+
+                        if (!empty($param['filters'])) {
+                            foreach ($param['filters'] as $filter_key => $filter_value) {
+                                if (empty($filter_value)) continue;
+                                switch ($filter_key) {
+                                    case 'created_by':
+                                        $where_clauses[] = "aims2.meta_value = %s";
+                                        $prepare_values[] = $filter_value;
+                                        break;
+                                    case 'featured_in':
+                                        if (is_array($filter_value)) {
+                                            $or_clauses = [];
+                                            foreach ($filter_value as $val) {
+                                                $or_clauses[] = "aims5.meta_value LIKE %s";
+                                                $prepare_values[] = '%' . $wpdb->esc_like($val) . '%';
+                                            }
+                                            if (!empty($or_clauses)) {
+                                                $where_clauses[] = "(" . implode(" OR ", $or_clauses) . ")";
+                                            }
+                                        } else {
+                                            $where_clauses[] = "aims5.meta_value LIKE %s";
+                                            $prepare_values[] = '%' . $wpdb->esc_like($filter_value) . '%';
+                                        }
+                                        break;
+                                }
+                            }
+                        }
+
+                        $query_raw = "SELECT aimo.id AS id,
                                     aimo.prompt AS prompt,
                                     aimo.negative_prompt AS negative_prompt,
                                     aimo.reference_id AS reference_id,
@@ -135,30 +206,22 @@ class Growtype_Art_Database_Crud
                                 LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims2 ON (aimo.id = aims2.model_id AND aims2.meta_key='created_by')
                                 LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims3 ON (aimo.id = aims3.model_id AND aims3.meta_key='character_title')
                                 LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims4 ON (aimo.id = aims4.model_id AND aims4.meta_key='slug')
-                                WHERE aimo.id LIKE %s
-                                    OR aimo.prompt LIKE %s
-                                    OR aimo.negative_prompt LIKE %s
-                                    OR aimo.reference_id LIKE %s
-                                    OR aims.meta_value LIKE %s
-                                    OR aims2.meta_value LIKE %s
-                                    OR aims3.meta_value LIKE %s
-                                    OR aims4.meta_value LIKE %s
+                                LEFT JOIN " . esc_sql($wpdb->prefix . 'growtype_art_model_settings') . " AS aims5 ON (aimo.id = aims5.model_id AND aims5.meta_key='featured_in')
+                                WHERE " . implode(' AND ', $where_clauses) . "
                                 GROUP BY aimo.id
                                 ORDER BY {$orderby} {$order}
                                 LIMIT %d OFFSET %d";
-                                
-                            $query = $wpdb->prepare($query_raw, 
-                                $search_like, $search_like, $search_like, $search_like,
-                                $search_like, $search_like, $search_like, $search_like,
-                                $limit, $offset
-                            );
-                            break;
-                        default:
-                            $query_raw = "SELECT * FROM " . esc_sql($table) . " WHERE id LIKE %s OR prompt LIKE %s OR negative_prompt LIKE %s OR reference_id LIKE %s ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
-                            $query = $wpdb->prepare($query_raw, 
-                                $search_like, $search_like, $search_like, $search_like,
-                                $limit, $offset
-                            );
+                        
+                        $prepare_values[] = $limit;
+                        $prepare_values[] = $offset;
+                        $query = $wpdb->prepare($query_raw, ...$prepare_values);
+                    } else {
+                        $search_like = '%' . $wpdb->esc_like((string)$search) . '%';
+                        $query_raw = "SELECT * FROM " . esc_sql($table) . " WHERE id LIKE %s OR prompt LIKE %s OR negative_prompt LIKE %s OR reference_id LIKE %s ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+                        $query = $wpdb->prepare($query_raw, 
+                            $search_like, $search_like, $search_like, $search_like,
+                            $limit, $offset
+                        );
                     }
                 } else {
                     $query_raw = "SELECT * FROM " . esc_sql($table) . " ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";

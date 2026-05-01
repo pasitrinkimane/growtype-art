@@ -113,6 +113,7 @@ class Growtype_Art_Admin
         $prompt_focus    = $_POST['prompt_focus'] ?? 'single';
         $provider        = $_POST['provider'] ?? Growtype_Art_Crud::DEFAULT_IMAGE_PROVIDER;
         $theme_hint      = $_POST['theme_hint'] ?? '';
+        $categories      = $_POST['categories'] ?? [];
 
         if (empty($prompt)) {
             wp_send_json_error(['message' => 'Prompt is missing.']);
@@ -216,6 +217,7 @@ class Growtype_Art_Admin
             'character_details'         => $llm_params,
             'slug'                      => $slug,
             'tags'                      => $tags,
+            'categories'                => $categories,
         ];
 
         if ($overwrite && $existing_model_id) {

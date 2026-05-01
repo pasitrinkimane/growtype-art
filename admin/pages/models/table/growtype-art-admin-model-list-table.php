@@ -109,6 +109,19 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
                 </div>
 
                 <?php
+                $featured_in_options = growtype_art_get_model_featured_in_options();
+                if ($featured_in_options) {
+                    $selected_featured_in = isset($_REQUEST['filter_featured_in']) ? (array)$_REQUEST['filter_featured_in'] : [];
+                    ?>
+                    <select name="filter_featured_in[]" class="ewc-filter-cat" multiple style="height: auto; min-width: 150px; max-height: 30px;">
+                        <option value="" <?php selected(empty($selected_featured_in)) ?>>All Featured In</option>
+                        <?php foreach ($featured_in_options as $key => $title) { ?>
+                            <option value="<?php echo $key; ?>" <?php echo in_array($key, $selected_featured_in) ? 'selected' : ''; ?>><?php echo $title; ?></option>
+                        <?php } ?>
+                    </select>
+                <?php } ?>
+
+                <?php
                 $options = [
                     [
                         'value' => 'admin',
@@ -134,15 +147,12 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
 
             <?php
             submit_button(__('Filter'), '', 'filter_action', false, array ('id' => 'post-query-submit'));
+
+            if (!empty($_REQUEST['filter_featured_in']) || !empty($_REQUEST['filter_models_action']) || !empty($_REQUEST['model_is_in_bundle'])) {
+                echo '<a href="' . admin_url('admin.php?page=' . $_REQUEST['page']) . '" class="button" style="margin-left: 5px; min-width: auto; padding: 0 10px;" title="Clear Filters">×</a>';
+            }
             ?>
 
-            <div style="display: inline-block;margin-left: 5px;">
-                <div class="actions-box" style="display: flex;gap: 10px;float:left;margin-right: 10px;">
-                    <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary">' . __('Retrieve images', 'growtype-art') . '</a>', $_REQUEST['page'], 'retrieve-models') ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary" style="display: none;">' . __('Pull external images', 'growtype-art') . '</a>', $_REQUEST['page'], 'index-download-all-models-images') ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary">' . __('Generate models', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-models') ?>
-                </div>
-            </div>
             <?php
         }
     }
@@ -192,9 +202,18 @@ class Growtype_Art_Admin_Result_List_Table extends WP_List_Table
             $args['values'] = $bundle_ids;
         }
 
-        if (empty($search_value) && isset($_REQUEST['filter_models_action']) && is_scalar($_REQUEST['filter_models_action']) && !empty($_REQUEST['filter_models_action'])) {
+        if (empty($search_value) && (isset($_REQUEST['filter_models_action']) || isset($_REQUEST['filter_featured_in']))) {
             $take_all_records = false;
-            $args['search'] = $_REQUEST['filter_models_action'];
+            $args['filters'] = [];
+            if (!empty($_REQUEST['filter_models_action'])) {
+                $args['filters']['created_by'] = $_REQUEST['filter_models_action'];
+            }
+            if (!empty($_REQUEST['filter_featured_in'])) {
+                $featured_in = array_filter((array)$_REQUEST['filter_featured_in']);
+                if (!empty($featured_in)) {
+                    $args['filters']['featured_in'] = $featured_in;
+                }
+            }
         }
 
         $items = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::MODELS_TABLE, [$args]);

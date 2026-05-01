@@ -385,6 +385,27 @@ class Growtype_Art_Admin_Model_Generator
             }
             .gen-details-raw::-webkit-scrollbar { width: 6px; }
             .gen-details-raw::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+            /* Responsive Adjustments */
+            @media (max-width: 1200px) {
+                .advanced-gen-wrapper { padding: 32px; margin: 16px 16px 16px 0; }
+                .gen-results-container { grid-template-columns: 1fr; }
+            }
+
+            @media (max-width: 768px) {
+                .advanced-gen-wrapper { padding: 20px; border-radius: 20px; }
+                .advanced-gen-header h1 { font-size: 1.75rem; }
+                .gen-grid { grid-template-columns: 1fr; gap: 16px; }
+                .gen-textarea-wrapper { grid-column: span 1; }
+                .gen-submit-group { flex-direction: column; align-items: stretch !important; gap: 20px !important; }
+                .gen-submit-btn { width: 100% !important; justify-content: center; }
+                .gen-settings-row { flex-direction: column; align-items: flex-start !important; gap: 12px !important; }
+                .gen-brainstorm-row { flex-direction: column; align-items: flex-start !important; }
+                .gen-brainstorm-controls { width: 100%; justify-content: space-between; }
+                .character-card { padding: 16px; border-radius: 16px; }
+                .gen-details-list { grid-template-columns: 1fr; gap: 4px; }
+                .gen-details-label { padding-top: 0; opacity: 0.7; }
+            }
         </style>
 
         <div class="advanced-gen-wrapper">
@@ -427,10 +448,25 @@ class Growtype_Art_Admin_Model_Generator
                     </select>
                 </div>
 
+                <div class="gen-control-group">
+                    <label class="gen-label">Primary Category</label>
+                    <select id="gen-category" class="gen-input-select">
+                        <option value="">Select Category</option>
+                        <?php foreach (growtype_art_get_art_categories() as $parent => $children): ?>
+                            <optgroup label="<?= esc_attr($parent) ?>">
+                                <option value="<?= esc_attr($parent) ?>"><?= esc_html($parent) ?> (All)</option>
+                                <?php foreach ($children as $child): ?>
+                                    <option value="<?= esc_attr($parent . '_' . $child) ?>"><?= esc_html($child) ?></option>
+                                <?php endforeach; ?>
+                            </optgroup>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
                 <div class="gen-control-group gen-textarea-wrapper">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                    <div class="gen-brainstorm-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
                         <label class="gen-label" for="models-to-generate" style="margin-bottom: 0;">Models to Generate (One per line or comma separated)</label>
-                        <div style="display: flex; gap: 8px; align-items: center;">
+                        <div class="gen-brainstorm-controls" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                                     <select id="gen-prompt-focus" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 0.85rem; height: 34px;">
                                         <option value="single" selected>Single Character</option>
                                         <option value="multiple">Multiple Characters</option>
@@ -439,7 +475,7 @@ class Growtype_Art_Admin_Model_Generator
                                         <option value="default" selected>Default List</option>
                                         <option value="universe">Same Universe / Shared Prefix</option>
                                     </select>
-                                    <input type="text" id="gen-theme-hint" placeholder="Theme hint (e.g. Marvel...)" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 0.85rem; width: 220px; height: 34px;">
+                                    <input type="text" id="gen-theme-hint" placeholder="Theme hint (e.g. Marvel...)" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 0.85rem; width: 180px; height: 34px;">
                                     <button type="button" id="gen-brainstorm-btn" class="gen-brainstorm-btn">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
                                         <span>Magic Brainstorm</span>
@@ -450,12 +486,12 @@ class Growtype_Art_Admin_Model_Generator
                 </div>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px;">
+            <div class="gen-submit-group" style="display: flex; align-items: center; gap: 16px; margin-top: 8px;">
                 <button type="button" id="gen-submit-ajax" class="gen-submit-btn">
                     <span>Generate Characters</span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                 </button>
-                <div style="display: flex; align-items: center; gap: 16px;">
+                <div class="gen-settings-row" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <label style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">Amount per prompt</label>
                         <input type="number" id="gen-amount" min="1" max="20" value="1" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: #fff; border-radius: 6px; padding: 6px 10px; font-size: 0.9rem; width: 70px; text-align: center;">
@@ -536,6 +572,7 @@ class Growtype_Art_Admin_Model_Generator
                 const featuredInSelect = document.getElementById('gen-featured-in');
                 const createdBySelect = document.getElementById('gen-created-by');
                 const amountInput = document.getElementById('gen-amount');
+                const categorySelect = document.getElementById('gen-category');
                 const resultsContainer = document.getElementById('gen-results');
                 const ajaxUrl = '<?= admin_url('admin-ajax.php') ?>';
                 const adminEditBase = '<?= admin_url('admin.php?page=growtype-art-models&action=edit&model=') ?>';
@@ -552,6 +589,7 @@ class Growtype_Art_Admin_Model_Generator
                     if (themeHint         && saved.theme)        themeHint.value         = saved.theme;
                     if (amountInput       && saved.amount)       amountInput.value       = saved.amount;
                     if (textarea          && saved.prompt)       textarea.value          = saved.prompt;
+                    if (categorySelect    && saved.category)     categorySelect.value    = saved.category;
                     if (featuredInSelect  && saved.featured_in) {
                         Array.from(featuredInSelect.options).forEach(opt => {
                             opt.selected = saved.featured_in.includes(opt.value);
@@ -605,6 +643,7 @@ class Growtype_Art_Admin_Model_Generator
                         theme:        themeHint         ? themeHint.value         : '',
                         amount:       amountInput       ? amountInput.value       : '1',
                         prompt:       textarea          ? textarea.value          : '',
+                        category:     categorySelect    ? categorySelect.value    : '',
                         featured_in:  featuredInSelect
                             ? Array.from(featuredInSelect.selectedOptions).map(o => o.value)
                             : [],
@@ -623,7 +662,7 @@ class Growtype_Art_Admin_Model_Generator
                     localStorage.setItem(LS + 'state', JSON.stringify(state));
                 };
                 
-                [providerSelect, styleSelect, promptFocusSelect, templateSelect, featuredInSelect, createdBySelect].forEach(el => {
+                [providerSelect, styleSelect, promptFocusSelect, templateSelect, featuredInSelect, createdBySelect, categorySelect].forEach(el => {
                     el && el.addEventListener('change', save);
                 });
                 [themeHint, amountInput, textarea].forEach(el => {
@@ -735,6 +774,18 @@ class Growtype_Art_Admin_Model_Generator
                                 formData.append('featured_in[]', opt.value);
                             });
                         }
+
+                        if (categorySelect && categorySelect.value) {
+                            const val = categorySelect.value;
+                            let catData = {};
+                            if (val.includes('_')) {
+                                const parts = val.split('_');
+                                catData[parts[0]] = [parts[1]];
+                            } else {
+                                catData[val] = [];
+                            }
+                            formData.append('categories', JSON.stringify(catData));
+                        }
                     }
 
                     try {
@@ -779,6 +830,18 @@ class Growtype_Art_Admin_Model_Generator
                     }
                 }
 
+                function isVideo(url) {
+                    return url && (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov'));
+                }
+
+                function renderMedia(url, size = 40) {
+                    if (!url) return `<div style="flex-shrink: 0; width: ${size}px; height: ${size}px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); display:flex; align-items:center; justify-content:center;"><svg width="${size/2.5}" height="${size/2.5}" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+                    if (isVideo(url)) {
+                        return `<div style="flex-shrink: 0; width: ${size}px; height: ${size}px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border);"><video src="${url}" style="width: 100%; height: 100%; object-fit: cover;" autoplay muted loop playsinline></video></div>`;
+                    }
+                    return `<div style="flex-shrink: 0; width: ${size}px; height: ${size}px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border);"><img src="${url}" style="width: 100%; height: 100%; object-fit: cover;"></div>`;
+                }
+
                 function showDuplicateModal(name, existing, generatedDetails) {
                     return new Promise(resolve => {
                         const modal = document.getElementById('gen-duplicate-modal');
@@ -793,7 +856,7 @@ class Growtype_Art_Admin_Model_Generator
                             const item = document.createElement('div');
                             item.style.cssText = 'display:flex; align-items:center; gap: 12px; padding: 10px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem;';
                             item.innerHTML = `
-                                ${char.image_url ? `<div style="flex-shrink: 0; width: 40px; height: 40px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border);"><img src="${char.image_url}" style="width: 100%; height: 100%; object-fit: cover;"></div>` : `<div style="flex-shrink: 0; width: 40px; height: 40px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`}
+                                ${renderMedia(char.image_url, 40)}
                                 <div style="flex-grow: 1;">
                                     <div style="font-weight: 700; color: #fff;">${char.title}</div>
                                     <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 2px;">slug: ${char.slug}</div>
@@ -894,7 +957,7 @@ class Growtype_Art_Admin_Model_Generator
 
                     card.innerHTML = `
                         <div style="display: flex; gap: 16px;">
-                            ${imageUrl ? `<div style="flex-shrink: 0; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border);"><img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;"></div>` : ''}
+                            ${renderMedia(imageUrl, 80)}
                             <div style="flex-grow: 1;">
                                 <div style="font-weight: 800; font-size: 1.25rem; margin-bottom: 4px;">${characterData.title}</div>
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">

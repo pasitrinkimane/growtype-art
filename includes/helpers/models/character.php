@@ -5,6 +5,17 @@ function growtype_art_format_character_slug($inputString, $model_id = null)
     $clean_string = preg_replace('/[^\w\s-]/', '', $inputString);
     $final_string = str_replace(' ', '-', $clean_string);
     $final_string = strtolower($final_string);
+    
+    // Enforce minimum slug length of 4 characters
+    if (strlen($final_string) < 4) {
+        $characters = '0123456789abcdefghijklmnopqrstuvwxyz';
+        $random_string = '';
+        for ($i = 0; $i < 4; $i++) {
+            $random_string .= $characters[rand(0, strlen($characters) - 1)];
+        }
+        $final_string = !empty($final_string) ? $final_string . '-' . $random_string : $random_string;
+    }
+
     $base_slug = $final_string;
 
     // Check if the base slug exists for another model

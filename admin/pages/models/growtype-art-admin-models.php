@@ -134,9 +134,22 @@ class Growtype_Art_Admin_Models
 
         $title = $action === 'edit' ? (__('Edit records id', 'growtype-art') . ': ' . $id) : __('Models', 'growtype-art') . ' ' . sprintf('<a href="?page=%s&action=%s" class="page-title-action">' . __('Add new', 'growtype-art') . '</a>', $_REQUEST['page'], 'create-model');
         ?>
+        <style>
+            .fixed .column-slug {
+                width: initial;
+            }
+        </style>
 
         <div class="wrap">
-            <h2><?php echo $title ?></h2>
+            <h2 style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <?php echo $title ?>
+                <?php if ($action !== 'edit') : ?>
+                    <div class="actions-box" style="display: flex; gap: 10px; margin-left: 10px;">
+                        <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary" style="display:none;">' . __('Retrieve images', 'growtype-art') . '</a>', $_REQUEST['page'], 'retrieve-models') ?>
+                        <?php echo sprintf('<a href="?page=%s&action=%s" class="button button-primary">' . __('Generate models', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-models') ?>
+                    </div>
+                <?php endif; ?>
+            </h2>
 
             <?php echo $message ?>
 
