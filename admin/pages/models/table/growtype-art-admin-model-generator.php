@@ -476,6 +476,7 @@ class Growtype_Art_Admin_Model_Generator
                                         <option value="universe">Same Universe / Shared Prefix</option>
                                     </select>
                                     <input type="text" id="gen-theme-hint" placeholder="Theme hint (e.g. Marvel...)" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 0.85rem; width: 180px; height: 34px;">
+                                    <input type="number" id="gen-brainstorm-amount" value="5" min="1" max="50" style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: #fff; border-radius: 6px; padding: 6px 10px; font-size: 0.9rem; width: 60px; height: 34px; text-align: center;" title="Amount to brainstorm">
                                     <button type="button" id="gen-brainstorm-btn" class="gen-brainstorm-btn">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
                                         <span>Magic Brainstorm</span>
@@ -499,6 +500,14 @@ class Growtype_Art_Admin_Model_Generator
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-muted); font-size: 0.85rem;">
                         <input type="checkbox" id="gen-review-toggle" style="accent-color: var(--primary);">
                         Review characters before generating
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-muted); font-size: 0.85rem;">
+                        <input type="checkbox" id="gen-skip-existing" style="accent-color: var(--primary);">
+                        Skip existing characters
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-muted); font-size: 0.85rem;">
+                        <input type="checkbox" id="gen-update-existing" style="accent-color: var(--primary);">
+                        Update existing characters
                     </label>
                 </div>
             </div>
@@ -573,6 +582,10 @@ class Growtype_Art_Admin_Model_Generator
                 const createdBySelect = document.getElementById('gen-created-by');
                 const amountInput = document.getElementById('gen-amount');
                 const categorySelect = document.getElementById('gen-category');
+                const reviewToggle = document.getElementById('gen-review-toggle');
+                const skipExisting = document.getElementById('gen-skip-existing');
+                const updateExisting = document.getElementById('gen-update-existing');
+                const brainstormAmount = document.getElementById('gen-brainstorm-amount');
                 const resultsContainer = document.getElementById('gen-results');
                 const ajaxUrl = '<?= admin_url('admin-ajax.php') ?>';
                 const adminEditBase = '<?= admin_url('admin.php?page=growtype-art-models&action=edit&model=') ?>';
@@ -595,6 +608,10 @@ class Growtype_Art_Admin_Model_Generator
                             opt.selected = saved.featured_in.includes(opt.value);
                         });
                     }
+                    if (reviewToggle && saved.reviewToggle !== undefined) reviewToggle.checked = saved.reviewToggle;
+                    if (skipExisting && saved.skipExisting !== undefined) skipExisting.checked = saved.skipExisting;
+                    if (updateExisting && saved.updateExisting !== undefined) updateExisting.checked = saved.updateExisting;
+                    if (brainstormAmount && saved.brainstormAmount) brainstormAmount.value = saved.brainstormAmount;
                     if (promptFocusSelect) promptFocusSelect.dispatchEvent(new Event('change'));
 
                     if (saved.results && Array.isArray(saved.results)) {
@@ -644,6 +661,9 @@ class Growtype_Art_Admin_Model_Generator
                         amount:       amountInput       ? amountInput.value       : '1',
                         prompt:       textarea          ? textarea.value          : '',
                         category:     categorySelect    ? categorySelect.value    : '',
+                        reviewToggle: reviewToggle      ? reviewToggle.checked    : false,
+                        skipExisting: skipExisting      ? skipExisting.checked    : false,
+                        updateExisting: updateExisting  ? updateExisting.checked  : false,
                         featured_in:  featuredInSelect
                             ? Array.from(featuredInSelect.selectedOptions).map(o => o.value)
                             : [],
@@ -657,16 +677,17 @@ class Growtype_Art_Admin_Model_Generator
                                 image_url: img ? img.src : '',
                                 metadata: JSON.parse(card.dataset.metadata || '{}')
                             };
-                        })
+                        }),
+                        brainstormAmount: document.getElementById('gen-brainstorm-amount') ? document.getElementById('gen-brainstorm-amount').value : 5
                     };
                     localStorage.setItem(LS + 'state', JSON.stringify(state));
                 };
                 
-                [providerSelect, styleSelect, promptFocusSelect, templateSelect, featuredInSelect, createdBySelect, categorySelect].forEach(el => {
-                    el && el.addEventListener('change', save);
+                [providerSelect, styleSelect, promptFocusSelect, templateSelect, featuredInSelect, createdBySelect, categorySelect, reviewToggle, skipExisting, updateExisting, brainstormAmount].forEach(el => {
+                    if (el) el.addEventListener('change', save);
                 });
-                [themeHint, amountInput, textarea].forEach(el => {
-                    el && el.addEventListener('input', save);
+                [themeHint, amountInput, textarea, brainstormAmount].forEach(el => {
+                    if (el) el.addEventListener('input', save);
                 });
 
                 if (brainstormBtn) {
@@ -683,6 +704,7 @@ class Growtype_Art_Admin_Model_Generator
                         formData.append('theme', themeHint ? themeHint.value : '');
                         formData.append('prompt_focus', promptFocusSelect ? promptFocusSelect.value : 'single');
                         formData.append('gen_template', templateSelect ? templateSelect.value : 'default');
+                        formData.append('amount', brainstormAmount ? brainstormAmount.value : 5);
 
                         fetch(ajaxUrl, { method: 'POST', body: formData })
                         .then(r => r.json())
@@ -780,9 +802,11 @@ class Growtype_Art_Admin_Model_Generator
                             let catData = {};
                             if (val.includes('_')) {
                                 const parts = val.split('_');
-                                catData[parts[0]] = [parts[1]];
+                                const parent = parts[0];
+                                catData[parent] = {};
+                                catData[parent][val] = {}; // Edit page expects Parent_Child as key
                             } else {
-                                catData[val] = [];
+                                catData[val] = {};
                             }
                             formData.append('categories', JSON.stringify(catData));
                         }
@@ -812,6 +836,21 @@ class Growtype_Art_Admin_Model_Generator
                                 save();
                             }
                         } else if (data.data?.code === 'duplicate_slug') {
+                            const skipExisting = document.getElementById('gen-skip-existing');
+                            const updateExisting = document.getElementById('gen-update-existing');
+                            
+                            if (skipExisting && skipExisting.checked) {
+                                console.warn('Skipping existing character:', name);
+                                return;
+                            }
+                            
+                            if (updateExisting && updateExisting.checked) {
+                                console.log('Automatically updating existing character:', name);
+                                formData.append('overwrite', '1');
+                                await processCharacter(name, { is_retry: true, formData });
+                                return;
+                            }
+
                             const action = await showDuplicateModal(name, data.data.existing, metadata);
                             if (action) {
                                 if (typeof action === 'object') {

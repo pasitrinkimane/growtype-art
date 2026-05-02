@@ -271,6 +271,7 @@ class Growtype_Art_Admin
         $theme = $_POST['theme'] ?? 'popular and trending';
         $prompt_focus = $_POST['prompt_focus'] ?? 'single';
         $gen_template = $_POST['gen_template'] ?? 'default';
+        $amount = intval($_POST['amount'] ?? 5);
 
         $api_key = Openai_Base::api_key();
 
@@ -280,13 +281,13 @@ class Growtype_Art_Admin
 
         if ($prompt_focus === 'multiple') {
             if ($gen_template === 'universe') {
-                $prompt = "Generate ONE specific example of characters from the same universe using the format 'Universe Name: Character 1, Character 2, Character 3'. Theme: $theme. Style: $style. Return ONLY the formatted string (e.g. 'Marvel Cinematic Universe: Iron Man, Captain America, Thor'). No extra text.";
+                $prompt = "Generate ONE specific example of exactly $amount characters from the same universe using the format 'Universe Name: Character 1, Character 2, ..., Character $amount'. Theme: $theme. Style: $style. Return ONLY the formatted string. No extra text.";
             } else {
-                $prompt = "Generate a list of 10-15 famous group names or duo/trio/team concepts for AI art generation (e.g. 'The Avengers', 'Charlie's Angels', 'Power Rangers'). Style: $style. Theme: $theme. Return a comma separated list of group names only, no descriptions.";
+                $prompt = "Generate a list of exactly $amount famous group names or duo/trio/team concepts for AI art generation (e.g. 'The Avengers', 'Charlie\'s Angels', 'Power Rangers'). Style: $style. Theme: $theme. Return a comma separated list of group names only, no descriptions.";
             }
         } else {
             $theme_context = !empty($theme) ? "Theme: $theme." : '';
-            $prompt = "Write exactly ONE AI image generation prompt for a single character. Format: [Character name] in a [art style], [atmospheric/symbolic details], [background description], [color palette], [lighting], [quality tags]. $theme_context Style: $style. Return only the prompt text. No lists. No numbering. No alternatives. No extra text.";
+            $prompt = "Write exactly $amount AI image generation prompts for single characters, separated by newlines. Each prompt format: [Character name] in a [art style], [atmospheric/symbolic details], [background description], [color palette], [lighting], [quality tags]. $theme_context Style: $style. Return only the prompt text. No lists. No numbering. No extra text.";
         }
         
         $response = Openai_Base::generate_content($prompt);

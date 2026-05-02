@@ -1008,12 +1008,20 @@ class Growtype_Art_Admin_Model_List_Table_Record
 
             window.categorySelect = window.categorySelect ? JSON.parse(window.categorySelect) : {}
 
-            Object.entries(window.categorySelect).forEach(([key, value]) => {
-                $('.category-select input[data-value="' + key + '"]').prop('checked', true)
+            Object.entries(window.categorySelect).forEach(([parentKey, children]) => {
+                $('.category-select input[data-value="' + parentKey + '"]').prop('checked', true)
 
-                Object.entries(value).forEach(([key, value]) => {
-                    $('.category-select input[data-value="' + key + '"]').prop('checked', true)
-                })
+                if (Array.isArray(children)) {
+                    children.forEach(child => {
+                        // Handle cases where child might be "Anime" or "Cartoons_Anime"
+                        $('.category-select input[data-value="' + child + '"]').prop('checked', true)
+                        $('.category-select input[data-value="' + parentKey + '_' + child + '"]').prop('checked', true)
+                    });
+                } else if (typeof children === 'object' && children !== null) {
+                    Object.keys(children).forEach(childKey => {
+                        $('.category-select input[data-value="' + childKey + '"]').prop('checked', true)
+                    });
+                }
             })
 
             $('input[name="settings[categories]"]').val(JSON.stringify(window.categorySelect))
