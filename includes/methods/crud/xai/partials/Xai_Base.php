@@ -47,10 +47,7 @@ class Xai_Base extends Growtype_Art_Generator_Base
         ];
 
         if (!empty($image_url)) {
-            $payload['image'] = [
-                'url' => $image_url,
-                'type' => 'image_url'
-            ];
+            $payload['image_url'] = $image_url;
         }
 
         $headers = [
@@ -87,7 +84,10 @@ class Xai_Base extends Growtype_Art_Generator_Base
                 ];
             }
 
-//                    var_dump($response);
+//                    var_dump([
+//                        $payload,
+//                        $response
+//                    ]);
 //        die();
 
             $decoded = json_decode($response, true);

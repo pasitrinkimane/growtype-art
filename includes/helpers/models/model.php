@@ -261,11 +261,11 @@ function growtype_art_get_image_id_by_url($url)
 
     // Try to find the image by URL. URL usually contains the name and extension.
     $image_name = pathinfo($url, PATHINFO_FILENAME);
-    
+
     // We can also try a direct match if we store the full URL or a relative path.
     // However, looking at the schema, we store 'name', 'extension', 'folder'.
     // A better way would be to query by the filename if it's unique enough or use a more robust lookup.
-    
+
     // For now, let's try to match by name as it's often unique in our system.
     $image_id = $wpdb->get_var($wpdb->prepare(
         "SELECT id FROM $table_name WHERE name = %s LIMIT 1",
@@ -287,10 +287,14 @@ function growtype_art_get_image_id_by_url($url)
 function growtype_art_get_provider_executor_data($entry, $params, $global_models = [])
 {
     $name = is_string($entry) ? $entry : ($entry['provider'] ?? '');
-    if (empty($name)) return null;
+    if (empty($name)) {
+        return null;
+    }
 
     $class_name = sprintf('\partials\%s_Base', ucfirst($name));
-    if (!class_exists($class_name)) return null;
+    if (!class_exists($class_name)) {
+        return null;
+    }
 
     $models = [];
     if (is_array($entry) && (isset($entry['model']) || isset($entry['models']))) {
@@ -323,10 +327,13 @@ function growtype_art_get_provider_executor_data($entry, $params, $global_models
 function growtype_art_execute_with_fallback($providers, $params, $callback, $global_models = [])
 {
     $generate_details = ['success' => false];
+    $all_responses = [];
 
     foreach ($providers as $entry) {
         $executor = growtype_art_get_provider_executor_data($entry, $params, $global_models);
-        if (!$executor) continue;
+        if (!$executor) {
+            continue;
+        }
 
         $crud = new $executor['class_name']();
 
@@ -345,9 +352,13 @@ function growtype_art_execute_with_fallback($providers, $params, $callback, $glo
                 $current_details = ['success' => false, 'message' => $e->getMessage()];
             }
 
+            $current_details['provider'] = $executor['name'];
+            $current_details['model_used'] = $model_slug;
+
+            $all_responses[] = $current_details;
+
             if ($current_details['success']) {
-                $current_details['provider'] = $executor['name'];
-                $current_details['model_used'] = $model_slug;
+                $current_details['all_responses'] = $all_responses;
                 return $current_details;
             }
 
@@ -358,6 +369,8 @@ function growtype_art_execute_with_fallback($providers, $params, $callback, $glo
             }
         }
     }
+
+    $generate_details['all_responses'] = $all_responses;
 
     return $generate_details;
 }
@@ -380,7 +393,9 @@ function growtype_art_generate_model_image($model_id, $params = [])
     }
 
     return growtype_art_execute_with_fallback($providers, $params, function ($crud, $p) use ($model_id) {
-        return $crud->generate_model_image($model_id, $p);
+        $generate_model_image = $crud->generate_model_image($model_id, $p);
+
+        return $generate_model_image;
     });
 }
 
