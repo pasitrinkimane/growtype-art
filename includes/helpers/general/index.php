@@ -215,8 +215,9 @@ if (!function_exists('growtype_art_get_model_images_grouped')) {
         $settings_table = $wpdb->prefix . 'growtype_art_image_settings';
 
         $filter = $params['filter'] ?? '';
+        $file_type = $params['file_type'] ?? '';
         $filter_query = "";
-        $query_args = [$model_id];
+        $query_args = [];
 
         if (!empty($filter)) {
             $map = [
@@ -226,12 +227,53 @@ if (!function_exists('growtype_art_get_model_images_grouped')) {
                 'featured' => 'is_featured',
                 'cover' => 'is_cover',
                 'porn' => 'porn',
-                'private' => 'private'
+                'private' => 'private',
+                'is_intro_asset' => 'is_intro_asset'
             ];
 
             $meta_key = $map[strtolower($filter)] ?? $filter;
-            $filter_query = "INNER JOIN {$settings_table} AS fs ON fs.image_id = i.id AND fs.meta_key = %s AND fs.meta_value = '1'";
-            $query_args = [$meta_key, $model_id];
+            $filter_query .= " INNER JOIN {$settings_table} AS fs ON fs.image_id = i.id AND fs.meta_key = %s AND fs.meta_value = '1'";
+            $query_args[] = $meta_key;
+        }
+
+        $has_relations = !empty($params['has_relations']);
+        if ($has_relations) {
+            // Images that ARE a child (have parent_image_id) OR ARE a parent (have children)
+            $where_clause_has_relations = " AND (EXISTS (
+                SELECT 1 FROM {$settings_table} AS fsc
+                WHERE fsc.image_id = i.id AND fsc.meta_key = 'parent_image_id'
+            ) OR EXISTS (
+                SELECT 1 FROM {$settings_table} AS fsp
+                WHERE fsp.meta_key = 'parent_image_id' AND fsp.meta_value = i.id
+            ))";
+        }
+
+        $where_clause = " WHERE m.id = %d";
+        $query_args[] = $model_id;
+
+        if (!empty($file_type)) {
+            $where_clause .= " AND i.extension = %s";
+            $query_args[] = $file_type;
+        }
+
+        $hide_private = !empty($params['hide_private']);
+        if ($hide_private) {
+            $where_clause .= " AND NOT EXISTS (
+                SELECT 1 FROM {$settings_table} AS hps 
+                WHERE hps.image_id = i.id 
+                  AND hps.meta_key = 'private' 
+                  AND hps.meta_value = '1'
+            )";
+        }
+
+        $parent_image_id = !empty($params['parent_image_id']) ? $params['parent_image_id'] : '';
+        if (!empty($parent_image_id)) {
+            $where_clause .= " AND (i.id = %d OR EXISTS (
+                SELECT 1 FROM {$settings_table} AS pis 
+                WHERE pis.image_id = i.id AND pis.meta_key = 'parent_image_id' AND pis.meta_value = %s
+            ))";
+            $query_args[] = $parent_image_id;
+            $query_args[] = $parent_image_id;
         }
 
         $query_args[] = (int)$limit;
@@ -239,12 +281,13 @@ if (!function_exists('growtype_art_get_model_images_grouped')) {
 
         // Step 1: Get distinct image IDs ordered by created_at DESC
         $image_ids_query = Growtype_Art_Database_Crud::custom_query("
-        SELECT i.id
+        SELECT DISTINCT i.id
         FROM {$models_table} AS m
         INNER JOIN {$pivot_table} AS mi ON mi.model_id = m.id
         INNER JOIN {$images_table} AS i ON i.id = mi.image_id
         {$filter_query}
-        WHERE m.id = %d
+        {$where_clause}
+        " . ($where_clause_has_relations ?? '') . "
         ORDER BY i.created_at DESC
         LIMIT %d OFFSET %d
     ", $query_args);
@@ -393,8 +436,9 @@ function growtype_art_get_model_total_images_amount($model_id, $params = [])
     global $wpdb;
 
     $filter = $params['filter'] ?? '';
+    $file_type = $params['file_type'] ?? '';
     $filter_query = "";
-    $query_args = [$model_id];
+    $query_args = [];
 
     if (!empty($filter)) {
         $map = [
@@ -404,12 +448,53 @@ function growtype_art_get_model_total_images_amount($model_id, $params = [])
             'featured' => 'is_featured',
             'cover' => 'is_cover',
             'porn' => 'porn',
-            'private' => 'private'
+            'private' => 'private',
+            'is_intro_asset' => 'is_intro_asset'
         ];
 
         $meta_key = $map[strtolower($filter)] ?? $filter;
         $filter_query = "INNER JOIN {$wpdb->prefix}growtype_art_image_settings AS fs ON fs.image_id = mi.image_id AND fs.meta_key = %s AND fs.meta_value = '1'";
-        $query_args = [$meta_key, $model_id];
+        $query_args[] = $meta_key;
+    }
+
+    $has_relations = !empty($params['has_relations']);
+    if ($has_relations) {
+        $where_clause_has_relations = " AND (EXISTS (
+            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS fsc
+            WHERE fsc.image_id = mi.image_id AND fsc.meta_key = 'parent_image_id'
+        ) OR EXISTS (
+            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS fsp
+            WHERE fsp.meta_key = 'parent_image_id' AND fsp.meta_value = mi.image_id
+        ))";
+    }
+
+    $where_clause = " WHERE mi.model_id = %d";
+    $query_args[] = $model_id;
+
+    if (!empty($file_type)) {
+        $filter_query .= " INNER JOIN {$wpdb->prefix}growtype_art_images AS i ON i.id = mi.image_id";
+        $where_clause .= " AND i.extension = %s";
+        $query_args[] = $file_type;
+    }
+
+    $hide_private = !empty($params['hide_private']);
+    if ($hide_private) {
+        $where_clause .= " AND NOT EXISTS (
+            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS hps 
+            WHERE hps.image_id = mi.image_id 
+              AND hps.meta_key = 'private' 
+              AND hps.meta_value = '1'
+        )";
+    }
+
+    $parent_image_id = !empty($params['parent_image_id']) ? $params['parent_image_id'] : '';
+    if (!empty($parent_image_id)) {
+        $where_clause .= " AND (mi.image_id = %d OR EXISTS (
+            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS pis 
+            WHERE pis.image_id = mi.image_id AND pis.meta_key = 'parent_image_id' AND pis.meta_value = %s
+        ))";
+        $query_args[] = $parent_image_id;
+        $query_args[] = $parent_image_id;
     }
 
     return (int)$wpdb->get_var(
@@ -417,7 +502,8 @@ function growtype_art_get_model_total_images_amount($model_id, $params = [])
         SELECT COUNT(DISTINCT mi.image_id) 
         FROM {$wpdb->prefix}growtype_art_model_image AS mi
         {$filter_query}
-        WHERE mi.model_id = %d
+        {$where_clause}
+        " . ($where_clause_has_relations ?? '') . "
     ", $query_args)
     );
 }
@@ -1074,17 +1160,17 @@ if (!function_exists('growtype_art_compress_existing_image')) {
             $extension = strtolower($image_details['extension'] ?? '');
 
             if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'])) {
-                error_log("Unsupported image format: $extension for image ID: $image_id");
+//                error_log("Unsupported image format: $extension for image ID: $image_id");
                 throw new Exception("Unsupported image format ($extension).");
             }
 
             $is_compressed = $image_details['settings']['compressed'] ?? false;
             if ($is_compressed) {
-                error_log("Image already compressed: {$image_details['name']}.$extension");
+//                error_log("Image already compressed: {$image_details['name']}.$extension");
                 return;
             }
 
-            error_log("Compressing image: {$image_details['name']}.$extension");
+//            error_log("Compressing image: {$image_details['name']}.$extension");
 
             $resmush = new Resmush_Crud();
             $img_url = $resmush->compress_online(growtype_art_get_image_url($image_id));
@@ -1116,7 +1202,7 @@ if (!function_exists('growtype_art_compress_existing_image')) {
             ]);
 
         } catch (Exception $e) {
-            error_log("Exception during image compression: " . $e->getMessage());
+//            error_log("Exception during image compression: " . $e->getMessage());
         }
     }
 }

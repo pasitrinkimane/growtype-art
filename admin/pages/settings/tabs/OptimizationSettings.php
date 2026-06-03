@@ -57,6 +57,9 @@ class OptimizationSettings
             'growtype_art_optimization_clean_duplicate_images'
         );
 
+        global $wpdb;
+        $images_count = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}" . Growtype_Art_Database::IMAGES_TABLE);
+
         add_settings_field(
             'growtype_art_optimization_clean_duplicate_images',
             'Clean duplicate images (clean db records)',
@@ -64,8 +67,8 @@ class OptimizationSettings
             Growtype_Art_Admin::SETTINGS_PAGE_NAME,
             'growtype_art_optimization_settings',
             [
-                'name' => 'growtype_art_optimization_clean_duplicate_images',
-                'amount' => count(Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::IMAGES_TABLE))
+                'name'   => 'growtype_art_optimization_clean_duplicate_images',
+                'amount' => $images_count,
             ]
         );
 

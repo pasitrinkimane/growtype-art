@@ -2,10 +2,11 @@
 
 class Growtype_Art_Admin_Images
 {
-    const IMAGE_VERSION = '1.1.7';
 
     public function __construct()
     {
+        $this->load_partials();
+
         add_action('admin_menu', array ($this, 'items_tab_init'));
 
         /**
@@ -14,6 +15,23 @@ class Growtype_Art_Admin_Images
         add_action('wp_ajax_growtype_art_admin_remove_image', array ($this, 'remove_image_callback'));
         add_action('wp_ajax_growtype_art_admin_update_image', array ($this, 'update_image_callback'));
         add_action('wp_ajax_growtype_art_admin_compress_image', array ($this, 'compress_image_callback'));
+    }
+
+    private function load_partials()
+    {
+        foreach (glob(__DIR__ . '/partials/*.php') as $partial) {
+            require_once $partial;
+
+            $filename = basename($partial, '.php');
+            if (strpos($filename, 'class-') === 0) {
+                $class_name = implode('_', array_map('ucfirst', explode('_',
+                    str_replace('-', '_', substr($filename, strlen('class-')))
+                )));
+                if (class_exists($class_name)) {
+                    new $class_name();
+                }
+            }
+        }
     }
 
     function remove_image_callback()
@@ -324,166 +342,7 @@ class Growtype_Art_Admin_Images
 
     public static function preview_image_from_data($image, $image_id = null)
     {
-        if (empty($image) || !is_array($image)) {
-            $image_id = $image_id !== null ? (int)$image_id : null;
-            ob_start();
-
-            ?>
-            <div class="image" <?= $image_id !== null ? 'data-id="' . $image_id . '"' : '' ?>>
-                Image doesnt exist
-                <div style="display:flex;flex-wrap: wrap;gap: 15px;flex-direction: column;">
-                    <?php if ($image_id !== null) { ?>
-                        <a href="#" class="button button-primary growtype-ajax-button"
-                           data-id="<?= $image_id ?>"
-                           data-action="growtype_art_admin_remove_image"
-                           data-success-action="remove"
-                           data-confirm="<?= __('Are you sure you want to delete this image?', 'growtype-art') ?>"><?= __('Delete', 'growtype-art') ?></a>
-                    <?php } ?>
-                </div>
-            </div>
-            <?php
-
-            return ob_get_clean();
-        }
-
-        $prompt = isset($image['settings']['prompt']) ? $image['settings']['prompt'] : '';
-        $caption = isset($image['settings']['caption']) ? $image['settings']['caption'] : '';
-        $alt_text = isset($image['settings']['alt_text']) ? $image['settings']['alt_text'] : '';
-        $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : '';
-        $tags = isset($image['settings']['tags']) ? json_decode($image['settings']['tags'], true) : '';
-        $tags = !empty($tags) ? implode(', ', $tags) : '';
-
-        $compressed = isset($image['settings']['compressed']) ? true : false;
-        $real_esrgan = isset($image['settings']['real_esrgan']) ? true : false;
-
-        $img_url = growtype_art_build_public_image_url($image);
-
-        $provider = isset($image['settings']['provider']) && !empty($image['settings']['provider']) ? $image['settings']['provider'] : '-';
-        $main_colors = isset($image['settings']['main_colors']) && !empty($image['settings']['main_colors']) && !empty(json_decode($image['settings']['main_colors'], true)) ? implode(',', json_decode($image['settings']['main_colors'], true)) : '';
-
-        $is_featured = !empty($image['settings']['is_featured']);
-        $is_cover = !empty($image['settings']['is_cover']);
-        $is_intro_asset = !empty($image['settings']['is_intro_asset']);
-        $is_compressed = !empty($image['settings']['compressed']);
-
-        $classes = ['image'];
-        $toggle_map = [
-            'is_featured' => 'is-featured',
-            'is_cover' => 'is-cover',
-            'is_intro_asset' => 'is-intro-asset',
-            'nsfw' => 'is-nsfw',
-            'nudity' => 'is-nudity',
-            'porn' => 'is-porn',
-            'private' => 'is-private',
-            'compressed' => 'is-compressed'
-        ];
-
-        foreach ($toggle_map as $key => $class) {
-            if (!empty($image['settings'][$key])) {
-                $classes[] = $class;
-            }
-        }
-
-        ob_start();
-        ?>
-    <div class="<?= implode(' ', $classes) ?>" data-id="<?= $image['id'] ?>">
-        <?php
-        if (!empty($img_url)) { ?>
-            <div class="image-preview">
-                <a href="<?php echo growtype_art_image_get_alternative_format($img_url) ?>?v=<?php echo self::IMAGE_VERSION ?>" target="_blank" style="min-height: 100px;width: 100%;display: flex;margin-bottom: 10px;">
-                    <?php if (in_array($image['extension'], ['jpg', 'jpeg', 'png', 'webp', 'gif'])) { ?>
-                        <img src="<?php echo growtype_art_image_get_alternative_format($img_url) ?>?v=<?php echo self::IMAGE_VERSION ?>" alt="" style="max-width: 100%;" loading="lazy">
-                    <?php } elseif (in_array($image['extension'], ['mp3', 'wav', 'ogg', 'm4a'])) { ?>
-                        <audio controls preload="none" style="width: 100%;">
-                            <source src="<?php echo $img_url ?>" type="audio/<?= $image['extension'] ?>">
-                        </audio>
-                    <?php } else { ?>
-                        <video width="100%" height="100%" controls loop muted preload="none" class="lazy-video">
-                            <source type="video/mp4" data-src="<?php echo $img_url ?>">
-                        </video>
-                    <?php } ?>
-                </a>
-            </div>
-            <div class="image-details">
-                <div style="display:flex;flex-wrap: wrap;gap: 15px;">
-                    <a href="#" class="button button-primary growtype-ajax-button"
-                       data-action="growtype_art_admin_remove_image"
-                       data-success-action="remove"
-                       data-confirm="<?= __('Are you sure?', 'growtype-art') ?>"><?= __('Delete', 'growtype-art') ?></a>
-
-                    <a style="display: none" href="<?= sprintf('/wp/wp-admin/admin.php?page=growtype-art-models&action=generate-image-content&model=%s&image=%s', growtype_art_get_image_model_details($image['id'])['id'], $image['id']) ?>" class="button button-secondary button-regenerate"><?= __('Regenerate description', 'growtype-art') ?></a>
-
-                    <a href="#" class="button button-secondary growtype-ajax-button"
-                       data-action="growtype_art_admin_compress_image"
-                       data-success-action="addClass:is-compressed"
-                       data-success-text="<?= __('Is compressed!', 'growtype-art') ?>"
-                       style="<?= $is_compressed ? 'background: green;color: white;' : '' ?>"><?= $is_compressed ? __('Is compressed!', 'growtype-art') : __('Compress photo', 'growtype-art') ?></a>
-
-                    <a style="display: none" href="<?= sprintf('/wp/wp-admin/admin.php?page=growtype-art-models&action=generate-images&model=%s&image=%s', growtype_art_get_image_model_details($image['id'])['id'], $image['id']) ?>" target="_blank" class="button button-secondary button-generate"><?= __('Generate new image', 'growtype-art') ?></a>
-
-                    <a href="#" class="button button-secondary growtype-ajax-button <?= $is_featured ? 'is-active' : '' ?>"
-                       data-action="growtype_art_admin_update_image"
-                       data-success-action="toggle"
-                       data-name="settings[is_featured]"
-                       data-class="is-featured"
-                       data-on="<?= __('Is featured!', 'growtype-art') ?>"
-                       data-off="<?= __('Feature', 'growtype-art') ?>"><?= $is_featured ? __('Is featured!', 'growtype-art') : __('Feature', 'growtype-art') ?></a>
-
-                    <a href="#" class="button button-secondary growtype-ajax-button <?= $is_cover ? 'is-active' : '' ?>"
-                       data-action="growtype_art_admin_update_image"
-                       data-success-action="toggle"
-                       data-name="settings[is_cover]"
-                       data-class="is-cover"
-                       data-on="<?= __('Is cover photo!', 'growtype-art') ?>"
-                       data-off="<?= __('Cover photo', 'growtype-art') ?>"><?= $is_cover ? __('Is cover photo!', 'growtype-art') : __('Cover photo', 'growtype-art') ?></a>
-
-                    <a href="#" class="button button-secondary growtype-ajax-button <?= $is_intro_asset ? 'is-active' : '' ?>"
-                       data-action="growtype_art_admin_update_image"
-                       data-success-action="toggle"
-                       data-name="settings[is_intro_asset]"
-                       data-class="is-intro-asset"
-                       data-on="<?= __('Is intro asset!', 'growtype-art') ?>"
-                       data-off="<?= __('Intro asset', 'growtype-art') ?>"><?= $is_intro_asset ? __('Is intro asset!', 'growtype-art') : __('Intro asset', 'growtype-art') ?></a>
-                </div>
-                <?php
-                if ($real_esrgan) {
-                    echo '<span style="color: green;display:inline-block;padding-top: 20px;">Upscaled</span>';
-                }
-                ?>
-                <div class="image-details-metrics">
-                    <div>
-                        <p><b>Name:</b> <?php echo $image['name'] ?? '-' ?></p>
-                        <p><b>Provider:</b> <?php echo $provider ?></p>
-                        <p style="display: none;"><b>Main Colors:</b> <?php echo $main_colors ?></p>
-                        <p><b>Prompt:</b> <?php echo $prompt ?></p>
-                        <p><b>Caption:</b> <?php echo $caption ?></p>
-                        <p><b>Alt text:</b> <?php echo $alt_text ?></p>
-                    </div>
-                    <div>
-                        <p style="display: none;"><b>Tags:</b> <?php echo $tags ?></p>
-                        <p><b>Model id:</b> <?php echo sprintf('<a href="?page=%s&action=%s&model=%s">' . $image['model_id'] . '</a>', Growtype_Art_Admin::MODELS_PAGE_NAME, 'edit', $image['model_id']) ?></p>
-                        <p><b>Image id:</b> <?php echo $image['id'] ?></p>
-                        <?php if (isset($image['settings']['id'])) { ?>
-                            <p><b>External image id:</b> <?php echo $image['settings']['id'] ?></p>
-                        <?php } ?>
-                        <?php if (isset($image['settings']['model_id'])) { ?>
-                            <p><b>External model id:</b> <?php echo $image['settings']['model_id'] ?></p>
-                        <?php } ?>
-                        <?php if (isset($image['settings']['modelId'])) { ?>
-                            <p><b>External model id:</b> <?php echo $image['settings']['modelId'] ?></p>
-                        <?php } ?>
-                        <p><b>EROTIC(NSFW):</b> <input type="checkbox" name="settings[nsfw]" <?php echo checked($image['settings']['nsfw'] ?? false) ?>/></p>
-                        <p><b>NUDITY:</b> <input type="checkbox" name="settings[nudity]" <?php echo checked($image['settings']['nudity'] ?? false) ?>/></p>
-                        <p><b>PORN:</b> <input type="checkbox" name="settings[porn]" <?php echo checked($image['settings']['porn'] ?? false) ?>/></p>
-                        <hr>
-                        <p><b>PRIVATE:</b> <input type="checkbox" name="settings[private]" <?php echo checked($image['settings']['private'] ?? false) ?>/></p>
-                    </div>
-                </div>
-            </div>
-            </div>
-        <?php }
-
-        return ob_get_clean();
+        return Growtype_Art_Image_Preview::render($image, $image_id);
     }
 
     public static function image_delete_ajax()
@@ -605,4 +464,5 @@ class Growtype_Art_Admin_Images
         </script>
         <?php
     }
+
 }

@@ -152,14 +152,18 @@ class Growtype_Art_Crud
         if (!empty($image_path)) {
             $directory = pathinfo($image_path, PATHINFO_DIRNAME);
             $filename_without_extension = pathinfo($image_path, PATHINFO_FILENAME);
+            $original_extension = strtolower(pathinfo($image_path, PATHINFO_EXTENSION));
 
-            $extensions = ['webp', 'jpg', 'jpeg', 'png'];
+            // Delete the exact file path
+            if (file_exists($image_path)) {
+                unlink($image_path);
+            }
 
-            // Loop through each extension and attempt to delete the file
-            foreach ($extensions as $extension) {
-                $file_to_delete = $directory . DIRECTORY_SEPARATOR . $filename_without_extension . '.' . $extension;
-                if (file_exists($file_to_delete)) {
-                    unlink($file_to_delete);
+            // Only delete the webp variation if the deleted file was a standard image
+            if (in_array($original_extension, ['jpg', 'jpeg', 'png'])) {
+                $webp_file = $directory . DIRECTORY_SEPARATOR . $filename_without_extension . '.webp';
+                if (file_exists($webp_file)) {
+                    unlink($webp_file);
                 }
             }
         }

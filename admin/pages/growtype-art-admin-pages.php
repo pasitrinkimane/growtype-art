@@ -60,40 +60,48 @@ class Growtype_Art_Admin_Pages
 
     public static function render_pagination($page, $total_items, $current_offset, $limit)
     {
+        $total_pages = ceil($total_items / $limit);
+        if ($total_pages <= 1) {
+            return '';
+        }
+
         ob_start();
         ?>
-        <div class="pagination">
-            <?php
-            $total_pages = ceil($total_items / $limit);
+        <div class="pagination-wrapper" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+            <div class="pagination-info" style="color: #646970;">
+                Showing <?php echo $limit; ?> items per page
+            </div>
+            <div class="pagination">
+                <?php
+                $current_page = (int)floor($current_offset / $limit);
+                $visible_pages = 10;
 
-            $current_page = (int)floor($current_offset / $limit);
-            $visible_pages = 10;
+                $start_page = max(0, $current_page - floor($visible_pages / 2));
+                $end_page = min($total_pages, $start_page + $visible_pages);
 
-            $start_page = max(0, $current_page - floor($visible_pages / 2));
-            $end_page = min($total_pages, $start_page + $visible_pages);
+                $start_page = max(0, $end_page - $visible_pages);
 
-            $start_page = max(0, $end_page - $visible_pages);
+                // Display the "Previous" link if applicable
+                if ($start_page > 0) {
+                    $prev_offset = max(0, $current_offset - ($limit * $visible_pages));
+                    $prev_url = self::generate_pagination_url($prev_offset, $limit, $page);
+                    echo "<a class='pagination-single' href='$prev_url'>...</a>";
+                }
 
-            // Display the "Previous" link if applicable
-            if ($start_page > 0) {
-                $prev_offset = max(0, $current_offset - ($limit * $visible_pages));
-                $prev_url = self::generate_pagination_url($prev_offset, $limit, $page);
-                echo "<a class='pagination-single' href='$prev_url'>...</a>";
-            }
+                for ($i = $start_page; $i < $end_page; $i++) {
+                    $offset = $i * $limit;
+                    $pagination_url = self::generate_pagination_url($offset, $limit, $page);
+                    $active_class = ($offset == $current_offset) ? 'active' : '';
+                    echo "<a class='pagination-single $active_class' href='$pagination_url'>Page " . ($i + 1) . "</a>";
+                }
 
-            for ($i = $start_page; $i < $end_page; $i++) {
-                $offset = $i * $limit;
-                $pagination_url = self::generate_pagination_url($offset, $limit, $page);
-                $active_class = ($offset == $current_offset) ? 'active' : '';
-                echo "<a class='pagination-single $active_class' href='$pagination_url'>Page " . ($i + 1) . "</a>";
-            }
-
-            if ($end_page < $total_pages) {
-                $next_offset = min($total_items, $current_offset + ($limit * $visible_pages));
-                $next_url = self::generate_pagination_url($next_offset, $limit, $page);
-                echo "<a class='pagination-single' href='$next_url'>...</a>";
-            }
-            ?>
+                if ($end_page < $total_pages) {
+                    $next_offset = min($total_items, $current_offset + ($limit * $visible_pages));
+                    $next_url = self::generate_pagination_url($next_offset, $limit, $page);
+                    echo "<a class='pagination-single' href='$next_url'>...</a>";
+                }
+                ?>
+            </div>
         </div>
         <?php
 

@@ -110,6 +110,11 @@ class Growtype_Art_Database_Crud
         $table = $wpdb->prefix . $table;
 
         if (empty($params)) {
+            trigger_error(
+                'get_records() called without params on table: ' . $table . '. Pass paginated params instead.',
+                E_USER_WARNING
+            );
+            
             return $wpdb->get_results("SELECT * FROM " . esc_sql($table) . " LIMIT 1000", ARRAY_A);
         }
 
