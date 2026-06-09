@@ -2,45 +2,238 @@
 
 namespace partials;
 
+require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
 use Growtype_Art_Database_Crud;
 use Exception;
 use Growtype_Cron_Jobs;
+use Growtype_Art_Generator_Base;
 
-class Replicate_Base
+class Replicate_Base extends Growtype_Art_Generator_Base
 {
     public function __construct()
     {
     }
 
-    public static function api_key()
+    public function get_provider_key()
     {
-        if (!class_exists('Growtype_Auth')) {
-            error_log('Growtype Art - Fatal Error: Growtype_Auth class not found. Please ensure Growtype - Auth plugin is activated.');
-            return [];
-        }
-
-        return \Growtype_Auth::credentials('replicate');
+        return Growtype_Art_Crud::REPLICATE_KEY;
     }
 
-    public static function get_random_access_token()
+    public function get_models()
     {
-        $api_keys = self::api_key();
+        return [
+            'black-forest-labs/flux-2-dev' => [
+                'is_nsfw' => false,
+                'rating' => 9
+            ],
+        ];
+    }
+
+    public function get_model_url($model_slug)
+    {
+        return "https://api.replicate.com/v1/models/{$model_slug}/predictions";
+    }
+
+    public function get_random_access_token()
+    {
+        $api_keys = $this->api_key();
 
         if (empty($api_keys)) {
             return null;
         }
 
-        $api_group_key = array_keys($api_keys)[array_rand(array_keys(self::api_key()))];
+        $api_group_key = array_keys($api_keys)[array_rand(array_keys($api_keys))];
 
-        return self::get_access_token($api_group_key);
+        return $this->get_access_token($api_group_key);
+    }
+
+    // ──────────────────────────────────────────────
+    // Image Generation (via Replicate predictions API)
+    // ──────────────────────────────────────────────
+
+    public function generate_image_init($params)
+    {
+        $model_slug = $params['model'] ?? 'black-forest-labs/flux-2-dev';
+        $url = $this->get_model_url($model_slug);
+        $token = $params['token'];
+
+        $input = [
+            'prompt' => $params['prompt'],
+            'width' => $params['width'] ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
+            'height' => $params['height'] ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
+            'go_fast' => $params['go_fast'] ?? true,
+            'output_format' => $params['output_format'] ?? 'webp',
+            'output_quality' => $params['output_quality'] ?? 80,
+            'num_outputs' => $params['num_outputs'] ?? 1,
+            'disable_safety_checker' => $params['disable_safety_checker'] ?? false,
+        ];
+
+        // Handle reference images for img2img (supports both 'image' and 'input_image' param names)
+        $reference_image_urls = $params['reference_image_urls'] ?? [];
+        $image_key = $params['image_key'] ?? 'image';
+        if (!empty($reference_image_urls)) {
+            $input[$image_key] = $reference_image_urls[0];
+            $input['aspect_ratio'] = $params['aspect_ratio'] ?? 'match_input_image';
+        } elseif (isset($params['aspect_ratio'])) {
+            $input['aspect_ratio'] = $params['aspect_ratio'];
+        }
+
+        // Forward any extra model-specific params (lora_weights, guidance, megapixels, num_inference_steps, etc.)
+        $internal_keys = ['prompt', 'width', 'height', 'go_fast', 'output_format', 'output_quality', 'num_outputs',
+            'disable_safety_checker', 'image_key', 'reference_image_urls', 'reference_image_url', 'aspect_ratio',
+            'token', 'model_id', 'model', 'save_to_db', 'providers', 'types', 'images_amount', 'reference_files',
+            'prompt_params', 'generation_id', 'segmind_model', 'api_group_key'];
+        foreach ($params as $key => $value) {
+            if (!in_array($key, $internal_keys, true) && !isset($input[$key])) {
+                $input[$key] = $value;
+            }
+        }
+
+        $headers = [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+            'Prefer: wait',
+        ];
+
+        $body = json_encode(['input' => $input]);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 180);
+
+        $response = curl_exec($ch);
+        $error = curl_error($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if (!empty($error)) {
+            return [
+                'success' => false,
+                'message' => 'cURL error: ' . $error,
+            ];
+        }
+
+        $data = json_decode($response, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return [
+                'success' => false,
+                'message' => 'Invalid JSON response',
+            ];
+        }
+
+        // Check for API-level errors
+        if (isset($data['error'])) {
+            return [
+                'success' => false,
+                'message' => $data['error'],
+            ];
+        }
+
+        $status = $data['status'] ?? 'unknown';
+
+        if ($status === 'failed' || $status === 'canceled') {
+            return [
+                'success' => false,
+                'message' => 'Generation ' . $status . ': ' . ($data['error'] ?? 'Unknown error'),
+            ];
+        }
+
+        if ($status === 'processing' || $status === 'starting') {
+            // Return pending status for polling
+            return [
+                'status' => 'pending',
+                'task_id' => $data['id'],
+                'generation_id' => $data['id'],
+            ];
+        }
+
+        if ($status === 'succeeded' && isset($data['output'])) {
+            $output = $data['output'];
+            $urls = is_array($output) ? $output : [$output];
+
+            $generations = [];
+            foreach ($urls as $image_url) {
+                if (is_string($image_url) && filter_var($image_url, FILTER_VALIDATE_URL)) {
+                    $generations[] = [
+                        'url' => $image_url,
+                    ];
+                }
+            }
+
+            if (empty($generations)) {
+                return [
+                    'success' => false,
+                    'message' => 'No valid image URLs in output',
+                ];
+            }
+
+            return [
+                'generations' => $generations,
+                'prediction_id' => $data['id'],
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Unexpected response status: ' . $status,
+        ];
+    }
+
+    public function retrieve_generations($model_id, $generation_ids, $args = [])
+    {
+        $generation_id = is_array($generation_ids) ? $generation_ids[0] : $generation_ids;
+        $api_group_key = $args['api_group_key'] ?? null;
+        $token = $api_group_key ? $this->get_access_token($api_group_key) : $this->get_random_access_token();
+
+        if (empty($token)) {
+            return [];
+        }
+
+        $url = "https://api.replicate.com/v1/predictions/{$generation_id}";
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+
+        if (empty($data) || ($data['status'] ?? '') !== 'succeeded') {
+            return [];
+        }
+
+        $output = $data['output'];
+        $urls = is_array($output) ? $output : [$output];
+
+        $generations = [];
+        foreach ($urls as $image_url) {
+            if (is_string($image_url) && filter_var($image_url, FILTER_VALIDATE_URL)) {
+                $generations[] = [
+                    'url' => $image_url,
+                ];
+            }
+        }
+
+        return $generations;
     }
 
     public function generate_model_video($model_id, $params = [])
     {
-        error_log('Generating video from image started!');
+        error_log(sprintf('Generating video from image started! Params: %s', print_r($params, true)));
 
         $model = growtype_art_get_model_details($model_id);
 
@@ -48,7 +241,7 @@ class Replicate_Base
 
         $formatted_prompt = growtype_art_model_format_prompt($prompt, $model_id);
 
-        $access_token = self::get_random_access_token();
+        $access_token = $this->get_random_access_token();
 
         if (empty($access_token)) {
             return [
@@ -70,31 +263,61 @@ class Replicate_Base
         $params['generation_id'] = wp_generate_password(52, false);
         $params['model_id'] = $model_id;
 
-        $generation_details = $this->img_to_video($params);
+        // Resolve which Replicate video model to use:
+        // 1. Explicit param  2. Model setting  3. Default
+        $video_model = $params['video_model']
+            ?? $model['video_model']
+            ?? 'wan-video/wan-2.2-i2v-fast';
 
-        if (empty($generation_details) || isset($generation_details['errors'])) {
+        $params['video_model'] = $video_model;
+
+        $generation_details = $this->dispatch_video_model($video_model, $params);
+
+        if (empty($generation_details) || isset($generation_details['error'])) {
             return [
                 'success' => false,
-                'message' => $generation_details['errors'][0]['message'] ?? 'Something went wrong',
+                'message' => $generation_details['error'] ?? 'Something went wrong',
             ];
         }
 
-        $response = $this->save_generations([$generation_details], $model_id, $params);
+        $prediction_id = $generation_details['id'] ?? null;
+
+        if (empty($prediction_id)) {
+            return [
+                'success' => false,
+                'message' => 'No prediction ID returned from Replicate',
+            ];
+        }
+
+        // Queue a cron job to poll and save the video when ready
+        Growtype_Cron_Jobs::create_if_not_exists('retrieve-video-generation', json_encode([
+            'prediction_id' => $prediction_id,
+            'model_id' => $model_id,
+            'params' => $params,
+        ]), 10);
 
         return [
             'success' => true,
-            'generations' => $response,
-            'message' => sprintf('Successfully generated. Prompt: %s', $prompt)
+            'prediction_id' => $prediction_id,
+            'generation_id' => $params['generation_id'],
+            'status' => $generation_details['status'] ?? 'processing',
+            'message' => sprintf('Video generation queued. Prediction ID: %s', $prediction_id),
         ];
     }
 
-    public static function get_access_token($api_group_key)
+    public function get_access_token($api_group_key)
     {
-        return self::api_key()[$api_group_key]['api_key'] ?? '';
+        return $this->api_key()[$api_group_key]['api_key'] ?? '';
     }
 
-    function save_generations($generations, $model_id, $params)
+    public function save_generations($generations, $model_id = null, $params = [])
     {
+        // If this is an image generation (url key), delegate to parent
+        $first_gen = $generations[0] ?? null;
+        if ($first_gen && isset($first_gen['url']) && !isset($first_gen['output'])) {
+            return parent::save_generations($generations, $model_id, $params);
+        }
+
         $saved_generations = [];
         foreach ($generations as $generation) {
 
@@ -102,7 +325,7 @@ class Replicate_Base
                 error_log(sprintf('Output not found. Trying to get again: %s', print_r($generation, true)));
 
                 $prediction_id = $generation['id'];
-                $access_token = self::get_random_access_token();
+                $access_token = $this->get_random_access_token();
 
                 $curl = curl_init();
 
@@ -220,34 +443,101 @@ class Replicate_Base
         return $saved_generations;
     }
 
-    public function img_to_video($params)
+    /**
+     * Dispatch video generation to the correct model handler.
+     *
+     * @param string $video_model  e.g. 'wan-video/wan-2.2-i2v-fast' or 'prunaai/p-video'
+     * @param array  $params
+     * @return array Replicate API response
+     */
+    public function dispatch_video_model(string $video_model, array $params): array
     {
-        $url = 'https://api.replicate.com/v1/models/wan-video/wan-2.2-i2v-fast/predictions';
+        switch ($video_model) {
+            case 'prunaai/p-video':
+                return $this->prunaai_p_video($params);
+
+            case 'wan-video/wan-2.2-i2v-fast':
+            default:
+                return $this->img_to_video($params);
+        }
+    }
+
+    /**
+     * prunaai/p-video  –  fast image-to-video model.
+     * https://replicate.com/prunaai/p-video
+     */
+    public function prunaai_p_video(array $params): array
+    {
+        $url = 'https://api.replicate.com/v1/models/prunaai/p-video/predictions';
+
+        $input = [
+            'image'             => $params['reference_image']['url'],
+            'prompt'            => $params['prompt'],
+            'prompt_upsampling' => $params['prompt_upsampling'] ?? false,
+        ];
+
+        // Allow callers to pass any extra p-video-specific keys via params['video_input']
+        if (!empty($params['video_input']) && is_array($params['video_input'])) {
+            $input = array_merge($input, $params['video_input']);
+        }
 
         $data = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $params['token'],
-                'Content-Type' => 'application/json',
-                'Prefer' => 'wait',
+                'Content-Type'  => 'application/json',
             ],
-            'body' => wp_json_encode([
-                'input' => [
-                    'image' => $params['reference_image']['url'],
-                    'prompt' => $params['prompt'],
-                    'go_fast' => true,
-                    'num_frames' => 81,
-                    'resolution' => '480p',
-                    'sample_shift' => 12,
-                    'frames_per_second' => 16,
-                    'interpolate_output' => true,
-                    'lora_scale_transformer' => 1,
-                    'lora_scale_transformer_2' => 1,
-                    'disable_safety_checker' => true,
-                ],
-            ]),
-            'method' => 'POST',
+            'body'        => wp_json_encode(['input' => $input]),
+            'method'      => 'POST',
             'data_format' => 'body',
-            'timeout' => 120,
+            'timeout'     => 120,
+        ];
+
+        $response = wp_remote_post($url, $data);
+
+        if (is_wp_error($response)) {
+            return ['error' => $response->get_error_message()];
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        return json_decode($body, true);
+    }
+
+    /**
+     * wan-video/wan-2.2-i2v-fast  –  original default model.
+     * Also aliased as img_to_video() for backward compatibility.
+     */
+    public function img_to_video(array $params): array
+    {
+        $url = 'https://api.replicate.com/v1/models/wan-video/wan-2.2-i2v-fast/predictions';
+
+        $input = [
+            'image'                   => $params['reference_image']['url'],
+            'prompt'                  => $params['prompt'],
+            'go_fast'                 => $params['video_input']['go_fast'] ?? true,
+            'num_frames'              => $params['video_input']['num_frames'] ?? 81,
+            'resolution'              => $params['video_input']['resolution'] ?? '480p',
+            'sample_shift'            => $params['video_input']['sample_shift'] ?? 12,
+            'frames_per_second'       => $params['video_input']['frames_per_second'] ?? 16,
+            'interpolate_output'      => $params['video_input']['interpolate_output'] ?? true,
+            'lora_scale_transformer'  => $params['video_input']['lora_scale_transformer'] ?? 1,
+            'lora_scale_transformer_2'=> $params['video_input']['lora_scale_transformer_2'] ?? 1,
+            'disable_safety_checker'  => $params['video_input']['disable_safety_checker'] ?? true,
+        ];
+
+        // Allow callers to pass any extra wan-specific keys
+        if (!empty($params['video_input']) && is_array($params['video_input'])) {
+            $input = array_merge($input, $params['video_input']);
+        }
+
+        $data = [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $params['token'],
+                'Content-Type'  => 'application/json',
+            ],
+            'body'        => wp_json_encode(['input' => $input]),
+            'method'      => 'POST',
+            'data_format' => 'body',
+            'timeout'     => 120,
         ];
 
         $response = wp_remote_post($url, $data);
@@ -287,10 +577,12 @@ class Replicate_Base
     {
         $url = 'https://api.replicate.com/v1/predictions';
 
+        $token = $this->get_random_access_token();
+
         $data = array (
             'headers' => array (
                 'Content-Type' => 'application/json; charset=utf-8',
-                'Authorization' => 'Token ' . $this->api_key,
+                'Authorization' => 'Bearer ' . $token,
             ),
             'body' => '{
   "version": "9a4298548422074c3f57258c5d544497314ae4112df80d116f0d2109e843d20d",
@@ -326,10 +618,12 @@ class Replicate_Base
     {
         $url = 'https://api.replicate.com/v1/predictions';
 
+        $token = $this->get_random_access_token();
+
         $response = wp_remote_post($url, array (
             'headers' => array (
                 'Content-Type' => 'application/json; charset=utf-8',
-                'Authorization' => 'Token ' . $this->api_key,
+                'Authorization' => 'Bearer ' . $token,
             ),
             'body' => '{
   "version": "42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b",
@@ -352,12 +646,13 @@ class Replicate_Base
 
     public function retrieve_generation($url)
     {
-        $response = wp_remote_post($url, array (
+        $token = $this->get_random_access_token();
+
+        $response = wp_remote_get($url, array (
             'headers' => array (
                 'Content-Type' => 'application/json; charset=utf-8',
-                'Authorization' => 'Token ' . $this->api_key,
+                'Authorization' => 'Bearer ' . $token,
             ),
-            'method' => 'GET'
         ));
 
         $body = wp_remote_retrieve_body($response);
@@ -367,4 +662,3 @@ class Replicate_Base
         return $responceData;
     }
 }
-

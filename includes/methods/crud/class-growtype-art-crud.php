@@ -9,16 +9,16 @@ class Growtype_Art_Crud
     const FAL_KEY = 'fal';
     const SEGMIND_KEY = 'segmind';
     const GEMINI_KEY = 'gemini';
-    
+
     const POLLINATIONS_KEY = 'pollinations';
-    
+
     const FLATAI_KEY = 'flatai';
     const WRITECREAM_KEY = 'writecream';
     const FREEFLUX_KEY = 'freeflux';
-    
+
     const PERCHANCE_KEY = 'perchance';
 
-    const REPLICATE_KEY = 'replicate'; // not image
+    const REPLICATE_KEY = 'replicate';
 
     const TOGETHERAI_KEY = 'togetherai'; // Not implemented
 
@@ -33,6 +33,7 @@ class Growtype_Art_Crud
         self::POLLINATIONS_KEY,
         self::FAL_KEY,
         self::XAI_KEY,
+        self::REPLICATE_KEY,
 //        self::SEGMIND_KEY,
 //        self::FREEFLUX_KEY,
 //        self::WRITECREAM_KEY,
@@ -47,6 +48,7 @@ class Growtype_Art_Crud
         self::AIEASE_KEY,
         self::PICLUMEN_KEY,
         self::XAI_KEY,
+        self::REPLICATE_KEY,
     ];
 
     const API_GENERATE_VIDEO_PROVIDERS = [
@@ -59,7 +61,8 @@ class Growtype_Art_Crud
         self::RUNWARE_KEY,
         self::FAL_KEY,
         self::XAI_KEY,
-        self::POLLINATIONS_KEY
+        self::POLLINATIONS_KEY,
+        self::REPLICATE_KEY,
     ];
 
     const MODEL_GENERATE_IMAGE_PROVIDERS = [
@@ -75,6 +78,7 @@ class Growtype_Art_Crud
         Growtype_Art_Crud::FAL_KEY => Growtype_Art_Crud::FAL_KEY,
         Growtype_Art_Crud::WRITECREAM_KEY => Growtype_Art_Crud::WRITECREAM_KEY,
         Growtype_Art_Crud::XAI_KEY => Growtype_Art_Crud::XAI_KEY,
+        Growtype_Art_Crud::REPLICATE_KEY => Growtype_Art_Crud::REPLICATE_KEY,
     ];
 
     const IMAGES_FOLDER_NAME = 'models';
@@ -169,6 +173,59 @@ class Growtype_Art_Crud
         }
 
         Growtype_Art_Database_Crud::delete_records(Growtype_Art_Database::IMAGES_TABLE, [$image_id]);
+    }
+
+    public static function link_mp4_to_parent_image($model_id, $saved_image_id, $file_name, $saved_image_url)
+    {
+        $file_extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        if (!in_array($file_extension, ['mp4'])) {
+            return;
+        }
+
+        $model_images = growtype_art_get_model_images_grouped($model_id, 1000)['original'] ?? [];
+        $matched_model_image = null;
+        $file_basename_exact = sanitize_file_name(pathinfo($file_name, PATHINFO_FILENAME));
+        $file_basename_prefix = explode('-', $file_basename_exact)[0];
+
+        // 1. Try exact match first
+        foreach ($model_images as $model_image) {
+            if ($model_image['extension'] === $file_extension) continue;
+            if ($model_image['name'] === $file_basename_exact) {
+                $matched_model_image = $model_image;
+                break;
+            }
+        }
+
+        // 2. Fallback to prefix match
+        if (!$matched_model_image) {
+            foreach ($model_images as $model_image) {
+                if ($model_image['extension'] === $file_extension) continue;
+                $model_image_prefix = explode('-', $model_image['name'])[0];
+                if ($model_image_prefix === $file_basename_prefix) {
+                    $matched_model_image = $model_image;
+                    break;
+                }
+            }
+        }
+
+        if ($matched_model_image) {
+            $parent_image_id = $matched_model_image['id'];
+            if (!empty($matched_model_image['settings']['parent_image_id'])) {
+                $parent_image_id = $matched_model_image['settings']['parent_image_id'];
+            }
+
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
+                'image_id' => $parent_image_id,
+                'meta_key' => 'video_url_image_id_' . $saved_image_id,
+                'meta_value' => $saved_image_url ?? '',
+            ]);
+
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
+                'image_id' => $saved_image_id,
+                'meta_key' => 'parent_image_id',
+                'meta_value' => $parent_image_id,
+            ]);
+        }
     }
 
     public static function save_image($image, $save_to_db = true, $crop_percent = null)
@@ -648,7 +705,7 @@ class Growtype_Art_Crud
             if (class_exists($provider_class_name)) {
                 $crud = new $provider_class_name();
                 $models = $crud->get_models();
-                
+
                 if (!empty($models)) {
                     $data[$provider] = $models;
                 }
