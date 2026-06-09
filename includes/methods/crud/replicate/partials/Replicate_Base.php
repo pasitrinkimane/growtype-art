@@ -72,11 +72,16 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             'disable_safety_checker' => $params['disable_safety_checker'] ?? false,
         ];
 
-        // Handle reference images for img2img (supports both 'image' and 'input_image' param names)
+        // Handle reference images for img2img (supports 'image', 'input_image', 'reference_images', etc.)
         $reference_image_urls = $params['reference_image_urls'] ?? [];
         $image_key = $params['image_key'] ?? 'image';
         if (!empty($reference_image_urls)) {
-            $input[$image_key] = $reference_image_urls[0];
+            // Plural keys (reference_images) get the full array, singular keys get first URL
+            if (str_contains($image_key, 'images')) {
+                $input[$image_key] = $reference_image_urls;
+            } else {
+                $input[$image_key] = $reference_image_urls[0];
+            }
             $input['aspect_ratio'] = $params['aspect_ratio'] ?? 'match_input_image';
         } elseif (isset($params['aspect_ratio'])) {
             $input['aspect_ratio'] = $params['aspect_ratio'];
