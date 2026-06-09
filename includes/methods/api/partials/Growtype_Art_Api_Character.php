@@ -8,6 +8,8 @@ class Growtype_Art_Api_Character
 {
     const FEATURED_IN_CHARACTERS_TRANSIENT_KEY = 'growtype_art_api_featured_in_characters';
 
+    const ALLOWED_IMAGE_META_KEYS = ['prompt', 'caption', 'nsfw', 'nudity', 'porn', 'private', 'provider', 'alt_text', 'parent_image_id', 'is_cover'];
+
     public function __construct()
     {
         $this->load_methods();
@@ -78,6 +80,13 @@ class Growtype_Art_Api_Character
             'callback' => array ($this, 'generate_character_video_callback'),
             'permission_callback' => array ($this, 'permission_check_callback')
         ));
+
+        register_rest_route('growtype-art/v1', 'retrieve/generation/(?P<generation_id>[a-zA-Z0-9]+)', array (
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => array ($this, 'retrieve_generation_callback'),
+            'permission_callback' => array ($this, 'permission_check_callback')
+        ));
+
 
         register_rest_route('growtype-art/v1', 'update/character/settings', array (
             'methods' => WP_REST_Server::CREATABLE,
@@ -534,8 +543,13 @@ class Growtype_Art_Api_Character
 
         if (!empty($custom_assets)) {
             $model = growtype_art_get_model_details($model_id);
-            foreach ($custom_assets as $value) {
-                $saved_image = Growtype_Art_Crud::save_image(['url' => $value, 'folder' => $model['image_folder']], true, $crop_percent);
+            foreach ($custom_assets as $asset) {
+                $url = is_array($asset) ? ($asset['url'] ?? '') : $asset;
+                if (empty($url)) {
+                    continue;
+                }
+
+                $saved_image = Growtype_Art_Crud::save_image(['url' => $url, 'folder' => $model['image_folder']], true, $crop_percent);
                 if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
                     error_log('create_character save_image: ' . json_encode($saved_image));
                     continue;
@@ -544,6 +558,15 @@ class Growtype_Art_Api_Character
                     'model_id' => $model_id,
                     'image_id' => $saved_image['id'],
                 ]);
+
+                // Set cover photo if requested
+                if (is_array($asset) && !empty($asset['is_cover'])) {
+                    Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
+                        'image_id' => $saved_image['id'],
+                        'meta_key' => 'is_cover',
+                        'meta_value' => '1',
+                    ]);
+                }
             }
         }
 
@@ -599,7 +622,7 @@ class Growtype_Art_Api_Character
     function generate_image_callback($data)
     {
         $params = $data->get_params();
-        
+
         $reference_image_urls = [];
         if (isset($params['reference_files']) && is_array($params['reference_files'])) {
             foreach ($params['reference_files'] as $file) {
@@ -608,7 +631,7 @@ class Growtype_Art_Api_Character
                 }
             }
         }
-        
+
         if (!empty($reference_image_urls)) {
              $params['reference_image_urls'] = $reference_image_urls;
         }
@@ -1109,7 +1132,7 @@ class Growtype_Art_Api_Character
                 }
             }
         }
-        
+
         if (empty($reference_image_urls)) {
              $reference_image_urls = isset($params['reference_image_urls']) ? $params['reference_image_urls'] : ($params['image_urls'] ?? []);
         }
@@ -1185,12 +1208,12 @@ class Growtype_Art_Api_Character
                 $model = growtype_art_get_model_details($model_id);
                 $prompt = !empty($prompt) ? $prompt : $model['prompt'];
 
-                $generate_details = growtype_art_generate_model_video($model_id, [
+                $generate_details = growtype_art_generate_model_video($model_id, array_merge($params, [
                     'prompt' => $prompt,
                     'providers' => $providers,
                     'reference_image' => $reference_image,
                     'types' => $types,
-                ]);
+                ]));
 
                 if (empty($generate_details) || !$generate_details['success']) {
                     $generate_details['success'] = false;
@@ -1214,6 +1237,22 @@ class Growtype_Art_Api_Character
             'success' => false,
             'message' => 'Character is missing',
         ], 200);
+    }
+
+    function retrieve_generation_callback($data)
+    {
+        $generation_id = $data->get_param('generation_id');
+
+        if (empty($generation_id)) {
+            return wp_send_json([
+                'success' => false,
+                'message' => 'generation_id is required',
+            ], 400);
+        }
+
+        $generation = growtype_art_get_generation_by_id($generation_id);
+
+        return wp_send_json($generation, 200);
     }
 
     function upload_character_content_callback($data)
@@ -1292,7 +1331,7 @@ class Growtype_Art_Api_Character
                 ];
                 if (is_array($item)) {
                     $meta_details = [];
-                    $allowed_meta_keys = ['prompt', 'caption', 'nsfw', 'nudity', 'porn', 'private', 'provider', 'alt_text', 'parent_image_id'];
+                    $allowed_meta_keys = self::ALLOWED_IMAGE_META_KEYS;
                     foreach ($item as $key => $value) {
                         if (!in_array($key, $allowed_meta_keys)) {
                             continue;
@@ -1327,7 +1366,7 @@ class Growtype_Art_Api_Character
             }
             // Extract meta_details from params for file uploads
             $meta_details = [];
-            $allowed_meta_keys = ['prompt', 'caption', 'nsfw', 'nudity', 'porn', 'private', 'provider', 'alt_text', 'parent_image_id'];
+            $allowed_meta_keys = self::ALLOWED_IMAGE_META_KEYS;
             foreach ($allowed_meta_keys as $key) {
                 if (isset($params[$key]) && $params[$key] !== '') {
                     $meta_details[] = [
@@ -1354,6 +1393,12 @@ class Growtype_Art_Api_Character
                         'model_id' => $model_id,
                         'image_id' => $saved_image['id']
                     ]);
+
+                    // --- Magic MP4 Filename Matching Logic ---
+                    $saved_image_url = $saved_image['details']['url'] ?? growtype_art_get_image_url($saved_image['id']);
+                    Growtype_Art_Crud::link_mp4_to_parent_image($model_id, $saved_image['id'], $file['name'], $saved_image_url);
+                    // -------------------------------------------------------------------
+
                     $uploaded_images[] = [
                         'id' => $saved_image['id'],
                         'url' => growtype_art_get_image_url($saved_image['id'])

@@ -105,6 +105,10 @@ class Growtype_Art_Cron
                 'classname' => 'Webhook_Update_Model_Job',
                 'path' => GROWTYPE_ART_PATH . '/includes/methods/cron/jobs/Webhook_Update_Model_Job.php',
             ],
+            'retrieve-video-generation' => [
+                'classname' => 'Retrieve_Video_Generation_Job',
+                'path' => GROWTYPE_ART_PATH . '/includes/methods/cron/jobs/Retrieve_Video_Generation_Job.php',
+            ],
         ]);
 
         return $jobs;

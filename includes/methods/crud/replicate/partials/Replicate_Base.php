@@ -98,6 +98,9 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             }
         }
 
+        error_log('Growtype Art - Replicate params: ' . json_encode(array_keys($params)));
+        error_log('Growtype Art - Replicate input: ' . json_encode($input));
+
         $headers = [
             'Authorization: Bearer ' . $token,
             'Content-Type: application/json',

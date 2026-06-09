@@ -11,7 +11,7 @@
  */
 class Growtype_Art_Documentation
 {
-    const SLUG = 'documentation';
+    const SLUG = 'growtype-art';
 
     public function __construct()
     {
@@ -74,9 +74,12 @@ class Growtype_Art_Documentation
                 ['POST', $base . '/update/character',                           'Update all fields of an existing character'],
                 ['POST', $base . '/generate/image',                             'Generate an image'],
                 ['POST', $base . '/generate/character/image',                   'Generate image for a character'],
-                ['POST', $base . '/generate/character/video',                   'Generate video for a character'],
                 ['POST', $base . '/update/character/settings',                  'Update character visibility / priority (limited)'],
                 ['POST', $base . '/upload/character/content',                   'Upload content for a character'],
+            ],
+            'Video' => [
+                ['POST', $base . '/generate/character/video',                   'Image-to-video generation via Replicate Wan 2.2'],
+                ['GET',  $base . '/retrieve/generation/{generation_id}',         'Poll generation status (universal — video, image, etc.)'],
             ],
             'Image' => [
                 ['GET', $base . '/generate/{service}',  'Generate via a named service'],
@@ -258,6 +261,41 @@ class Growtype_Art_Documentation
             padding: 2px 10px;
         }
 
+        /* ── Tabs ── */
+        .tab-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 0;
+            margin-bottom: 32px;
+        }
+        .tab-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 7px 16px;
+            border-radius: 100px;
+            cursor: pointer;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        .tab-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text);
+            border-color: var(--accent);
+        }
+        .tab-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
         /* ── Table ── */
         .table-wrap {
             background: var(--bg-card);
@@ -378,16 +416,47 @@ class Growtype_Art_Documentation
 <?php
         $icons = [
             'Character' => '🎭',
+            'Video'     => '🎬',
             'Image'     => '🖼',
             'Meal'      => '🍽',
             'Model'     => '🤖',
             'Color'     => '🎨',
         ];
 
+        // Tab navigation
+        $tabs = [
+            'character' => ['icon' => '🎭', 'label' => 'Character'],
+            'video'     => ['icon' => '🎬', 'label' => 'Video'],
+            'image'     => ['icon' => '🖼', 'label' => 'Image'],
+            'meal'      => ['icon' => '🍽', 'label' => 'Meal'],
+            'model'     => ['icon' => '🤖', 'label' => 'Model'],
+            'color'     => ['icon' => '🎨', 'label' => 'Color'],
+            'auth'      => ['icon' => '🔑', 'label' => 'Auth'],
+            'examples'  => ['icon' => '📋', 'label' => 'Examples'],
+        ];
+        ?>
+    <nav class="tab-nav" role="tablist">
+        <?php $first = true; foreach ($tabs as $tab_id => $tab) : ?>
+        <button class="tab-btn<?php echo $first ? ' active' : ''; ?>"
+                role="tab"
+                aria-selected="<?php echo $first ? 'true' : 'false'; ?>"
+                data-tab="<?php echo $tab_id; ?>"
+                onclick="switchTab('<?php echo $tab_id; ?>')">
+            <?php echo $tab['icon'] . ' ' . $tab['label']; ?>
+        </button>
+        <?php $first = false; endforeach; ?>
+    </nav>
+
+    <?php
+        $first = true;
         foreach ($endpoints as $group => $routes) :
             $icon = $icons[$group] ?? '📡';
+            $tab_id = strtolower($group);
             ?>
-    <section class="section" id="section-<?php echo esc_attr(strtolower($group)); ?>">
+    <div class="tab-panel<?php echo $first ? ' active' : ''; ?>"
+         id="tab-<?php echo esc_attr($tab_id); ?>"
+         role="tabpanel">
+    <section class="section" id="section-<?php echo esc_attr($tab_id); ?>">
         <div class="section-header">
             <div class="section-icon"><?php echo $icon; ?></div>
             <span class="section-title"><?php echo esc_html($group); ?></span>
@@ -419,13 +488,51 @@ class Growtype_Art_Documentation
             </table>
         </div>
     </section>
-<?php endforeach; ?>
+    <?php if ($group === 'Video') : ?>
+        <?php require __DIR__ . '/partials/Example_Generate_Video.php'; ?>
+    <?php endif; ?>
+    </div>
+    <?php $first = false; endforeach; ?>
 
-<?php require __DIR__ . '/partials/Section_Credentials.php'; ?>
+    <div class="tab-panel" id="tab-auth" role="tabpanel">
+        <?php require __DIR__ . '/partials/Section_Credentials.php'; ?>
+    </div>
 
-<?php require __DIR__ . '/partials/Example_Create_Character.php'; ?>
+    <div class="tab-panel" id="tab-examples" role="tabpanel">
+        <?php require __DIR__ . '/partials/Example_Create_Character.php'; ?>
+    </div>
 
 </div>
+
+<script>
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach(function(panel) {
+        panel.classList.remove('active');
+    });
+    var activeBtn = document.querySelector('.tab-btn[data-tab="' + tabId + '"]');
+    var activePanel = document.getElementById('tab-' + tabId);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.setAttribute('aria-selected', 'true');
+    }
+    if (activePanel) {
+        activePanel.classList.add('active');
+    }
+    // URL hash for deep linking
+    history.replaceState(null, null, '#' + tabId);
+}
+// Restore tab from URL hash on load
+document.addEventListener('DOMContentLoaded', function() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById('tab-' + hash)) {
+        switchTab(hash);
+    }
+});
+</script>
 
 <footer class="footer">
     Generated by <a href="https://growtype.com" target="_blank" rel="noopener">Growtype Art</a> &nbsp;·&nbsp;

@@ -259,9 +259,9 @@ if (!function_exists('growtype_art_get_model_images_grouped')) {
         $hide_private = !empty($params['hide_private']);
         if ($hide_private) {
             $where_clause .= " AND NOT EXISTS (
-                SELECT 1 FROM {$settings_table} AS hps 
-                WHERE hps.image_id = i.id 
-                  AND hps.meta_key = 'private' 
+                SELECT 1 FROM {$settings_table} AS hps
+                WHERE hps.image_id = i.id
+                  AND hps.meta_key = 'private'
                   AND hps.meta_value = '1'
             )";
         }
@@ -269,7 +269,7 @@ if (!function_exists('growtype_art_get_model_images_grouped')) {
         $parent_image_id = !empty($params['parent_image_id']) ? $params['parent_image_id'] : '';
         if (!empty($parent_image_id)) {
             $where_clause .= " AND (i.id = %d OR EXISTS (
-                SELECT 1 FROM {$settings_table} AS pis 
+                SELECT 1 FROM {$settings_table} AS pis
                 WHERE pis.image_id = i.id AND pis.meta_key = 'parent_image_id' AND pis.meta_value = %s
             ))";
             $query_args[] = $parent_image_id;
@@ -302,7 +302,7 @@ if (!function_exists('growtype_art_get_model_images_grouped')) {
         $placeholders = implode(',', array_fill(0, count($image_ids), '%d'));
 
         $raw_results = Growtype_Art_Database_Crud::custom_query("
-        SELECT 
+        SELECT
             i.id AS image_id,
             i.name,
             i.extension,
@@ -386,7 +386,7 @@ if (!function_exists('growtype_art_get_model_details')) {
 
         // Fetch model and settings in one query
         $results = Growtype_Art_Database_Crud::custom_query("
-        SELECT 
+        SELECT
             m.id,
             m.prompt,
             m.negative_prompt,
@@ -480,9 +480,9 @@ function growtype_art_get_model_total_images_amount($model_id, $params = [])
     $hide_private = !empty($params['hide_private']);
     if ($hide_private) {
         $where_clause .= " AND NOT EXISTS (
-            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS hps 
-            WHERE hps.image_id = mi.image_id 
-              AND hps.meta_key = 'private' 
+            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS hps
+            WHERE hps.image_id = mi.image_id
+              AND hps.meta_key = 'private'
               AND hps.meta_value = '1'
         )";
     }
@@ -490,7 +490,7 @@ function growtype_art_get_model_total_images_amount($model_id, $params = [])
     $parent_image_id = !empty($params['parent_image_id']) ? $params['parent_image_id'] : '';
     if (!empty($parent_image_id)) {
         $where_clause .= " AND (mi.image_id = %d OR EXISTS (
-            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS pis 
+            SELECT 1 FROM {$wpdb->prefix}growtype_art_image_settings AS pis
             WHERE pis.image_id = mi.image_id AND pis.meta_key = 'parent_image_id' AND pis.meta_value = %s
         ))";
         $query_args[] = $parent_image_id;
@@ -499,7 +499,7 @@ function growtype_art_get_model_total_images_amount($model_id, $params = [])
 
     return (int)$wpdb->get_var(
         $wpdb->prepare("
-        SELECT COUNT(DISTINCT mi.image_id) 
+        SELECT COUNT(DISTINCT mi.image_id)
         FROM {$wpdb->prefix}growtype_art_model_image AS mi
         {$filter_query}
         {$where_clause}
@@ -1577,4 +1577,30 @@ function growtype_art_shuffle_assoc_array($array)
     }
 
     return $shuffledArray;
+}
+
+if (!function_exists('growtype_art_get_generation_by_id')) {
+    function growtype_art_get_generation_by_id($generation_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . Growtype_Art_Database::IMAGE_SETTINGS_TABLE;
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table WHERE meta_key = 'generation_id' AND meta_value = %s LIMIT 1",
+            $generation_id
+        ));
+        if (empty($row)) {
+            return [
+                'success' => false,
+                'status' => 'processing',
+                'message' => 'Generation is still processing or not found',
+            ];
+        }
+        $url = growtype_art_get_image_url($row->image_id);
+        return [
+            'success' => true,
+            'status' => 'completed',
+            'generation_id' => $generation_id,
+            'image_id' => (int) $row->image_id,
+            'url' => $url ?: null,
+        ];
+    }
 }

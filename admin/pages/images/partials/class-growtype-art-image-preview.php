@@ -192,13 +192,20 @@ class Growtype_Art_Image_Preview
 
                         <div class="image-meta-relations">
                             <p><b>Relation:</b></p>
-                            <?php if (!empty($image['settings']['parent_image_id'])): ?>
-                                <p>
+                            <div class="relation-set-parent" style="margin-bottom: 8px;">
+                                <p style="margin-bottom: 4px;">
                                     <b class="relation-label">Parent file:</b>
-                                    <a href="?page=<?php echo Growtype_Art_Admin::MODELS_PAGE_NAME ?>&action=edit&model=<?php echo $image['model_id'] ?>&parent_image_id=<?php echo $image['settings']['parent_image_id'] ?>"><?php echo $image['settings']['parent_image_id'] ?></a>
-                                    <a href="#" class="relation-remove-parent" data-child-id="<?= (int)$image['id'] ?>" title="Remove parent">✕</a>
+                                    <?php if (!empty($image['settings']['parent_image_id'])): ?>
+                                        <a href="?page=<?php echo Growtype_Art_Admin::MODELS_PAGE_NAME ?>&action=edit&model=<?php echo $image['model_id'] ?>&parent_image_id=<?php echo $image['settings']['parent_image_id'] ?>"><?php echo $image['settings']['parent_image_id'] ?></a>
+                                        <a href="#" class="relation-remove-parent" data-child-id="<?= (int)$image['id'] ?>" title="Remove parent">✕</a>
+                                    <?php else: ?>
+                                        <span>None</span>
+                                    <?php endif; ?>
                                 </p>
-                            <?php endif; ?>
+                                <input type="number" class="relation-parent-input" placeholder="Parent image ID" min="1">
+                                <button class="button button-small relation-set-parent-btn" data-child-id="<?= (int)$image['id'] ?>">Set parent</button>
+                                <span class="relation-parent-status"></span>
+                            </div>
                             <?php
                             $child_ids = self::get_children_map()[(int)$image['id']] ?? [];
                             if (!empty($child_ids)): ?>
@@ -296,6 +303,34 @@ class Growtype_Art_Image_Preview
                 });
             });
 
+            // Set/Change parent
+            $(document).on('click', '.relation-set-parent-btn', function (e) {
+                e.preventDefault();
+                var $btn    = $(this);
+                var $wrap   = $btn.closest('.relation-set-parent');
+                var $input  = $wrap.find('.relation-parent-input');
+                var $status = $wrap.find('.relation-parent-status');
+                var parentId = parseInt($input.val(), 10);
+                var childId  = $btn.data('child-id');
+
+                if (!parentId) { $status.text('Enter a parent image ID.').show(); return; }
+
+                $btn.prop('disabled', true);
+                $.post(ajaxurl, {
+                    action:      'growtype_art_admin_set_parent_image',
+                    child_id:    childId,
+                    parent_id:   parentId,
+                    action_type: 'add'
+                }, function (res) {
+                    $input.val('');
+                    $status.text('Added! Reload to see.').show().delay(3000).fadeOut();
+                    $btn.prop('disabled', false);
+                }).fail(function () {
+                    $status.text('Error.').show();
+                    $btn.prop('disabled', false);
+                });
+            });
+
             // Add a child to parent
             $(document).on('click', '.relation-add-child-btn', function (e) {
                 e.preventDefault();
@@ -331,7 +366,7 @@ class Growtype_Art_Image_Preview
     public static function output_styles()
     {
         $page = $_GET['page'] ?? '';
-        if ($page !== Growtype_Art_Admin::MODELS_PAGE_NAME) {
+        if ($page !== Growtype_Art_Admin::MODELS_PAGE_NAME && $page !== 'growtype-art') {
             return;
         }
         ?>
@@ -387,6 +422,7 @@ class Growtype_Art_Image_Preview
 
             .image-preview-img, .image-preview video {
                 width: 100%;
+                max-width: 100%;
                 height: auto;
                 object-fit: cover;
                 display: block;

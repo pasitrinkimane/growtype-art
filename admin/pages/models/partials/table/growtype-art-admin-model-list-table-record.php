@@ -284,51 +284,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
                         'extension' => pathinfo($file['name'], PATHINFO_EXTENSION)
                     ];
 
-                    if (in_array($file_extension, ['mp4'])) {
-                        $matched_model_image = null;
-                        $file_basename_exact = sanitize_file_name(pathinfo($file['name'], PATHINFO_FILENAME));
-                        $file_basename_prefix = explode('-', $file_basename_exact)[0];
-
-                        // 1. Try exact match first
-                        foreach ($model_images as $model_image) {
-                            if ($model_image['extension'] === $file_extension) continue;
-                            if ($model_image['name'] === $file_basename_exact) {
-                                $matched_model_image = $model_image;
-                                break;
-                            }
-                        }
-
-                        // 2. Fallback to prefix match if no exact match found
-                        if (!$matched_model_image) {
-                            foreach ($model_images as $model_image) {
-                                if ($model_image['extension'] === $file_extension) continue;
-                                $model_image_prefix = explode('-', $model_image['name'])[0];
-                                if ($model_image_prefix === $file_basename_prefix) {
-                                    $matched_model_image = $model_image;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if ($matched_model_image) {
-                            $parent_image_id = $matched_model_image['id'];
-                            if (!empty($matched_model_image['settings']['parent_image_id'])) {
-                                $parent_image_id = $matched_model_image['settings']['parent_image_id'];
-                            }
-
-                            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
-                                'image_id' => $parent_image_id,
-                                'meta_key' => 'video_url_image_id_' . $saved_image['id'],
-                                'meta_value' => $saved_image['details']['url'] ?? '',
-                            ]);
-
-                            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
-                                'image_id' => $saved_image['id'],
-                                'meta_key' => 'parent_image_id',
-                                'meta_value' => $parent_image_id,
-                            ]);
-                        }
-                    }
+                    Growtype_Art_Crud::link_mp4_to_parent_image($model_id, $saved_image['id'], $file['name'], $saved_image['details']['url'] ?? '');
                 }
             }
 
