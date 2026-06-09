@@ -129,11 +129,26 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             ];
         }
 
-        // Check for API-level errors
+        // Check for API-level errors (Replicate uses 'detail' for 4xx, 'error' for other cases)
         if (isset($data['error'])) {
             return [
                 'success' => false,
                 'message' => $data['error'],
+            ];
+        }
+
+        if (isset($data['detail'])) {
+            error_log('Growtype Art - Replicate error: ' . print_r($data, true));
+            return [
+                'success' => false,
+                'message' => $data['detail'],
+            ];
+        }
+
+        if (!empty($http_code) && $http_code >= 400) {
+            return [
+                'success' => false,
+                'message' => 'HTTP ' . $http_code . ': ' . ($data['title'] ?? $data['detail'] ?? 'Unknown error'),
             ];
         }
 
