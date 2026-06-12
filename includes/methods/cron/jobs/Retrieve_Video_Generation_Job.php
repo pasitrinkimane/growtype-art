@@ -13,7 +13,7 @@ class Retrieve_Video_Generation_Job
         $reference_image = $params['reference_image'] ?? null;
 
         $replicate_base = new partials\Replicate_Base();
-        $access_token = $replicate_base::get_random_access_token();
+        $access_token = $replicate_base->get_random_access_token();
 
         // Poll Replicate for prediction status
         $curl = curl_init();

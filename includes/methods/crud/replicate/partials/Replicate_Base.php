@@ -75,6 +75,13 @@ class Replicate_Base extends Growtype_Art_Generator_Base
         // Handle reference images for img2img (supports 'image', 'input_image', 'reference_images', etc.)
         $reference_image_urls = $params['reference_image_urls'] ?? [];
         $image_key = $params['image_key'] ?? 'image';
+
+        // Model-specific defaults for known models
+        if ($model_slug === 'prunaai/p-image-edit' || $model_slug === 'prunaai/p-image') {
+            $image_key = 'images'; // this model expects 'images' (plural array)
+            $input['aspect_ratio'] = $params['aspect_ratio'] ?? 'custom';
+        }
+
         if (!empty($reference_image_urls)) {
             // Plural keys (reference_images) get the full array, singular keys get first URL
             if (str_contains($image_key, 'images')) {
@@ -85,6 +92,11 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             $input['aspect_ratio'] = $params['aspect_ratio'] ?? 'match_input_image';
         } elseif (isset($params['aspect_ratio'])) {
             $input['aspect_ratio'] = $params['aspect_ratio'];
+        }
+
+        // Default megapixels for models that require it (only reference_images schema)
+        if ($model_slug === 'prunaai/p-image-edit' && !isset($input['megapixels']) && $image_key !== 'images') {
+            $input['megapixels'] = '2';
         }
 
         // Forward any extra model-specific params (lora_weights, guidance, megapixels, num_inference_steps, etc.)
@@ -108,6 +120,7 @@ class Replicate_Base extends Growtype_Art_Generator_Base
         ];
 
         $body = json_encode(['input' => $input]);
+        error_log('Growtype Art - Replicate body: ' . $body);
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
