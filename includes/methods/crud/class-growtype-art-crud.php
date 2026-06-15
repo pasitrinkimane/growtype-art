@@ -26,6 +26,17 @@ class Growtype_Art_Crud
 
     const DEFAULT_IMAGE_PROVIDER = self::XAI_KEY;
 
+    /**
+     * Providers that support text / content generation.
+     * Each corresponding *_Base class must implement get_text_models().
+     * Extensible via the `growtype_art_text_providers` filter.
+     */
+    const API_GENERATE_TEXT_PROVIDERS = [
+        'openai',
+        self::GEMINI_KEY,
+        self::XAI_KEY,
+    ];
+
     const DEFAULT_GENERATABLE_IMAGES_LIMIT = 5;
 
     const NSFW_PROVIDERS = [
@@ -84,9 +95,9 @@ class Growtype_Art_Crud
     const IMAGES_FOLDER_NAME = 'models';
 
     const HTTP_HEADER = [
-        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-        "Accept: image/jpeg,image/png,image/gif,image/webp,*/*;q=0.8",
-        "Connection: keep-alive"
+        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
+        'Accept'     => 'image/jpeg,image/png,image/gif,image/webp,*/*;q=0.8',
+        'Connection' => 'keep-alive',
     ];
 
     public function __construct()
@@ -469,17 +480,13 @@ class Growtype_Art_Crud
 
     public static function fetch_image_info($image_url)
     {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $image_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        $wp_response = wp_remote_get($image_url, [
+            'headers' => self::HTTP_HEADER,
+            'timeout' => 30,
+        ]);
 
-        // Set headers to mimic a real browser
-        curl_setopt($ch, CURLOPT_HTTPHEADER, self::HTTP_HEADER);
-
-        $image_data = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $http_code  = is_wp_error($wp_response) ? 0 : (int) wp_remote_retrieve_response_code($wp_response);
+        $image_data = is_wp_error($wp_response) ? '' : wp_remote_retrieve_body($wp_response);
 
         if ($http_code == 200 && $image_data) {
             $image_info = getimagesizefromstring($image_data);
@@ -630,19 +637,21 @@ class Growtype_Art_Crud
 
     public static function validate_file($url)
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_NOBODY, true);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // follow redirects
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $wp_response = wp_remote_head($url, [
+            'timeout'   => 10,
+            'sslverify' => true,
+            'redirection' => 5,
+        ]);
 
-        curl_exec($ch);
+        if (is_wp_error($wp_response)) {
+            return [
+                'is_valid' => false,
+                'message'  => $wp_response->get_error_message(),
+            ];
+        }
 
-        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-        $contentLength = curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
-
-        curl_close($ch);
+        $contentType   = wp_remote_retrieve_header($wp_response, 'content-type');
+        $contentLength = (int) wp_remote_retrieve_header($wp_response, 'content-length');
 
         if (!$contentType || $contentLength <= 0) {
             return [
@@ -714,4 +723,151 @@ class Growtype_Art_Crud
 
         return $data;
     }
+
+    /**
+     * Returns all text-generation providers with their available models.
+     *
+     * Each entry: [ 'provider_key' => [ 'label' => '...', 'models' => [ 'model-id' => 'Model Label', ... ] ] ]
+     *
+     * Discovery rules (same pattern as get_providers_with_models):
+     *   1. Try namespaced class  \partials\{Provider}_Base
+     *   2. Fall back to plain    {Provider}_Base  (e.g. Openai_Base)
+     *   3. Class must implement  get_text_models(): array
+     *
+     * Extensible via the `growtype_art_text_providers` filter.
+     */
+    public static function get_text_providers_with_models(): array
+    {
+        $providers = apply_filters('growtype_art_text_providers', self::API_GENERATE_TEXT_PROVIDERS);
+        $data      = [];
+
+        foreach ($providers as $provider) {
+            $namespaced = sprintf('\partials\%s_Base', ucfirst($provider));
+            $plain      = sprintf('%s_Base',           ucfirst($provider));
+
+            if (class_exists($namespaced)) {
+                $instance = new $namespaced();
+            } elseif (class_exists($plain)) {
+                $instance = new $plain();
+            } else {
+                continue;
+            }
+
+            if (!method_exists($instance, 'get_text_models')) {
+                continue;
+            }
+
+            $models = $instance->get_text_models();
+
+            if (empty($models)) {
+                continue;
+            }
+
+            $label = method_exists($instance, 'get_provider_label')
+                ? $instance->get_provider_label()
+                : ucfirst($provider);
+
+            $data[$provider] = [
+                'label'  => $label,
+                'models' => $models,
+            ];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Returns all image-generation providers with their available models.
+     * Mirrors get_text_providers_with_models() but uses API_GENERATE_IMAGE_PROVIDERS
+     * and the existing get_models() method on each Base class.
+     */
+    public static function get_image_providers_with_models(): array
+    {
+        $providers = apply_filters('growtype_art_image_providers', self::API_GENERATE_IMAGE_PROVIDERS);
+        $data      = [];
+
+        foreach ($providers as $provider) {
+            $namespaced = sprintf('\partials\%s_Base', ucfirst($provider));
+            $plain      = sprintf('%s_Base',           ucfirst($provider));
+
+            if (class_exists($namespaced)) {
+                $instance = new $namespaced();
+            } elseif (class_exists($plain)) {
+                $instance = new $plain();
+            } else {
+                continue;
+            }
+
+            $models = method_exists($instance, 'get_models') ? $instance->get_models() : [];
+
+            // Normalize: get_models() returns ['model-id' => [...meta]] or ['model-id' => 'label']
+            // We want ['model-id' => 'Label'] for the UI dropdown.
+            $flat = [];
+            foreach ($models as $model_id => $meta) {
+                $flat[$model_id] = is_array($meta) ? ($meta['label'] ?? ucwords(str_replace(['-', '_'], ' ', $model_id))) : (string)$meta;
+            }
+
+            if (empty($flat)) {
+                $flat = ['' => '— default —'];
+            }
+
+            $label = method_exists($instance, 'get_provider_label')
+                ? $instance->get_provider_label()
+                : ucfirst($provider);
+
+            $data[$provider] = [
+                'label'  => $label,
+                'models' => $flat,
+            ];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Returns all video-generation providers with their available models.
+     * Same pattern as get_image_providers_with_models() but for API_GENERATE_VIDEO_PROVIDERS.
+     */
+    public static function get_video_providers_with_models(): array
+    {
+        $providers = apply_filters('growtype_art_video_providers', self::API_GENERATE_VIDEO_PROVIDERS);
+        $data      = [];
+
+        foreach ($providers as $provider) {
+            $namespaced = sprintf('\partials\%s_Base', ucfirst($provider));
+            $plain      = sprintf('%s_Base',           ucfirst($provider));
+
+            if (class_exists($namespaced)) {
+                $instance = new $namespaced();
+            } elseif (class_exists($plain)) {
+                $instance = new $plain();
+            } else {
+                continue;
+            }
+
+            $models = method_exists($instance, 'get_video_models') ? $instance->get_video_models()
+                    : (method_exists($instance, 'get_models')      ? $instance->get_models() : []);
+
+            $flat = [];
+            foreach ($models as $model_id => $meta) {
+                $flat[$model_id] = is_array($meta) ? ($meta['label'] ?? ucwords(str_replace(['-', '_'], ' ', $model_id))) : (string)$meta;
+            }
+
+            if (empty($flat)) {
+                $flat = ['' => '— default —'];
+            }
+
+            $label = method_exists($instance, 'get_provider_label')
+                ? $instance->get_provider_label()
+                : ucfirst($provider);
+
+            $data[$provider] = [
+                'label'  => $label,
+                'models' => $flat,
+            ];
+        }
+
+        return $data;
+    }
 }
+

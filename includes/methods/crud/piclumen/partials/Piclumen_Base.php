@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
@@ -22,7 +22,8 @@ class Piclumen_Base extends Growtype_Art_Generator_Base
     {
         return [
             'piclumen-default' => [
-                'is_nsfw' => false,
+                'is_nsfw'  => false,
+                'cost_usd' => 0.002,
             ],
         ];
     }
@@ -33,17 +34,6 @@ class Piclumen_Base extends Growtype_Art_Generator_Base
         error_log(sprintf('Growtype Art - Piclumen Base: Token length: %d, Prefix: %s', strlen($token), substr($token, 0, 10)));
 
         $url = "https://api.piclumen.com/api/gen/create";
-
-        $headers = [
-            "authorization: $token",
-            "platform: Web",
-            "Content-Type: application/json;charset=UTF-8",
-            "Accept: application/json",
-            "Origin: https://www.piclumen.com",
-            "Referer: https://www.piclumen.com/",
-            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-            "Cache-Control: no-cache",
-        ];
 
         $data = [
             "model_id" => "23887bba-507e-4249-a0e3-6951e4027f2b",
@@ -64,19 +54,25 @@ class Piclumen_Base extends Growtype_Art_Generator_Base
             "hires_scale" => 2,
         ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        $wp_response = wp_remote_post($url, [
+            'headers' => [
+                'authorization'  => $token,
+                'platform'       => 'Web',
+                'Content-Type'   => 'application/json;charset=UTF-8',
+                'Accept'         => 'application/json',
+                'Origin'         => 'https://www.piclumen.com',
+                'Referer'        => 'https://www.piclumen.com/',
+                'User-Agent'     => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+                'Cache-Control'  => 'no-cache',
+            ],
+            'body'    => json_encode($data),
+            'timeout' => 60,
+        ]);
 
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $response  = is_wp_error($wp_response) ? '' : wp_remote_retrieve_body($wp_response);
+        $http_code = is_wp_error($wp_response) ? 0 : (int) wp_remote_retrieve_response_code($wp_response);
 
-        error_log(sprintf('Growtype Art - Piclumen Base: HTTP Code: %s, Error: %s, Raw Response: %s', $http_code, $error, $response));
+        error_log(sprintf('Growtype Art - Piclumen Base: HTTP Code: %s, Error: %s, Raw Response: %s', $http_code, is_wp_error($wp_response) ? $wp_response->get_error_message() : '', $response));
 
         if ($http_code === 401) {
             return [
@@ -169,24 +165,21 @@ class Piclumen_Base extends Growtype_Art_Generator_Base
     {
         $url = "https://api.piclumen.com/api/task/batch-process-task";
 
-        $headers = [
-            "authorization: $token",
-            "platform: Web",
-            "Content-Type: application/json",
-            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-            "Accept: */*",
-            "Cache-Control: no-cache",
-        ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($generations_ids));
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        $wp_response = wp_remote_post($url, [
+            'headers' => [
+                'authorization' => $token,
+                'platform'      => 'Web',
+                'Content-Type'  => 'application/json',
+                'User-Agent'    => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+                'Accept'        => '*/*',
+                'Cache-Control' => 'no-cache',
+            ],
+            'body'    => json_encode($generations_ids),
+            'timeout' => 30,
+        ]);
 
-        $response = curl_exec($ch);
-        curl_close($ch);
+        $response = is_wp_error($wp_response) ? '{}' : wp_remote_retrieve_body($wp_response);
 
         return json_decode($response, true);
     }
@@ -195,29 +188,25 @@ class Piclumen_Base extends Growtype_Art_Generator_Base
     {
         $url = "https://api.piclumen.com/api/img/delete";
 
-        $headers = [
-            "authorization: $token",
-            "platform: Web",
-            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-            "Accept: */*",
-            "Cache-Control: no-cache",
-            "Content-Type: multipart/form-data"
-        ];
 
         $fields = [
             "promptId" => $prompt_id,
             "imgName" => $img_name
         ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
+        $wp_response = wp_remote_post($url, [
+            'headers' => [
+                'authorization' => $token,
+                'platform'      => 'Web',
+                'User-Agent'    => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+                'Accept'        => '*/*',
+                'Cache-Control' => 'no-cache',
+            ],
+            'body'    => $fields,
+            'timeout' => 15,
+        ]);
 
-        $response = curl_exec($ch);
-        curl_close($ch);
+        $response = is_wp_error($wp_response) ? '{}' : wp_remote_retrieve_body($wp_response);
 
         return json_decode($response, true);
     }

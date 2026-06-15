@@ -3,7 +3,7 @@
 namespace partials;
 
 require GROWTYPE_ART_PATH . '/vendor/autoload.php';
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Cloudinary_Crud;
 use Exception;
@@ -22,6 +22,11 @@ class Leonardoai_Base extends Growtype_Art_Generator_Base
     public function get_provider_key()
     {
         return Growtype_Art_Crud::LEONARDOAI_KEY;
+    }
+
+    public function get_default_model($params = [])
+    {
+        return $params['model'] ?? 'general';
     }
 
     public static function user_credentials($user_nr = null)
@@ -221,6 +226,14 @@ class Leonardoai_Base extends Growtype_Art_Generator_Base
 
         if (isset($single_generation['status']) && $single_generation['status'] === 'PENDING') {
             throw new Exception('PENDING generation');
+        }
+
+        if (isset($single_generation['status']) && in_array($single_generation['status'], ['FAILED', 'ERROR', 'FAIL'], true)) {
+            do_action('growtype_art_generation_failed', $model_id, array_merge([
+                'generation_id' => $generation_id,
+                'model' => $single_generation['coreModel'] ?? $single_generation['sdVersion'] ?? $this->get_default_model($args),
+            ], $args), 'Leonardo.ai generation failed', $this->get_provider_key());
+            return [];
         }
 
         $generations = [$single_generation];
@@ -962,6 +975,11 @@ class Leonardoai_Base extends Growtype_Art_Generator_Base
 
                     if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
                         error_log('save_generations: ' . json_encode($saved_image));
+                        do_action('growtype_art_generation_failed', $model_id, array_merge([
+                            'prompt' => $generation['prompt'] ?? '',
+                            'generation_id' => $image['id'] ?? null,
+                            'model' => $generation['coreModel'] ?? $generation['sdVersion'] ?? $this->get_default_model($args),
+                        ], $args), $saved_image['error'] ?? 'save_image failed', $this->get_provider_key());
                         continue;
                     }
 
@@ -1002,6 +1020,13 @@ class Leonardoai_Base extends Growtype_Art_Generator_Base
                      * Compress image
                      */
                     growtype_art_compress_existing_image($saved_image['id']);
+
+                    // Trigger logger action for successful generation
+                    do_action('growtype_art_generation_success', $saved_image, $model_id, array_merge([
+                        'prompt' => $generation['prompt'] ?? '',
+                        'model' => $generation['coreModel'] ?? $generation['sdVersion'] ?? $this->get_default_model($args),
+                        'generation_id' => $image['id'] ?? null,
+                    ], $args), $this->get_provider_key());
 
                     sleep(2);
                 }

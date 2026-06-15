@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
@@ -23,22 +23,28 @@ class Pollinations_Base extends Growtype_Art_Generator_Base
     {
         return [
             'flux' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.000, // free tier
             ],
             'flux-realism' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.000,
             ],
             'any-dark' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.000,
             ],
             'flux-anime' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.000,
             ],
             'flux-3d' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.000,
             ],
             'turbo' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.000,
             ],
         ];
     }
@@ -78,31 +84,21 @@ class Pollinations_Base extends Growtype_Art_Generator_Base
         // Fallback without any query parameters – current public endpoint still serves an image this way.
         $urls_to_try[] = $base_url . urlencode($params['prompt']);
 
-        $headers = [
-            "Content-Type: application/json",
-            "User-Agent: PHP-cURL"
-        ];
 
         foreach ($urls_to_try as $url) {
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_HTTPGET, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $wp_response = wp_remote_get($url, [
+                'headers' => ['Accept' => '*/*'],
+                'timeout' => 30,
+            ]);
 
-            $response = curl_exec($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $content_type = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-            $error = curl_error($ch);
-
-            curl_close($ch);
-
-            if ($error) {
+            if (is_wp_error($wp_response)) {
                 // Try next URL on network errors
                 continue;
             }
+
+            $http_code    = (int) wp_remote_retrieve_response_code($wp_response);
+            $response     = wp_remote_retrieve_body($wp_response);
+            $content_type = wp_remote_retrieve_header($wp_response, 'content-type');
 
             // If we didn't get a 200, try next URL before failing
             if ($http_code !== 200) {
@@ -126,8 +122,9 @@ class Pollinations_Base extends Growtype_Art_Generator_Base
             // Accept only image content types
             if ($content_type && strpos($content_type, 'image/') === 0) {
                 return [
-                    'success' => true,
-                    'imageBase64' => base64_encode($response)
+                    'success'          => true,
+                    'imageBase64'      => base64_encode($response),
+                    '_request_payload' => array_merge(['_url' => $url], $query_data),
                 ];
             }
         }

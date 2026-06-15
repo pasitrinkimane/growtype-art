@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
@@ -26,40 +26,47 @@ class Segmind_Base extends Growtype_Art_Generator_Base
     {
         return [
             'z-image-turbo' => [
-                'url' => 'https://api.segmind.com/v1/z-image-turbo',
+                'url'      => 'https://api.segmind.com/v1/z-image-turbo',
                 'test_url' => 'https://www.segmind.com/models/z-image-turbo',
-                'is_nsfw' => true,
-                'rating' => 9
+                'is_nsfw'  => true,
+                'rating'   => 9,
+                'cost_usd' => 0.002,
             ],
             'p-image' => [
-                'url' => 'https://api.segmind.com/v1/p-image',
-                'is_nsfw' => false,
-                'rating' => 9
+                'url'      => 'https://api.segmind.com/v1/p-image',
+                'is_nsfw'  => false,
+                'rating'   => 9,
+                'cost_usd' => 0.003,
             ],
             'seedream-4' => [
-                'url' => 'https://api.segmind.com/v1/seedream-4',
-                'is_nsfw' => false,
-                'rating' => 8
+                'url'      => 'https://api.segmind.com/v1/seedream-4',
+                'is_nsfw'  => false,
+                'rating'   => 8,
+                'cost_usd' => 0.004,
             ],
             'fast-flux-schnell' => [
-                'url' => 'https://api.segmind.com/v1/fast-flux-schnell',
-                'is_nsfw' => false,
-                'rating' => 7
+                'url'      => 'https://api.segmind.com/v1/fast-flux-schnell',
+                'is_nsfw'  => false,
+                'rating'   => 7,
+                'cost_usd' => 0.001,
             ],
             'ssd-1b' => [
-                'url' => 'https://api.segmind.com/v1/ssd-1b',
-                'is_nsfw' => false,
-                'rating' => 6
+                'url'      => 'https://api.segmind.com/v1/ssd-1b',
+                'is_nsfw'  => false,
+                'rating'   => 6,
+                'cost_usd' => 0.002,
             ],
             'sdxl1.0-txt2img' => [
-                'url' => 'https://api.segmind.com/v1/sdxl1.0-txt2img',
-                'is_nsfw' => false,
-                'rating' => 5
+                'url'      => 'https://api.segmind.com/v1/sdxl1.0-txt2img',
+                'is_nsfw'  => false,
+                'rating'   => 5,
+                'cost_usd' => 0.002,
             ],
             'qwen-image-fast' => [
-                'url' => 'https://api.segmind.com/v1/qwen-image-fast',
-                'is_nsfw' => false,
-                'rating' => 5
+                'url'      => 'https://api.segmind.com/v1/qwen-image-fast',
+                'is_nsfw'  => false,
+                'rating'   => 5,
+                'cost_usd' => 0.002,
             ],
         ];
     }
@@ -143,23 +150,25 @@ class Segmind_Base extends Growtype_Art_Generator_Base
         $token = $params['token'];
 
         $headers = [
-            "Content-Type: application/json",
-            "x-api-key: $token",
+            'Content-Type' => 'application/json',
+            'x-api-key'    => $token,
         ];
 
-        $ch = curl_init($url);
+        $wp_response = wp_remote_post($url, [
+            'headers' => $headers,
+            'body'    => json_encode($generating_settings),
+            'timeout' => 120,
+        ]);
 
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($generating_settings));
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        $response  = is_wp_error($wp_response) ? '' : wp_remote_retrieve_body($wp_response);
+        $http_code = is_wp_error($wp_response) ? 0 : (int) wp_remote_retrieve_response_code($wp_response);
 
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        curl_close($ch);
+        if (is_wp_error($wp_response)) {
+            return [
+                'success' => false,
+                'message' => $wp_response->get_error_message(),
+            ];
+        }
 
         if (!empty($response) && is_string($response)) {
             $response_decoded = json_decode($response, true);
@@ -171,13 +180,17 @@ class Segmind_Base extends Growtype_Art_Generator_Base
                         'message' => $response_decoded['error'] ?? $response_decoded['message']
                       ];
                  }
-                 return ['data' => $response_decoded]; 
+                 return array_merge(
+                     ['data' => $response_decoded],
+                     ['_request_payload' => array_merge(['_url' => $url, '_model' => $model_slug], $generating_settings)]
+                 );
             }
         }
         
         return [
-            'success' => true,
-            'imageBase64' => base64_encode($response)
+            'success'          => true,
+            'imageBase64'      => base64_encode($response),
+            '_request_payload' => array_merge(['_url' => $url, '_model' => $model_slug], $generating_settings),
         ];
     }
 }

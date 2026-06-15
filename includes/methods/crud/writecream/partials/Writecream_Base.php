@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
@@ -58,34 +58,27 @@ class Writecream_Base extends Growtype_Art_Generator_Base
 
         // Set headers
         $headers = [
-            "Content-Type: application/json",
-            "User-Agent: PHP-cURL"
+            'Content-Type' => 'application/json',
         ];
 
-        // Initialize cURL
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $api_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        $wp_response = wp_remote_get($api_url, [
+            'headers' => $headers,
+            'timeout' => 30,
+        ]);
 
-        // Execute the request
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
+        $http_code = is_wp_error($wp_response) ? 0 : (int) wp_remote_retrieve_response_code($wp_response);
+        $response  = is_wp_error($wp_response) ? '' : wp_remote_retrieve_body($wp_response);
+        $error     = is_wp_error($wp_response) ? $wp_response->get_error_message() : '';
 
         error_log(sprintf('Growtype Art - Writecream Response: Code: %s, Error: %s, Body: %s', $http_code, $error, $response));
 
-        // Close cURL connection
-        curl_close($ch);
-
-        // Handle cURL errors
+        // Handle errors
         if ($error) {
             return [
                 'errors' => [
                     [
-                        'message' => "cURL Error: " . $error,
-                        'http_code' => $http_code
+                        'message'   => $error,
+                        'http_code' => $http_code,
                     ]
                 ]
             ];
@@ -110,10 +103,11 @@ class Writecream_Base extends Growtype_Art_Generator_Base
         if (json_last_error() === JSON_ERROR_NONE) {
             if (isset($decoded_response['image_link'])) {
                 return [
-                    'success' => true,
-                    'generations' => [
+                    'success'          => true,
+                    'generations'      => [
                         ['imageURL' => $decoded_response['image_link']]
-                    ]
+                    ],
+                    '_request_payload' => array_merge(['_url' => $api_url], $query_data),
                 ];
             }
              if (isset($decoded_response['status']) && $decoded_response['status'] === 'error') {

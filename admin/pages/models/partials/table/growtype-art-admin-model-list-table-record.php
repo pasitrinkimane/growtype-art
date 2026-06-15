@@ -938,32 +938,122 @@ class Growtype_Art_Admin_Model_List_Table_Record
         <hr>
         <hr>
 
-        <div style="display:flex;justify-content: flex-end;margin-bottom: 40px;">
-            <div style="display: flex;flex-wrap: wrap;gap:10px;flex-direction: column;width: 100%;">
-                <div>
-                    <p>Generating</p>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate image', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-images', $id) ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Face swap images', 'growtype-art') . '</a>', $_REQUEST['page'], 'faceswap-images', $id) ?>
-                </div>
-                <div>
-                    <p>Content</p>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate model details', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-model-content', $id) ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate character details', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-model-character-content', $id) ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Generate images details', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-image-content', $id) ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Re-Generate images details', 'growtype-art') . '</a>', $_REQUEST['page'], 'regenerate-image-content', $id) ?>
-                </div>
-                <div>
-                    <p>Retrieving</p>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Pull images', 'growtype-art') . '</a>', $_REQUEST['page'], 'pull-model-images', $id) ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Retrieve images', 'growtype-art') . '</a>', $_REQUEST['page'], 'retrieve-model-images', $id) ?>
-                </div>
-                <div>
-                    <p>Images Modification</p>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Update colors', 'growtype-art') . '</a>', $_REQUEST['page'], 'update-model-images-colors', $id) ?>
-                    <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="button button-secondary">' . __('Upscale images', 'growtype-art') . '</a>', $_REQUEST['page'], 'upscale-images', $id) ?>
-                </div>
+        <style>
+        /* ── Model actions tabs ───────────────────────────── */
+        .gm-actions-panel {
+            margin: 24px 0 32px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 1px 6px rgba(0,0,0,.05);
+            overflow: hidden;
+        }
+        .gm-actions-tabs {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 10px 14px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+            flex-wrap: wrap;
+        }
+        .gm-actions-tab {
+            padding: 5px 13px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            background: none;
+            color: #64748b;
+            cursor: pointer;
+            transition: background .12s, color .12s, border-color .12s;
+            white-space: nowrap;
+        }
+        .gm-actions-tab:hover { background: #e0e7ff; color: #4338ca; }
+        .gm-actions-tab.active {
+            background: #6366f1;
+            color: #fff;
+            border-color: #6366f1;
+        }
+        .gm-actions-pane {
+            display: none;
+            padding: 18px 20px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .gm-actions-pane.active { display: flex; }
+        .gm-action-btn {
+            display: inline-flex;
+            align-items: center;
+            height: 30px;
+            padding: 0 13px;
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            color: #374151 !important;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: background .12s, border-color .12s, color .12s;
+        }
+        .gm-action-btn:hover {
+            background: #6366f1;
+            border-color: #6366f1;
+            color: #fff !important;
+        }
+        </style>
+
+        <div class="gm-actions-panel" id="gm-actions-panel">
+            <div class="gm-actions-tabs">
+                <button type="button" class="gm-actions-tab active" data-pane="gm-pane-gen">🎨 Generating</button>
+                <button type="button" class="gm-actions-tab"        data-pane="gm-pane-cnt">📝 Content</button>
+                <button type="button" class="gm-actions-tab"        data-pane="gm-pane-ret">⬇ Retrieving</button>
+                <button type="button" class="gm-actions-tab"        data-pane="gm-pane-img">🖼 Image Modification</button>
+            </div>
+
+            <div class="gm-actions-pane active" id="gm-pane-gen">
+                <?php
+                $generator_url = add_query_arg([
+                    'page'               => Growtype_Art_Admin_Content::PAGE_NAME,
+                    'reuse_character_id' => (int)$id,
+                    'reuse_type'         => 'image',
+                    'reuse_prompt'       => rawurlencode($model_details['prompt'] ?? ''),
+                    'reuse_provider'     => rawurlencode($model_details['provider'] ?? ''),
+                ], admin_url('admin.php'));
+                ?>
+                <a href="<?php echo esc_url($generator_url); ?>" class="gm-action-btn">
+                    ✨ <?php esc_html_e('Open in Generator', 'growtype-art'); ?>
+                </a>
+            </div>
+            <div class="gm-actions-pane" id="gm-pane-cnt">
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Generate model details', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-model-content', $id) ?>
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Generate character details', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-model-character-content', $id) ?>
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Generate images details', 'growtype-art') . '</a>', $_REQUEST['page'], 'generate-image-content', $id) ?>
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Re-Generate images details', 'growtype-art') . '</a>', $_REQUEST['page'], 'regenerate-image-content', $id) ?>
+            </div>
+            <div class="gm-actions-pane" id="gm-pane-ret">
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Pull images', 'growtype-art') . '</a>', $_REQUEST['page'], 'pull-model-images', $id) ?>
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Retrieve images', 'growtype-art') . '</a>', $_REQUEST['page'], 'retrieve-model-images', $id) ?>
+            </div>
+            <div class="gm-actions-pane" id="gm-pane-img">
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Update colors', 'growtype-art') . '</a>', $_REQUEST['page'], 'update-model-images-colors', $id) ?>
+                <?php echo sprintf('<a href="?page=%s&action=%s&model=%s" class="gm-action-btn">' . __('Upscale images', 'growtype-art') . '</a>', $_REQUEST['page'], 'upscale-images', $id) ?>
             </div>
         </div>
+        <script>
+        (function () {
+            var panel = document.getElementById('gm-actions-panel');
+            panel.querySelectorAll('.gm-actions-tab').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    panel.querySelectorAll('.gm-actions-tab').forEach(function (t) { t.classList.remove('active'); });
+                    panel.querySelectorAll('.gm-actions-pane').forEach(function (p) { p.classList.remove('active'); });
+                    tab.classList.add('active');
+                    document.getElementById(tab.getAttribute('data-pane')).classList.add('active');
+                });
+            });
+        }());
+        </script>
 
         <script>
             $ = jQuery;
@@ -972,7 +1062,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
              * Category select
              */
 
-            window.categorySelect = '<?php echo $model_details['settings']['categories'] ?>';
+            window.categorySelect = '<?php echo $model_details['settings']['categories'] ?? '' ?>';
 
             window.categorySelect = window.categorySelect ? JSON.parse(window.categorySelect) : {}
 

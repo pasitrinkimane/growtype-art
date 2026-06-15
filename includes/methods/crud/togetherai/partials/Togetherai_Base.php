@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
@@ -52,41 +52,31 @@ class Togetherai_Base extends Growtype_Art_Generator_Base
 
         // Set headers
         $headers = [
-            "Authorization: Bearer {$api_key}",
-            "Content-Type: application/json",
-            "User-Agent: PHP-cURL"
+            'Authorization' => "Bearer {$api_key}",
+            'Content-Type'  => 'application/json',
         ];
 
-        // Initialize cURL
-        $ch = curl_init();
+        $wp_response = wp_remote_post($url, [
+            'headers' => $headers,
+            'body'    => $json_payload,
+            'timeout' => 60,
+        ]);
 
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true); // POST request
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $json_payload);
-
-        // Execute request
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-
-        // Close connection
-        curl_close($ch);
-
-        // Handle cURL errors
-        if ($error) {
+        // Handle WP errors
+        if (is_wp_error($wp_response)) {
             return [
                 'success' => false,
-                'errors' => [
+                'errors'  => [
                     [
-                        'message' => "cURL Error: " . $error,
-                        'http_code' => $http_code
+                        'message'   => $wp_response->get_error_message(),
+                        'http_code' => 0,
                     ]
                 ]
             ];
         }
+
+        $http_code = (int) wp_remote_retrieve_response_code($wp_response);
+        $response  = wp_remote_retrieve_body($wp_response);
 
         // Decode and return response
         $decoded = json_decode($response, true);
@@ -101,11 +91,16 @@ class Togetherai_Base extends Growtype_Art_Generator_Base
                      }
                 }
                 if (!empty($generations)) {
-                    return ['success' => true, 'generations' => $generations];
+                    return [
+                        'success'          => true,
+                        'generations'      => $generations,
+                        '_request_payload' => array_merge(['_url' => $url], $payload),
+                    ];
                 }
              }
 
-            $decoded['success'] = true;
+            $decoded['success']          = true;
+            $decoded['_request_payload'] = array_merge(['_url' => $url], $payload);
             return $decoded; // Fallback or errors
         } else {
             return [

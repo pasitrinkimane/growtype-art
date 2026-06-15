@@ -10,6 +10,15 @@ abstract class Growtype_Art_Generator_Base
     abstract public function generate_image_init($params);
 
     abstract public function get_provider_key();
+ 
+    /**
+     * Get the default model name for the provider.
+     * Overridden by subclasses.
+     */
+    public function get_default_model($params = [])
+    {
+        return $params['model'] ?? null;
+    }
 
     public function retrieve_generations($model_id, $generation_id, $args = [])
     {
@@ -19,6 +28,27 @@ abstract class Growtype_Art_Generator_Base
     public function get_models()
     {
         return [];
+    }
+
+    /**
+     * Return the cost_usd for a given model slug, reading from get_models().
+     *
+     * Providers can define cost per model:
+     *   'flux-dev' => ['cost_usd' => 0.003, 'rating' => 9]
+     *
+     * Returns null if cost is not configured for the model.
+     *
+     * @param string|null $model_slug  The provider-side model identifier.
+     * @return float|null
+     */
+    public function get_model_cost(?string $model_slug): ?float
+    {
+        if (empty($model_slug)) {
+            return null;
+        }
+        $models = $this->get_models();
+        $cost   = $models[$model_slug]['cost_usd'] ?? null;
+        return ($cost !== null) ? (float) $cost : null;
     }
 
     // ──────────────────────────────────────────────
@@ -72,7 +102,7 @@ abstract class Growtype_Art_Generator_Base
      *
      * @return array{api_group_key: string, token: string}|null Null if no keys available.
      */
-    private function select_api_credentials()
+    protected function select_api_credentials(): ?array
     {
         $api_keys = $this->api_key();
 
@@ -81,12 +111,24 @@ abstract class Growtype_Art_Generator_Base
         }
 
         $available_keys = array_keys($api_keys);
-        $api_group_key = $available_keys[array_rand($available_keys)];
+        $api_group_key  = $available_keys[array_rand($available_keys)];
 
         return [
             'api_group_key' => $api_group_key,
-            'token' => $this->get_access_token($api_group_key),
+            'token'         => $this->get_access_token($api_group_key),
         ];
+    }
+
+    /**
+     * Return a random access token (token only, without the api_group_key).
+     * Convenience wrapper around select_api_credentials().
+     *
+     * @return string|null Null when no API keys are configured.
+     */
+    public function get_random_access_token(): ?string
+    {
+        $credentials = $this->select_api_credentials();
+        return $credentials ? $credentials['token'] : null;
     }
 
     /**
@@ -203,10 +245,21 @@ abstract class Growtype_Art_Generator_Base
 
         $generation_result = $this->generate_image_init($params);
 
+        // If the provider returned the exact payload it sent to the API, capture it for history.
+        if (isset($generation_result['_request_payload'])) {
+            $params['_provider_request_payload'] = $generation_result['_request_payload'];
+            unset($generation_result['_request_payload']);
+        }
+
         if (empty($generation_result) || isset($generation_result['errors']) || (isset($generation_result['success']) && !$generation_result['success'])) {
+            $error_message = $generation_result['message'] ?? $generation_result['errors'][0]['message'] ?? 'Something went wrong';
+            error_log(sprintf('Growtype Art - Generation init failed. Params: %s. Result: %s', print_r($params, true), print_r($generation_result, true)));
+
+            do_action('growtype_art_generation_failed', $model_id, $this->sanitize_params($params), $error_message, $this->get_provider_key());
+
             return [
                 'success' => false,
-                'message' => $generation_result['message'] ?? $generation_result['errors'][0]['message'] ?? 'Something went wrong',
+                'message' => $error_message,
             ];
         }
 
@@ -252,12 +305,21 @@ abstract class Growtype_Art_Generator_Base
 
         $generation_result = $this->generate_image_init($params);
 
+        // If the provider returned the exact payload it sent to the API, capture it for history.
+        if (isset($generation_result['_request_payload'])) {
+            $params['_provider_request_payload'] = $generation_result['_request_payload'];
+            unset($generation_result['_request_payload']);
+        }
+
         if (empty($generation_result) || isset($generation_result['errors']) || (isset($generation_result['success']) && !$generation_result['success'])) {
+            $error_message = $generation_result['message'] ?? $generation_result['errors'][0]['message'] ?? 'Something went wrong';
             error_log(sprintf('Growtype Art - Generation init failed. Params: %s. Result: %s', print_r($params, true), print_r($generation_result, true)));
+
+            do_action('growtype_art_generation_failed', $model_id, $this->sanitize_params($params), $error_message, $this->get_provider_key());
 
             return [
                 'success' => false,
-                'message' => $generation_result['message'] ?? $generation_result['errors'][0]['message'] ?? 'Something went wrong',
+                'message' => $error_message,
             ];
         }
 
@@ -357,6 +419,10 @@ abstract class Growtype_Art_Generator_Base
 
             if (empty($saved_image) || isset($saved_image['error'])) {
                 error_log(sprintf('save_generations error for provider %s: %s', $this->get_provider_key(), json_encode($saved_image)));
+                if (empty($params['model']) && empty($params['video_model'])) {
+                    $params['model'] = $this->get_default_model($params);
+                }
+                do_action('growtype_art_generation_failed', $model_id, $params, $saved_image['error'] ?? 'save_image failed', $this->get_provider_key());
                 continue;
             }
 
@@ -371,11 +437,30 @@ abstract class Growtype_Art_Generator_Base
             }
 
             $saved_generations[] = [
-                'url' => $saved_image['details']['url'] ?? '',
-                'image_id' => $saved_image['id'] ?? null,
+                'url'           => $saved_image['details']['url'] ?? '',
+                'image_id'      => $saved_image['id'] ?? null,
                 'generation_id' => $generation['generation_id'] ?? $generation['id'] ?? $params['generation_id'] ?? $params['task_id'] ?? '',
-                'image_prompt' => $params['prompt'] ?? '',
+                'image_prompt'  => $params['prompt'] ?? '',
             ];
+
+            // ── Emit generation event (provider-agnostic, DB-only) ────────────
+            // Only log generations that are actually persisted. Ephemeral/preview
+            // calls (save_to_db=false) are intentionally excluded from history.
+            // Any code can hook `growtype_art_generation_saved` to react further.
+            if (empty($params['model']) && empty($params['video_model'])) {
+                $params['model'] = $this->get_default_model($params);
+            }
+
+            // Auto-resolve cost from model config if not already set by caller.
+            if (!isset($params['cost_usd'])) {
+                $model_slug      = $params['model'] ?? $params['video_model'] ?? $params['segmind_model'] ?? null;
+                $resolved_cost   = $this->get_model_cost($model_slug);
+                if ($resolved_cost !== null) {
+                    $params['cost_usd'] = $resolved_cost;
+                }
+            }
+
+            do_action('growtype_art_generation_success', $saved_image, $model_id, $params, $this->get_provider_key());
         }
 
         if ($save_to_db && $model_id) {

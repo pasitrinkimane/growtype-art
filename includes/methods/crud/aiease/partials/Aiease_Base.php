@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
@@ -19,6 +19,11 @@ class Aiease_Base extends Growtype_Art_Generator_Base
         return Growtype_Art_Crud::AIEASE_KEY;
     }
 
+    public function get_default_model($params = [])
+    {
+        return $params['model'] ?? 'art_v1';
+    }
+
     public function get_access_token($api_group_key)
     {
         $api_keys = $this->api_key();
@@ -30,10 +35,6 @@ class Aiease_Base extends Growtype_Art_Generator_Base
         $url = "https://www.aiease.ai/api/api/gen/text2img";
         $token = $params['token'];
 
-        $headers = [
-            "authorization: JWT $token",
-            "Content-Type: application/json"
-        ];
 
         $data = [
             "gen_type" => "art_v1",
@@ -44,18 +45,16 @@ class Aiease_Base extends Growtype_Art_Generator_Base
             ]
         ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        $wp_response = wp_remote_post($url, [
+            'headers' => [
+                'authorization' => "JWT $token",
+                'Content-Type'  => 'application/json',
+            ],
+            'body'    => json_encode($data),
+            'timeout' => 60,
+        ]);
 
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        curl_close($ch);
+        $response = is_wp_error($wp_response) ? '' : wp_remote_retrieve_body($wp_response);
 
         error_log('Growtype Art - Aiease Base: Raw Response: ' . $response);
 
@@ -63,10 +62,15 @@ class Aiease_Base extends Growtype_Art_Generator_Base
 
         if (isset($result['result']['task_id'])) {
             return [
-                'status' => 'pending',
-                'task_id' => $result['result']['task_id'],
-                'message' => 'Generation started',
-                'original_response' => $result
+                'status'           => 'pending',
+                'task_id'          => $result['result']['task_id'],
+                'message'          => 'Generation started',
+                'original_response'=> $result,
+                '_request_payload' => array_merge(['_url' => $url], $data),
+                // Thread payload through cron so it's available when the image is saved
+                'cron_payload'     => [
+                    '_provider_request_payload' => array_merge(['_url' => $url], $data),
+                ],
             ];
         }
 
@@ -91,13 +95,15 @@ class Aiease_Base extends Growtype_Art_Generator_Base
         $generations = [];
         foreach ($generations_ids as $generations_id) {
             $generation = $this->get_generation($token, $generations_id);
+            $data = $generation['result']['data'] ?? [];
+            $status = $data['status'] ?? '';
 
-            if (isset($generation['result']['data']['results']) && !empty($generation['result']['data']['results'])) {
+            if (isset($data['results']) && !empty($data['results'])) {
 
                 $args['generation_id'] = $generations_id;
 
                 // Save using local override
-                $saved_generations = $this->save_generations($generation['result']['data']['results'], $model_id, $args);
+                $saved_generations = $this->save_generations($data['results'], $model_id, $args);
 
                 // External delete
                 foreach ($saved_generations as $saved_generation) {
@@ -115,6 +121,13 @@ class Aiease_Base extends Growtype_Art_Generator_Base
                 }
                 
                 $generations[] = $saved_generations;
+            } elseif (in_array($status, ['failed', 'error', 'fail'], true) || (isset($generation['code']) && $generation['code'] !== 200)) {
+                if (empty($args['model'])) {
+                    $args['model'] = $this->get_default_model($args);
+                }
+                do_action('growtype_art_generation_failed', $model_id, array_merge(['generation_id' => $generations_id], $args), $generation['message'] ?? 'Aiease task failed', $this->get_provider_key());
+            } else {
+                throw new Exception(sprintf('Aiease generation %s is still processing (status: %s).', $generations_id, is_scalar($status) ? $status : json_encode($status)));
             }
         }
 
@@ -140,6 +153,10 @@ class Aiease_Base extends Growtype_Art_Generator_Base
                     'nsfw' => true
                 ];
                 error_log(sprintf('aiease generator. Sensitive image. %s', print_r($generation, true)));
+                if (empty($params['model'])) {
+                    $params['model'] = $this->get_default_model($params);
+                }
+                do_action('growtype_art_generation_failed', $model_id, $params, 'NSFW image detected by provider', $this->get_provider_key());
                 continue;
             }
 
@@ -186,6 +203,10 @@ class Aiease_Base extends Growtype_Art_Generator_Base
 
             if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
                 error_log('save_generations: ' . json_encode($saved_image));
+                if (empty($params['model'])) {
+                    $params['model'] = $this->get_default_model($params);
+                }
+                do_action('growtype_art_generation_failed', $model_id, $params, $saved_image['error'] ?? 'save_image failed', $this->get_provider_key());
                 continue;
             }
 
@@ -204,6 +225,12 @@ class Aiease_Base extends Growtype_Art_Generator_Base
                 'image_id' => $saved_image['id'],
                 'url' => $saved_image['details']['url'] ?? '',
             ];
+
+            // Trigger logger action for successful generation
+            if (empty($params['model'])) {
+                $params['model'] = $this->get_default_model($params);
+            }
+            do_action('growtype_art_generation_success', $saved_image, $model_id, $params, $this->get_provider_key());
         }
 
         return $saved_generations;
@@ -212,18 +239,15 @@ class Aiease_Base extends Growtype_Art_Generator_Base
     function get_generation($token, $generation_id)
     {
         $url = "https://www.aiease.ai/api/api/id_photo/task-info?task_id=" . $generation_id;
-        $headers = [
-            "authorization: JWT $token",
-            "Content-Type: application/json"
-        ];
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_HTTPGET, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        $wp_response = wp_remote_get($url, [
+            'headers' => [
+                'authorization' => "JWT $token",
+                'Content-Type'  => 'application/json',
+            ],
+            'timeout' => 30,
+        ]);
 
-        $response = curl_exec($ch);
-        curl_close($ch);
+        $response = is_wp_error($wp_response) ? '{}' : wp_remote_retrieve_body($wp_response);
 
         return json_decode($response, true);
     }
@@ -232,18 +256,16 @@ class Aiease_Base extends Growtype_Art_Generator_Base
     {
         $prompt_id = (int)$prompt_id;
         $url = "https://www.aiease.ai/api/api/id_photo/history/$prompt_id/1";
-        $headers = [
-            "authorization: JWT $token",
-            "Content-Type: application/json"
-        ];
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        $wp_response = wp_remote_request($url, [
+            'method'  => 'DELETE',
+            'headers' => [
+                'authorization' => "JWT $token",
+                'Content-Type'  => 'application/json',
+            ],
+            'timeout' => 15,
+        ]);
 
-        $response = curl_exec($ch);
-        curl_close($ch);
+        $response = is_wp_error($wp_response) ? '{}' : wp_remote_retrieve_body($wp_response);
 
         return json_decode($response, true);
     }

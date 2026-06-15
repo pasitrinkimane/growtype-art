@@ -56,6 +56,18 @@ class Growtype_Art_Admin_Pages
          */
         require_once 'settings/growtype-art-admin-settings.php';
         new Growtype_Art_Admin_Settings();
+
+        /**
+         * History
+         */
+        require_once 'history/growtype-art-admin-history.php';
+        new Growtype_Art_Admin_History();
+
+        /**
+         * Content Generator
+         */
+        require_once 'content-generator/growtype-art-admin-content-generator.php';
+        new Growtype_Art_Admin_Content();
     }
 
     public static function render_pagination($page, $total_items, $current_offset, $limit)

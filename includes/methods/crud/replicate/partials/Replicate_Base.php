@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
@@ -23,12 +23,31 @@ class Replicate_Base extends Growtype_Art_Generator_Base
         return Growtype_Art_Crud::REPLICATE_KEY;
     }
 
+    public function get_default_model($params = [])
+    {
+        return $params['model'] ?? 'black-forest-labs/flux-2-dev';
+    }
+
     public function get_models()
     {
         return [
             'black-forest-labs/flux-2-dev' => [
-                'is_nsfw' => false,
-                'rating' => 9
+                'label'    => 'Flux 2 Dev',
+                'is_nsfw'  => false,
+                'rating'   => 9,
+                'cost_usd' => 0.003,
+            ],
+            'prunaai/p-image' => [
+                'label'    => 'Prun AI / P-Image',
+                'is_nsfw'  => true,
+                'rating'   => 8,
+                'cost_usd' => 0.002,
+            ],
+            'prunaai/p-image-edit' => [
+                'label'    => 'Prun AI / P-Image Edit',
+                'is_nsfw'  => true,
+                'rating'   => 8,
+                'cost_usd' => 0.002,
             ],
         ];
     }
@@ -38,72 +57,125 @@ class Replicate_Base extends Growtype_Art_Generator_Base
         return "https://api.replicate.com/v1/models/{$model_slug}/predictions";
     }
 
-    public function get_random_access_token()
-    {
-        $api_keys = $this->api_key();
-
-        if (empty($api_keys)) {
-            return null;
-        }
-
-        $api_group_key = array_keys($api_keys)[array_rand(array_keys($api_keys))];
-
-        return $this->get_access_token($api_group_key);
-    }
 
     // ──────────────────────────────────────────────
     // Image Generation (via Replicate predictions API)
     // ──────────────────────────────────────────────
 
+    /**
+     * Declarative per-model configuration.
+     *
+     * Keys:
+     *   image_key        – param name used to pass reference image(s) to the API
+     *   aspect_ratio     – default aspect_ratio when NO reference image is provided (null = omit)
+     *   ref_aspect_ratio – default aspect_ratio when a reference image IS provided (null = omit)
+     *   extra_defaults   – any additional fields to inject when not already set by the caller
+     *
+     * To add a new model: add one entry here. No logic changes needed.
+     */
+    private static function get_model_config(string $model_slug): array
+    {
+        $configs = [
+            'prunaai/p-image' => [
+                'image_key'         => 'images',   // expects array of images
+                'aspect_ratio'      => 'custom',   // valid: 1:1 16:9 9:16 4:3 3:4 3:2 2:3 custom
+                'ref_aspect_ratio'  => 'custom',   // same restriction; 'match_input_image' NOT valid
+                'ref_exclude_fields'=> [],
+                'extra_defaults'    => [],
+            ],
+            'prunaai/p-image-edit' => [
+                // p-image-edit does NOT accept 'custom'; valid values:
+                // match_input_image | 1:1 | 16:9 | 9:16 | 4:3 | 3:4 | 3:2 | 2:3
+                'image_key'         => 'images',
+                'aspect_ratio'      => '1:1',             // no ref-image case
+                'ref_aspect_ratio'  => 'match_input_image', // ref-image case
+                'ref_exclude_fields'=> ['width', 'height'], // incompatible with match_input_image
+                'extra_defaults'    => ['megapixels' => '2'],
+            ],
+        ];
+
+        // Default config for all other models
+        return $configs[$model_slug] ?? [
+            'image_key'         => 'image',
+            'aspect_ratio'      => null,                // don't send unless caller specifies
+            'ref_aspect_ratio'  => 'match_input_image', // safe default for most flux-style models
+            'ref_exclude_fields'=> [],
+            'extra_defaults'    => [],
+        ];
+    }
+
     public function generate_image_init($params)
     {
         $model_slug = $params['model'] ?? 'black-forest-labs/flux-2-dev';
-        $url = $this->get_model_url($model_slug);
-        $token = $params['token'];
+        $url        = $this->get_model_url($model_slug);
+        $token      = $params['token'];
+        $config     = self::get_model_config($model_slug);
 
+        // ── Base input ────────────────────────────────────────────────────────
         $input = [
-            'prompt' => $params['prompt'],
-            'width' => $params['width'] ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
-            'height' => $params['height'] ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
-            'go_fast' => $params['go_fast'] ?? true,
-            'output_format' => $params['output_format'] ?? 'webp',
-            'output_quality' => $params['output_quality'] ?? 80,
-            'num_outputs' => $params['num_outputs'] ?? 1,
-            'disable_safety_checker' => $params['disable_safety_checker'] ?? false,
+            'prompt'                 => $params['prompt'],
+            'width'                  => $params['width']          ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
+            'height'                 => $params['height']         ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
+            'go_fast'                => $params['go_fast']        ?? true,
+            'output_format'          => $params['output_format']  ?? 'webp',
+            'output_quality'         => $params['output_quality'] ?? 80,
+            'num_outputs'            => $params['num_outputs']    ?? 1,
+            'disable_safety_checker' => $params['disable_safety_checker'] ?? true,
         ];
 
-        // Handle reference images for img2img (supports 'image', 'input_image', 'reference_images', etc.)
-        $reference_image_urls = $params['reference_image_urls'] ?? [];
-        $image_key = $params['image_key'] ?? 'image';
-
-        // Model-specific defaults for known models
-        if ($model_slug === 'prunaai/p-image-edit' || $model_slug === 'prunaai/p-image') {
-            $image_key = 'images'; // this model expects 'images' (plural array)
-            $input['aspect_ratio'] = $params['aspect_ratio'] ?? 'custom';
+        // ── Model-specific extra defaults (e.g. megapixels for p-image-edit) ─
+        foreach ($config['extra_defaults'] as $field => $value) {
+            if (!isset($input[$field])) {
+                $input[$field] = $value;
+            }
         }
+
+        // ── Reference images ──────────────────────────────────────────────────
+        // Normalize singular → plural so callers can use either form
+        $reference_image_urls = $params['reference_image_urls'] ?? [];
+        if (empty($reference_image_urls) && !empty($params['reference_image_url'])) {
+            $reference_image_urls = (array) $params['reference_image_url'];
+        }
+        // Model config is authoritative for the API field name (e.g. 'images', 'image').
+        // $params['image_key'] is treated as a semantic hint only — it must NOT override
+        // the model config for explicitly configured models, because the caller may use
+        // 'reference_images' as a logical name while the API actually expects 'images'.
+        // To customise the key for a new model, add it to get_model_config() instead.
+        $image_key = $config['image_key'];
 
         if (!empty($reference_image_urls)) {
-            // Plural keys (reference_images) get the full array, singular keys get first URL
-            if (str_contains($image_key, 'images')) {
-                $input[$image_key] = $reference_image_urls;
-            } else {
-                $input[$image_key] = $reference_image_urls[0];
+            // Plural key → full array; singular key → first URL only
+            $input[$image_key] = str_contains($image_key, 'images')
+                ? $reference_image_urls
+                : $reference_image_urls[0];
+
+            $default_ar = $config['ref_aspect_ratio'];
+
+            // Strip fields that are incompatible with this model's reference-image mode
+            foreach ($config['ref_exclude_fields'] ?? [] as $field) {
+                unset($input[$field]);
             }
-            $input['aspect_ratio'] = $params['aspect_ratio'] ?? 'match_input_image';
-        } elseif (isset($params['aspect_ratio'])) {
+        } else {
+            $default_ar = $config['aspect_ratio'];
+        }
+
+        // ── aspect_ratio: explicit caller param > model default > omit ────────
+        if (isset($params['aspect_ratio'])) {
             $input['aspect_ratio'] = $params['aspect_ratio'];
+        } elseif ($default_ar !== null) {
+            $input['aspect_ratio'] = $default_ar;
         }
 
-        // Default megapixels for models that require it (only reference_images schema)
-        if ($model_slug === 'prunaai/p-image-edit' && !isset($input['megapixels']) && $image_key !== 'images') {
-            $input['megapixels'] = '2';
-        }
-
-        // Forward any extra model-specific params (lora_weights, guidance, megapixels, num_inference_steps, etc.)
-        $internal_keys = ['prompt', 'width', 'height', 'go_fast', 'output_format', 'output_quality', 'num_outputs',
-            'disable_safety_checker', 'image_key', 'reference_image_urls', 'reference_image_url', 'aspect_ratio',
-            'token', 'model_id', 'model', 'save_to_db', 'providers', 'types', 'images_amount', 'reference_files',
-            'prompt_params', 'generation_id', 'segmind_model', 'api_group_key'];
+        // ── Forward any extra caller params not already set ───────────────────
+        // (lora_weights, guidance, num_inference_steps, etc.)
+        $internal_keys = [
+            'prompt', 'width', 'height', 'go_fast', 'output_format', 'output_quality',
+            'num_outputs', 'disable_safety_checker', 'image_key', 'reference_image_urls',
+            'reference_image_url', 'aspect_ratio', 'token', 'model_id', 'model',
+            'save_to_db', 'providers', 'types', 'images_amount', 'reference_files',
+            'prompt_params', 'generation_id', 'segmind_model', 'api_group_key',
+            'source', 'created_by',
+        ];
         foreach ($params as $key => $value) {
             if (!in_array($key, $internal_keys, true) && !isset($input[$key])) {
                 $input[$key] = $value;
@@ -114,32 +186,29 @@ class Replicate_Base extends Growtype_Art_Generator_Base
         error_log('Growtype Art - Replicate input: ' . json_encode($input));
 
         $headers = [
-            'Authorization: Bearer ' . $token,
-            'Content-Type: application/json',
-            'Prefer: wait',
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type'  => 'application/json',
+            'Prefer'        => 'wait',
         ];
 
         $body = json_encode(['input' => $input]);
         error_log('Growtype Art - Replicate body: ' . $body);
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 180);
+        $wp_response = wp_remote_post($url, [
+            'headers' => $headers,
+            'body'    => $body,
+            'timeout' => 180,
+        ]);
 
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if (!empty($error)) {
+        if (is_wp_error($wp_response)) {
             return [
                 'success' => false,
-                'message' => 'cURL error: ' . $error,
+                'message' => $wp_response->get_error_message(),
             ];
         }
+
+        $response  = wp_remote_retrieve_body($wp_response);
+        $http_code = (int) wp_remote_retrieve_response_code($wp_response);
 
         $data = json_decode($response, true);
 
@@ -235,20 +304,36 @@ class Replicate_Base extends Growtype_Art_Generator_Base
 
         $url = "https://api.replicate.com/v1/predictions/{$generation_id}";
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $token,
-            'Content-Type: application/json',
+        $wp_response = wp_remote_get($url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type'  => 'application/json',
+            ],
+            'timeout' => 30,
         ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
-        $response = curl_exec($ch);
-        curl_close($ch);
+        if (is_wp_error($wp_response)) {
+            return [];
+        }
+
+        $response = wp_remote_retrieve_body($wp_response);
 
         $data = json_decode($response, true);
+        $status = $data['status'] ?? 'unknown';
 
-        if (empty($data) || ($data['status'] ?? '') !== 'succeeded') {
+        if (empty($data) || in_array($status, ['starting', 'processing'], true)) {
+            throw new Exception(sprintf('Replicate prediction %s is still %s.', $generation_id, $status));
+        }
+
+        if (in_array($status, ['failed', 'canceled'], true)) {
+            if (empty($args['model']) && empty($args['video_model'])) {
+                $args['model'] = $this->get_default_model($args);
+            }
+            do_action('growtype_art_generation_failed', $model_id, array_merge(['generation_id' => $generation_id], $args), $data['error'] ?? 'Prediction failed', $this->get_provider_key());
+            return []; // Do not throw exception so the cron job is cleared
+        }
+
+        if ($status !== 'succeeded' || !isset($data['output'])) {
             return [];
         }
 
@@ -341,11 +426,6 @@ class Replicate_Base extends Growtype_Art_Generator_Base
         ];
     }
 
-    public function get_access_token($api_group_key)
-    {
-        return $this->api_key()[$api_group_key]['api_key'] ?? '';
-    }
-
     public function save_generations($generations, $model_id = null, $params = [])
     {
         // If this is an image generation (url key), delegate to parent
@@ -361,33 +441,41 @@ class Replicate_Base extends Growtype_Art_Generator_Base
                 error_log(sprintf('Output not found. Trying to get again: %s', print_r($generation, true)));
 
                 $prediction_id = $generation['id'];
-                $access_token = $this->get_random_access_token();
+                $access_token  = $this->get_random_access_token();
 
-                $curl = curl_init();
+                $max_attempts = 60; // 60 × 5s = 5 min max
+                $attempt      = 0;
+                $status       = 'unknown';
 
                 do {
-                    curl_setopt_array($curl, [
-                        CURLOPT_URL => "https://api.replicate.com/v1/predictions/$prediction_id",
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_HTTPHEADER => [
-                            "Authorization: Token $access_token",
-                            "Content-Type: application/json"
-                        ],
-                    ]);
+                    $poll_response = wp_remote_get(
+                        "https://api.replicate.com/v1/predictions/{$prediction_id}",
+                        [
+                            'headers' => [
+                                'Authorization' => "Bearer {$access_token}",
+                                'Content-Type'  => 'application/json',
+                            ],
+                            'timeout' => 30,
+                        ]
+                    );
 
-                    $response = curl_exec($curl);
-                    $data = json_decode($response, true);
-
+                    $data   = !is_wp_error($poll_response)
+                        ? json_decode(wp_remote_retrieve_body($poll_response), true)
+                        : [];
                     $status = $data['status'] ?? 'unknown';
 
                     if ($status === 'succeeded' || $status === 'failed' || $status === 'canceled') {
                         break;
                     }
 
+                    $attempt++;
+                    if ($attempt >= $max_attempts) {
+                        error_log(sprintf('Replicate polling timeout after %d attempts for prediction %s', $max_attempts, $prediction_id));
+                        break;
+                    }
+
                     sleep(5); // wait 5 seconds before checking again
                 } while (true);
-
-                curl_close($curl);
 
                 if ($status === 'succeeded') {
 
@@ -402,32 +490,45 @@ class Replicate_Base extends Growtype_Art_Generator_Base
 
             $model = growtype_art_get_model_details($model_id);
 
-            $image_folder = $model['image_folder'];
+            // Normalize output: some models return a string URL, others an array
+            $output_url = is_array($generation['output'])
+                ? ($generation['output'][0] ?? null)
+                : $generation['output'];
+
+            if (empty($output_url)) {
+                error_log('Replicate save_generations: empty output URL for prediction.');
+                continue;
+            }
+
+            $image_folder   = $model['image_folder'];
             $image_location = growtype_art_get_images_saving_location();
 
-            $image['folder'] = $image_folder;
-            $image['location'] = $image_location;
-            $image['url'] = $generation['output'];
-            $image['meta_details'] = [
-                [
-                    'key' => 'generation_id',
-                    'value' => $params['generation_id']
+            // Re-initialize $image each iteration to prevent property leakage
+            $image = [
+                'folder'       => $image_folder,
+                'location'     => $image_location,
+                'url'          => $output_url,
+                'meta_details' => [
+                    [
+                        'key'   => 'generation_id',
+                        'value' => $params['generation_id'],
+                    ],
+                    [
+                        'key'   => 'provider',
+                        'value' => Growtype_Art_Crud::REPLICATE_KEY,
+                    ],
+                    [
+                        'key'   => 'prompt',
+                        'value' => $params['prompt'],
+                    ],
                 ],
-                [
-                    'key' => 'provider',
-                    'value' => Growtype_Art_Crud::REPLICATE_KEY
-                ],
-                [
-                    'key' => 'prompt',
-                    'value' => $params['prompt']
-                ]
             ];
 
             if (isset($params['types'])) {
                 foreach ($params['types'] as $type) {
                     $image['meta_details'][] = [
-                        'key' => $type,
-                        'value' => 1
+                        'key'   => $type,
+                        'value' => 1,
                     ];
                 }
             }
@@ -436,6 +537,10 @@ class Replicate_Base extends Growtype_Art_Generator_Base
 
             if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
                 error_log('save generations output error: ' . print_r($saved_image, true));
+                if (empty($params['video_model'])) {
+                    $params['video_model'] = 'wan-video/wan-2.2-i2v-fast';
+                }
+                do_action('growtype_art_generation_failed', $model_id, array_merge(['asset_type' => 'video'], $params), $saved_image['error'] ?? 'save_image failed', $this->get_provider_key());
                 continue;
             }
 
@@ -444,14 +549,14 @@ class Replicate_Base extends Growtype_Art_Generator_Base
              */
             Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [
                 'model_id' => $model_id,
-                'image_id' => $saved_image['id']
+                'image_id' => $saved_image['id'],
             ]);
 
             $saved_generations[] = [
-                'url' => $saved_image['details']['url'],
-                'image_id' => $saved_image['id'],
+                'url'           => $saved_image['details']['url'],
+                'image_id'      => $saved_image['id'],
                 'generation_id' => $params['generation_id'],
-                'image_prompt' => $params['prompt'],
+                'image_prompt'  => $params['prompt'],
             ];
 
             $reference_image_id = $params['reference_image']['id'] ?? null;
@@ -461,17 +566,24 @@ class Replicate_Base extends Growtype_Art_Generator_Base
 
             if (!empty($reference_image_id)) {
                 Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
-                    'image_id' => $reference_image_id,
-                    'meta_key' => 'video_url_image_id_' . $saved_image['id'],
+                    'image_id'   => $reference_image_id,
+                    'meta_key'   => 'video_url_image_id_' . $saved_image['id'],
                     'meta_value' => $saved_image['details']['url'],
                 ]);
 
                 Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
-                    'image_id' => $saved_image['id'],
-                    'meta_key' => 'parent_image_id',
+                    'image_id'   => $saved_image['id'],
+                    'meta_key'   => 'parent_image_id',
                     'meta_value' => $reference_image_id,
                 ]);
             }
+
+            // Trigger logger action for successful generation
+            if (empty($params['video_model'])) {
+                $params['video_model'] = 'wan-video/wan-2.2-i2v-fast';
+            }
+
+            do_action('growtype_art_generation_success', $saved_image, $model_id, array_merge(['asset_type' => 'video'], $params), $this->get_provider_key());
         }
 
         do_action('growtype_art_model_update', $model_id);
@@ -589,16 +701,6 @@ class Replicate_Base extends Growtype_Art_Generator_Base
     public function faceswap($original_image_id, $swap_image_url)
     {
         $target_image_url = growtype_art_get_image_url($original_image_id);
-
-//        $cloudinary_crud = new Cloudinary_Crud();
-//
-//        $target_image_cloudinary = $cloudinary_crud->upload_asset($target_image_url, [
-//            'folder' => 'faceswap'
-//        ]);
-//
-//        $swap_image_cloudinary = $cloudinary_crud->upload_asset($swap_image_url, [
-//            'folder' => 'faceswap'
-//        ]);
 
         $response = $this->faceswap_generate($target_image_url, $swap_image_url);
 

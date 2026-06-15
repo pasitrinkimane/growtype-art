@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
@@ -80,80 +80,70 @@ class Flatai_Base extends Growtype_Art_Generator_Base
         $attempt = 0;
 
         while ($attempt < $maxRetries) {
-            $randomUserAgent = $userAgents[array_rand($userAgents)];
+            $randomUserAgent      = $userAgents[array_rand($userAgents)];
             $randomAcceptLanguage = $acceptLanguages[array_rand($acceptLanguages)];
-            $randomProxy = $proxies[$attempt];
-            $useProxy = rand(0, 1) === 1;
-
-            $headers = [
-                "Content-Type: multipart/form-data; boundary=$delimiter",
-                "Accept: */*",
-                "Accept-Encoding: gzip, deflate, br, zstd",
-                "Accept-Language: $randomAcceptLanguage",
-                "Cache-Control: no-cache",
-                "Origin: https://flatai.org",
-                "Referer: https://flatai.org/ai-image-generator-free-no-signup/?utm_source=chatgpt.com",
-                "User-Agent: $randomUserAgent",
-                "X-Requested-With: XMLHttpRequest",
-            ];
-
-            $ch = curl_init($url);
-
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 20); // Set timeout to 10 seconds
-
-            // Use proxy
-            if ($useProxy) {
-                curl_setopt($ch, CURLOPT_PROXY, $randomProxy);
-                error_log("Using proxy: $randomProxy");
-            } else {
-                error_log("No proxy used for this request.");
-            }
 
             try {
-                $response = curl_exec($ch);
+                $wp_response = wp_remote_post($url, [
+                    'headers' => [
+                        'Content-Type'    => "multipart/form-data; boundary=$delimiter",
+                        'Accept'          => '*/*',
+                        'Accept-Encoding' => 'gzip, deflate, br, zstd',
+                        'Accept-Language' => $randomAcceptLanguage,
+                        'Cache-Control'   => 'no-cache',
+                        'Origin'          => 'https://flatai.org',
+                        'Referer'         => 'https://flatai.org/ai-image-generator-free-no-signup/?utm_source=chatgpt.com',
+                        'User-Agent'      => $randomUserAgent,
+                        'X-Requested-With'=> 'XMLHttpRequest',
+                    ],
+                    'body'    => $postData,
+                    'timeout' => 20,
+                ]);
 
-                if (curl_errno($ch)) {
-                    throw new Exception('CURL Error: ' . curl_error($ch));
+                if (is_wp_error($wp_response)) {
+                    throw new Exception($wp_response->get_error_message());
                 }
 
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $httpCode = (int) wp_remote_retrieve_response_code($wp_response);
                 if ($httpCode >= 400) {
                     throw new Exception('HTTP Error: ' . $httpCode);
                 }
 
-                curl_close($ch);
-
-                $decoded = @gzdecode($response);
+                $response = wp_remote_retrieve_body($wp_response);
+                $decoded  = @gzdecode($response);
 
                 // If the response is valid, return the decoded data
                 if ($decoded !== false) {
-                    error_log(sprintf('Successfully decoded %s', $randomProxy));
+                    error_log(sprintf('Successfully decoded attempt %d', $attempt + 1));
 
                     $json_decoded = json_decode($decoded, true);
                     // Standardize result for base class
                     if (isset($json_decoded['data']['images'])) {
                         return [
-                            'success' => true,
-                            'generations' => array_map(function($img) { return ['url' => $img]; }, $json_decoded['data']['images'])
+                            'success'          => true,
+                            'generations'      => array_map(function($img) { return ['url' => $img]; }, $json_decoded['data']['images']),
+                            '_request_payload' => array_merge(['_url' => $url], $data),
                         ];
                     }
-                     return [
+                    return [
                         'success' => false,
                         'message' => $json_decoded['data']['message'] ?? 'Unknown error'
                     ];
-
                 } else {
+                    // Maybe response wasn't gzip-encoded — try raw JSON
+                    $json_decoded = json_decode($response, true);
+                    if (isset($json_decoded['data']['images'])) {
+                        return [
+                            'success'          => true,
+                            'generations'      => array_map(function($img) { return ['url' => $img]; }, $json_decoded['data']['images']),
+                            '_request_payload' => array_merge(['_url' => $url], $data),
+                        ];
+                    }
                     throw new Exception('Failed to decode response');
                 }
             } catch (Exception $e) {
-                // Log the error and try the next proxy
-                error_log(sprintf('Proxy %s. Error: %s', $randomProxy, $e->getMessage()));
-                curl_close($ch);
-                $attempt++; // Move to the next proxy
+                error_log(sprintf('Flatai attempt %d. Error: %s', $attempt + 1, $e->getMessage()));
+                $attempt++;
             }
         }
 

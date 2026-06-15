@@ -535,8 +535,18 @@ class Growtype_Art_Api_Character
             if (!function_exists($gen_fn)) {
                 $gen_fn = 'growtype_art_generate_model_image';
             }
+
+            // Pass context so save_generations() → generation_saved action has full metadata.
+            $gen_params = [
+                'providers'       => [$provider],
+                'created_by'      => $created_by,
+                'character_title' => $character_details['character_title'] ?? null,
+                'asset_type'      => $asset_type,
+                'featured_in'     => $featured_in,
+            ];
+
             for ($i = 0; $i < $assets_amount; $i++) {
-                $gen_fn($model_id, ['providers' => [$provider]]);
+                $gen_fn($model_id, $gen_params);
                 if ($i < $assets_amount - 1) sleep(2);
             }
         }
@@ -636,7 +646,7 @@ class Growtype_Art_Api_Character
              $params['reference_image_urls'] = $reference_image_urls;
         }
 
-        $params['save_to_db'] = false;
+        $params['save_to_db'] = isset($params['save_to_db']) ? filter_var($params['save_to_db'], FILTER_VALIDATE_BOOLEAN) : true;
 
         $generate_details = growtype_art_generate_image($params);
 

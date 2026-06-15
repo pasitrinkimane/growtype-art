@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
@@ -27,13 +27,16 @@ class Runware_Base extends Growtype_Art_Generator_Base
     {
         return [
             'rundiffusion:130@100' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.002,
             ],
             'runware:97@1' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.002,
             ],
             'bfl:2@1' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.004,
             ],
         ];
     }
@@ -98,42 +101,43 @@ class Runware_Base extends Growtype_Art_Generator_Base
         $url = "https://api.runware.ai/v1";
 
         $headers = [
-            "Content-Type: application/json",
-            "User-Agent: PHP-cURL",
+            'Content-Type' => 'application/json',
         ];
 
         $data = [
             [
-                "taskType" => "authentication",
-                "apiKey" => $token
+                'taskType' => 'authentication',
+                'apiKey'   => $token,
             ],
-            $generating_settings
+            $generating_settings,
         ];
 
-        $ch = curl_init($url);
+        $wp_response = wp_remote_post($url, [
+            'headers' => $headers,
+            'body'    => json_encode($data),
+            'timeout' => 60,
+        ]);
 
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        if (is_wp_error($wp_response)) {
+            return [
+                'errors' => [['message' => $wp_response->get_error_message()]],
+            ];
+        }
 
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        curl_close($ch);
-
+        $response         = wp_remote_retrieve_body($wp_response);
         $response_decoded = json_decode($response, true);
 
         if (empty($response_decoded)) {
             $response_decoded = [
-                'errors' => [
-                    [
-                        'message' => $response
-                    ]
-                ]
+                'errors' => [['message' => $response]],
             ];
+        }
+
+        if (is_array($response_decoded)) {
+            $response_decoded['_request_payload'] = array_merge(
+                ['_url' => $url],
+                $generating_settings
+            );
         }
 
         return $response_decoded;

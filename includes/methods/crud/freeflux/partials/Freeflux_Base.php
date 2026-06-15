@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
@@ -47,36 +47,23 @@ class Freeflux_Base extends Growtype_Art_Generator_Base
         // Convert query parameters to JSON
         $post_data = json_encode($query_data);
 
-        // Set headers
-        $headers = [
-            "Content-Type: application/json",
-            "User-Agent: PHP-cURL"
-        ];
+        $wp_response = wp_remote_post($base_url, [
+            'headers' => ['Content-Type' => 'application/json'],
+            'body'    => $post_data,
+            'timeout' => 60,
+        ]);
 
-        // Initialize cURL
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $base_url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+        $http_code = is_wp_error($wp_response) ? 0 : (int) wp_remote_retrieve_response_code($wp_response);
+        $response  = is_wp_error($wp_response) ? '' : wp_remote_retrieve_body($wp_response);
+        $error     = is_wp_error($wp_response) ? $wp_response->get_error_message() : '';
 
-        // Execute the request
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-
-        // Close cURL connection
-        curl_close($ch);
-
-        // Handle cURL errors
+        // Handle errors
         if ($error || $http_code !== 200) {
             return [
                 'errors' => [
                     [
-                        'message' => "API Error: " . ($error ?: "HTTP Code $http_code"),
-                        'http_code' => $http_code
+                        'message'   => $error ?: "HTTP Code $http_code",
+                        'http_code' => $http_code,
                     ]
                 ]
             ];
@@ -98,7 +85,8 @@ class Freeflux_Base extends Growtype_Art_Generator_Base
 
         // Return standardized format (content -> imageBase64)
         return [
-            'imageBase64' => $response_data['result']
+            'imageBase64'      => $response_data['result'],
+            '_request_payload' => array_merge(['_url' => $base_url], $query_data),
         ];
     }
 }

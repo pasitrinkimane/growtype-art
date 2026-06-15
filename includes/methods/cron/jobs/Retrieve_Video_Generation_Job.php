@@ -8,6 +8,7 @@ class Retrieve_Video_Generation_Job
         $prediction_id = $job_payload['prediction_id'];
         $model_id = $job_payload['model_id'];
         $params = $job_payload['params'];
+        $params['video_model'] = $params['video_model'] ?? 'wan-video/wan-2.2-i2v-fast';
         $generation_id = $params['generation_id'] ?? '';
         $prompt = $params['prompt'] ?? '';
         $reference_image = $params['reference_image'] ?? null;
@@ -15,25 +16,31 @@ class Retrieve_Video_Generation_Job
         $replicate_base = new partials\Replicate_Base();
         $access_token = $replicate_base->get_random_access_token();
 
-        // Poll Replicate for prediction status
-        $curl = curl_init();
         $max_attempts = 60; // 5 minutes max
         $attempts = 0;
 
         error_log(sprintf('Retrieve_Video_Generation_Job: Polling prediction %s', $prediction_id));
 
         do {
-            curl_setopt_array($curl, [
-                CURLOPT_URL => "https://api.replicate.com/v1/predictions/$prediction_id",
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => [
-                    "Authorization: Token $access_token",
-                    "Content-Type: application/json"
-                ],
-            ]);
+            $wp_response = wp_remote_get(
+                "https://api.replicate.com/v1/predictions/$prediction_id",
+                [
+                    'headers' => [
+                        'Authorization' => "Token $access_token",
+                        'Content-Type'  => 'application/json',
+                    ],
+                    'timeout' => 15,
+                ]
+            );
 
-            $response = curl_exec($curl);
-            $data = json_decode($response, true);
+            if (is_wp_error($wp_response)) {
+                error_log('Retrieve_Video_Generation_Job: wp_remote_get error: ' . $wp_response->get_error_message());
+                sleep(5);
+                $attempts++;
+                continue;
+            }
+
+            $data   = json_decode(wp_remote_retrieve_body($wp_response), true);
             $status = $data['status'] ?? 'unknown';
 
             if ($status === 'succeeded' || $status === 'failed' || $status === 'canceled') {
@@ -44,10 +51,18 @@ class Retrieve_Video_Generation_Job
             $attempts++;
         } while ($attempts < $max_attempts);
 
-        curl_close($curl);
-
         if ($status !== 'succeeded') {
             error_log(sprintf('Retrieve_Video_Generation_Job: Job did not succeed. Status: %s, Data: %s', $status, print_r($data, true)));
+            do_action('growtype_art_generation_failed', $model_id, array_merge([
+                'prompt' => $prompt,
+                'generation_id' => $generation_id,
+                'asset_type' => 'video',
+            ], $params), $data['error'] ?? $status, Growtype_Art_Crud::REPLICATE_KEY);
+            
+            if (in_array($status, ['failed', 'canceled'], true)) {
+                return; // Permanent failure: exit cleanly so the cron job is cleared
+            }
+            
             throw new Exception('Video generation failed: ' . ($data['error'] ?? $status));
         }
 
@@ -91,8 +106,20 @@ class Retrieve_Video_Generation_Job
 
         if (empty($saved_image) || isset($saved_image['error']) || !isset($saved_image['id'])) {
             error_log('Retrieve_Video_Generation_Job: save_image error: ' . print_r($saved_image, true));
+            do_action('growtype_art_generation_failed', $model_id, array_merge([
+                'prompt' => $prompt,
+                'generation_id' => $generation_id,
+                'asset_type' => 'video',
+            ], $params), $saved_image['error'] ?? 'save_image failed', Growtype_Art_Crud::REPLICATE_KEY);
             throw new Exception('Failed to save video');
         }
+
+        // Trigger logger action for successful video generation
+        do_action('growtype_art_generation_success', $saved_image, $model_id, array_merge([
+            'prompt' => $prompt,
+            'generation_id' => $generation_id,
+            'asset_type' => 'video',
+        ], $params), Growtype_Art_Crud::REPLICATE_KEY);
 
         // Link to model
         Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::MODEL_IMAGE_TABLE, [

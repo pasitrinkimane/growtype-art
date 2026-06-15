@@ -3,7 +3,7 @@
 namespace partials;
 
 require GROWTYPE_ART_PATH . '/vendor/autoload.php';
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Generator_Base;
@@ -46,33 +46,28 @@ class Perchance_Base extends Growtype_Art_Generator_Base
         // Prepare URL with query parameters
         $url = 'https://image-generation.perchance.org/api/generate' . '?' . http_build_query($finalParams);
 
-        // Initialize cURL
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'User-Agent: PostmanRuntime/7.43.0',
-            'Accept: */*',
-            'Cache-Control: no-cache',
-            'Host: image-generation.perchance.org',
-            'Accept-Encoding: gzip, deflate, br',
-            'Connection: keep-alive',
-            'Content-Length: 0'
+        $wp_response = wp_remote_post($url, [
+            'headers' => [
+                'User-Agent'      => 'PostmanRuntime/7.43.0',
+                'Accept'          => '*/*',
+                'Cache-Control'   => 'no-cache',
+                'Accept-Encoding' => 'gzip, deflate, br',
+                'Connection'      => 'keep-alive',
+            ],
+            'body'    => '',
+            'timeout' => 30,
         ]);
 
-        // Execute request
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        // Close cURL
-        curl_close($ch);
+        $httpCode = is_wp_error($wp_response) ? 0 : (int) wp_remote_retrieve_response_code($wp_response);
+        $response = is_wp_error($wp_response) ? '' : wp_remote_retrieve_body($wp_response);
 
         $result = json_decode($response, true);
 
         if ($httpCode == 200 && !empty($result)) {
              return [
-                 'success' => true,
-                 'data' => [$result]
+                 'success'          => true,
+                 'data'             => [$result],
+                 '_request_payload' => array_merge(['_url' => $url], $finalParams),
              ];
         }
 

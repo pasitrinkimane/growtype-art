@@ -131,40 +131,25 @@ if (!function_exists('growtype_art_save_external_file')) {
                 $save_file_loc = $growtype_art_upload_dir . '/' . $file['name'] . '.' . $file['extension'];
 
                 if (file_exists($growtype_art_upload_dir)) {
-                    // Initialize the cURL session
-                    $ch = curl_init($url);
-
-                    // Open file
-                    $fp = fopen($save_file_loc, 'wb');
-
-                    // Set cURL options
-                    curl_setopt($ch, CURLOPT_FILE, $fp);
-                    curl_setopt($ch, CURLOPT_HEADER, 0);
-                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Follow redirects
-                    curl_setopt($ch, CURLOPT_MAXREDIRS, 5); // Maximum redirects to follow
-                    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Set timeout limit
-
-                    // Custom Headers
-                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-                        "Accept: image/jpeg,image/png,image/gif,image/webp,*/*;q=0.8",
-                        "Connection: keep-alive"
+                    $wp_response = wp_remote_get($url, [
+                        'headers' => [
+                            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
+                            'Accept'     => 'image/jpeg,image/png,image/gif,image/webp,*/*;q=0.8',
+                            'Connection' => 'keep-alive',
+                        ],
+                        'timeout'   => 30,
+                        'stream'    => false,
+                        'redirection' => 5,
                     ]);
 
-                    // Perform a cURL session
-                    curl_exec($ch);
-
-                    // Check for errors
-                    if (curl_errno($ch)) {
-                        $error_msg = curl_error($ch);
-                        error_log('cURL error: ' . $error_msg);
+                    if (is_wp_error($wp_response)) {
+                        error_log('WP HTTP error: ' . $wp_response->get_error_message());
+                    } else {
+                        $image_body = wp_remote_retrieve_body($wp_response);
+                        if ($image_body) {
+                            file_put_contents($save_file_loc, $image_body);
+                        }
                     }
-
-                    // Closes a cURL session and frees all resources
-                    curl_close($ch);
-
-                    // Close file
-                    fclose($fp);
                 }
 
                 return [
@@ -1151,7 +1136,6 @@ if (!function_exists('growtype_art_compress_existing_image')) {
         $image_path = growtype_art_get_image_path($image_id);
 
         if (empty($image_path) || !file_exists($image_path)) {
-            error_log("Image path invalid or file does not exist for image ID: $image_id");
             return;
         }
 

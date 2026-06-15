@@ -7,6 +7,7 @@ class Growtype_Art_Database
     const IMAGES_TABLE = 'growtype_art_images';
     const MODEL_IMAGE_TABLE = 'growtype_art_model_image';
     const IMAGE_SETTINGS_TABLE = 'growtype_art_image_settings';
+    const GENERATIONS_TABLE = 'growtype_art_generations';
 
     const REBUILD_TABLE = false; // IMPORTANT: Set to true to rebuild the database tables
 
@@ -126,6 +127,51 @@ class Growtype_Art_Database
                         'data_type' => 'INTEGER',
                     )
                 ]
+            ],
+            [
+                'name' => $wpdb->prefix . self::GENERATIONS_TABLE,
+                'fields' => [
+                    array (
+                        'data_field' => 'model_id',
+                        'data_type' => 'bigint unsigned DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'image_id',
+                        'data_type' => 'bigint unsigned DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'prompt',
+                        'data_type' => 'TEXT DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'provider',
+                        'data_type' => 'VARCHAR(255) DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'status',
+                        'data_type' => "VARCHAR(50) DEFAULT 'pending'",
+                    ),
+                    array (
+                        'data_field' => 'created_by',
+                        'data_type' => 'VARCHAR(255) DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'character_title',
+                        'data_type' => 'VARCHAR(255) DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'duration_ms',
+                        'data_type' => 'INT DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'meta',
+                        'data_type' => 'LONGTEXT DEFAULT NULL',
+                    ),
+                    array (
+                        'data_field' => 'content_type',
+                        'data_type' => "VARCHAR(20) DEFAULT 'image'",
+                    ),
+                ]
             ]
         ];
     }
@@ -168,6 +214,9 @@ class Growtype_Art_Database
                 if ($table_name == $wpdb->prefix . self::MODEL_IMAGE_TABLE) {
                     $sql .= "KEY model_id (model_id), KEY image_id (image_id), ";
                 }
+                if ($table_name == $wpdb->prefix . self::GENERATIONS_TABLE) {
+                    $sql .= "KEY model_id (model_id), KEY status (status), ";
+                }
 
                 $sql .= "PRIMARY KEY  (id)
     ) $charset_collate;";
@@ -183,6 +232,9 @@ class Growtype_Art_Database
         require_once GROWTYPE_ART_PATH . 'database/methods/class-growtype-art-database-crud.php';
 
         require_once GROWTYPE_ART_PATH . 'database/methods/class-growtype-art-database-optimize.php';
+
+        require_once GROWTYPE_ART_PATH . 'database/methods/class-growtype-art-generation-logger.php';
+        Growtype_Art_Generation_Logger::init();
     }
 }
 

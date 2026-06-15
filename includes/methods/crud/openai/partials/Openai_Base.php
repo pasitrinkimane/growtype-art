@@ -14,6 +14,72 @@ class Openai_Base
         $this->open_ai_key = self::api_key();
     }
 
+    public function get_provider_label(): string
+    {
+        return 'OpenAI';
+    }
+
+    public function get_text_models(): array
+    {
+        return [
+            'gpt-4o'        => 'GPT-4o',
+            'gpt-4o-mini'   => 'GPT-4o mini',
+            'gpt-4-turbo'   => 'GPT-4 Turbo',
+            'gpt-3.5-turbo' => 'GPT-3.5 Turbo',
+        ];
+    }
+
+    /**
+     * Generate text content via OpenAI Chat Completions.
+     * Named generate_chat_content() (not generate_text_content) to avoid
+     * a signature conflict with Openai_Base_Image::generate_text_content($text, $type).
+     */
+    public function generate_chat_content(string $prompt, string $model = 'gpt-4o-mini'): ?string
+    {
+        return self::generate_content_with_model($prompt, $model);
+    }
+
+    public static function generate_content_with_model(string $content, string $model = 'gpt-4o-mini'): ?string
+    {
+        if (!class_exists('Orhanerday\\OpenAi\\OpenAi')) {
+            error_log('Growtype Art - OpenAi library not found');
+            return null;
+        }
+
+        $api_key = self::api_key();
+        if (empty($api_key)) {
+            error_log('Growtype Art - OpenAI API Key is empty');
+            return null;
+        }
+
+        $open_ai  = new \Orhanerday\OpenAi\OpenAi($api_key);
+        $response = $open_ai->chat([
+            'model'             => $model,
+            'messages'          => [
+                ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+                ['role' => 'user',   'content' => $content],
+            ],
+            'temperature'       => 1.0,
+            'max_tokens'        => 4000,
+            'frequency_penalty' => 0,
+            'presence_penalty'  => 0,
+        ]);
+
+        if (empty($response)) {
+            error_log('Growtype Art - OpenAI response is empty');
+            return null;
+        }
+
+        $decoded = json_decode($response, true);
+
+        if (isset($decoded['error'])) {
+            error_log('Growtype Art - OpenAI Error: ' . json_encode($decoded['error']));
+            return null;
+        }
+
+        return $decoded['choices'][0]['message']['content'] ?? null;
+    }
+
     public static function api_key()
     {
         // Prefer credentials from the growtype-auth plugin.

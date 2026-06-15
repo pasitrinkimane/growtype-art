@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Database;
@@ -20,7 +20,8 @@ class Fal_Base extends Growtype_Art_Generator_Base
     {
         return [
             'flux-2/edit' => [
-                'is_nsfw' => true,
+                'is_nsfw'  => true,
+                'cost_usd' => 0.005,
             ],
         ];
     }
@@ -41,25 +42,21 @@ class Fal_Base extends Growtype_Art_Generator_Base
             'num_inference_steps' => $params['num_inference_steps'] ?? 32
         ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Authorization: Key $apiKey",
-            "Content-Type: application/json",
+        $wp_response = wp_remote_post($url, [
+            'headers' => [
+                'Authorization' => "Key $apiKey",
+                'Content-Type'  => 'application/json',
+            ],
+            'body'    => json_encode($postData),
+            'timeout' => 60,
         ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
-        $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            $error = curl_error($ch);
-            curl_close($ch);
-            return ['success' => false, 'message' => "CURL Error: $error"];
+        if (is_wp_error($wp_response)) {
+            return ['success' => false, 'message' => $wp_response->get_error_message()];
         }
 
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $httpCode = (int) wp_remote_retrieve_response_code($wp_response);
+        $response = wp_remote_retrieve_body($wp_response);
 
         error_log('Growtype Art - Fal Base: Raw Response: ' . $response);
 
@@ -106,8 +103,9 @@ class Fal_Base extends Growtype_Art_Generator_Base
         }
 
         return [
-            'success' => true,
-            'generations' => $generations
+            'success'          => true,
+            'generations'      => $generations,
+            '_request_payload' => array_merge(['_url' => $url], $postData),
         ];
     }
 

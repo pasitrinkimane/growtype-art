@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Extract_Image_Colors_Job;
 use Growtype_Art_Crud;
@@ -23,11 +23,75 @@ class Gemini_Base extends Growtype_Art_Generator_Base
         return Growtype_Art_Crud::GEMINI_KEY;
     }
 
+    public function get_provider_label(): string
+    {
+        return 'Gemini';
+    }
+
+    public function get_text_models(): array
+    {
+        return [
+            'gemini-2.0-flash'  => 'Gemini 2.0 Flash',
+            'gemini-2.5-flash'  => 'Gemini 2.5 Flash',
+            'gemini-1.5-pro'    => 'Gemini 1.5 Pro',
+            'gemini-1.5-flash'  => 'Gemini 1.5 Flash',
+        ];
+    }
+
+    /**
+     * Generate text content via the Gemini REST API.
+     * Reuses get_access_token() inherited from Growtype_Art_Generator_Base.
+     */
+    public function generate_text_content(string $prompt, string $model = 'gemini-2.0-flash'): ?string
+    {
+        $credentials = $this->api_key();
+
+        if (empty($credentials)) {
+            error_log('Growtype Art Gemini - No API credentials found.');
+            return null;
+        }
+
+        $first_group = reset($credentials);
+        $api_key     = $first_group['api_key'] ?? $first_group['token'] ?? '';
+
+        if (empty($api_key)) {
+            error_log('Growtype Art Gemini - API key is empty.');
+            return null;
+        }
+
+        $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$api_key}";
+
+        $response = wp_remote_post($endpoint, [
+            'headers' => ['Content-Type' => 'application/json'],
+            'body'    => wp_json_encode([
+                'contents' => [
+                    ['parts' => [['text' => $prompt]]]
+                ]
+            ]),
+            'timeout' => 60,
+        ]);
+
+        if (is_wp_error($response)) {
+            error_log('Growtype Art Gemini - Request error: ' . $response->get_error_message());
+            return null;
+        }
+
+        $decoded = json_decode(wp_remote_retrieve_body($response), true);
+
+        if (isset($decoded['error'])) {
+            error_log('Growtype Art Gemini - API error: ' . json_encode($decoded['error']));
+            return null;
+        }
+
+        return $decoded['candidates'][0]['content']['parts'][0]['text'] ?? null;
+    }
+
     public function get_models()
     {
         return [
             'gemini-2.5-flash-image-preview' => [
-                'is_nsfw' => false,
+                'is_nsfw'  => false,
+                'cost_usd' => 0.001,
             ],
         ];
     }

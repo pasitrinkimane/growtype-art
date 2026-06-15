@@ -2,7 +2,7 @@
 
 namespace partials;
 
-require_once GROWTYPE_ART_PATH . '/includes/methods/crud/Growtype_Art_Generator_Base.php';
+require_once GROWTYPE_ART_PATH . '/includes/methods/base/Growtype_Art_Generator_Base.php';
 
 use Growtype_Art_Crud;
 use Growtype_Art_Generator_Base;
@@ -12,6 +12,88 @@ class Xai_Base extends Growtype_Art_Generator_Base
     public function get_provider_key()
     {
         return Growtype_Art_Crud::XAI_KEY;
+    }
+
+    public function get_provider_label(): string
+    {
+        return 'xAI (Grok)';
+    }
+
+    public function get_text_models(): array
+    {
+        return [
+            'grok-3-mini' => 'Grok 3 Mini',
+            'grok-3'      => 'Grok 3',
+            'grok-2'      => 'Grok 2',
+            'grok-beta'   => 'Grok Beta',
+        ];
+    }
+
+    /**
+     * Generate text content via the xAI Chat Completions API.
+     * Reuses get_access_token() inherited from Growtype_Art_Generator_Base.
+     */
+    public function generate_text_content(string $prompt, string $model = 'grok-3-mini'): ?string
+    {
+        $credentials = $this->api_key();
+
+        if (empty($credentials)) {
+            error_log('Growtype Art xAI - No API credentials found.');
+            return null;
+        }
+
+        $first_group = array_key_first($credentials);
+        $api_key     = $this->get_access_token($first_group);
+
+        if (empty($api_key)) {
+            error_log('Growtype Art xAI - API key is empty.');
+            return null;
+        }
+
+        $response = wp_remote_post('https://api.x.ai/v1/chat/completions', [
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key,
+            ],
+            'body'    => wp_json_encode([
+                'model'       => $model,
+                'messages'    => [
+                    ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+                    ['role' => 'user',   'content' => $prompt],
+                ],
+                'temperature' => 0.7,
+                'max_tokens'  => 4000,
+            ]),
+            'timeout' => 90,
+        ]);
+
+        if (is_wp_error($response)) {
+            error_log('Growtype Art xAI - Request error: ' . $response->get_error_message());
+            return null;
+        }
+
+        $decoded = json_decode(wp_remote_retrieve_body($response), true);
+
+        if (isset($decoded['error'])) {
+            error_log('Growtype Art xAI - API error: ' . json_encode($decoded['error']));
+            return null;
+        }
+
+        return $decoded['choices'][0]['message']['content'] ?? null;
+    }
+
+    /**
+     * Image models available for xAI image generation.
+     * grok-imagine-image     = standard image generation
+     * grok-imagine-image-pro = higher quality / more credits
+     * ("aurora" is the internal engine name, not an API model ID)
+     */
+    public function get_models(): array
+    {
+        return [
+            'grok-imagine-image'     => 'Grok Imagine Image',
+            'grok-imagine-image-pro' => 'Grok Imagine Image Pro',
+        ];
     }
 
     public function generate_image_init($params)
@@ -41,9 +123,9 @@ class Xai_Base extends Growtype_Art_Generator_Base
         }
 
         $payload = [
-            'model' => $params['model'] ?? 'grok-imagine-image',
-            'prompt' => $params['prompt'] ?? '',
-            'aspect_ratio' => $params['aspect_ratio'] ?? "2:3"
+            'model'        => $params['model'] ?? 'grok-imagine-image',
+            'prompt'       => $params['prompt'] ?? '',
+            'aspect_ratio' => $params['aspect_ratio'] ?? '2:3',
         ];
 
         if (!empty($image_url)) {
@@ -51,46 +133,32 @@ class Xai_Base extends Growtype_Art_Generator_Base
         }
 
         $headers = [
-            "Authorization: Bearer {$api_key}",
-            "Content-Type: application/json"
+            'Authorization' => "Bearer {$api_key}",
+            'Content-Type'  => 'application/json',
         ];
 
         $max_retries = 0;
         $retry_count = 0;
 
-//        var_dump($payload);
-//        die();
-
         do {
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            $wp_response = wp_remote_post($url, [
+                'headers' => $headers,
+                'body'    => json_encode($payload),
+                'timeout' => 120,
+            ]);
 
-            $response = curl_exec($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
-
-            curl_close($ch);
-
-            if ($error) {
-                error_log("XAI - cURL Error: " . $error);
+            if (is_wp_error($wp_response)) {
+                $error_msg = $wp_response->get_error_message();
+                error_log('XAI - Request Error: ' . $error_msg);
                 return [
                     'success' => false,
-                    'message' => "cURL Error: " . $error
+                    'message' => $error_msg,
                 ];
             }
 
-//                    var_dump([
-//                        $payload,
-//                        $response
-//                    ]);
-//        die();
-
-            $decoded = json_decode($response, true);
+            $http_code = (int) wp_remote_retrieve_response_code($wp_response);
+            $response  = wp_remote_retrieve_body($wp_response);
+            $decoded   = json_decode($response, true);
 
             if (json_last_error() === JSON_ERROR_NONE) {
                 if ($http_code >= 400) {
@@ -103,7 +171,7 @@ class Xai_Base extends Growtype_Art_Generator_Base
                     if ($http_code == 400 && strpos($error_message, 'content moderation') !== false && $retry_count < $max_retries) {
                         $retry_count++;
                         error_log("XAI - Content moderation error. Cleaning prompt and retrying ($retry_count/$max_retries)...");
-                        
+
                         // Clean the prompt for the second try
                         $payload['prompt'] = $this->clean_prompt($payload['prompt']);
                         continue;
@@ -125,20 +193,25 @@ class Xai_Base extends Growtype_Art_Generator_Base
                         }
                     }
                     if (!empty($generations)) {
-                        return ['success' => true, 'generations' => $generations];
+                        return [
+                            'success'          => true,
+                            'generations'      => $generations,
+                            '_request_payload' => array_merge(['_url' => $url], $payload),
+                        ];
                     }
                 }
 
-                $decoded['success'] = true;
+                $decoded['success']          = true;
+                $decoded['_request_payload'] = array_merge(['_url' => $url], $payload);
                 return $decoded;
             }
 
-            error_log("XAI - JSON Decode Error: " . json_last_error_msg() . " - Response: " . $response);
+            error_log('XAI - JSON Decode Error: ' . json_last_error_msg() . ' - Response: ' . $response);
 
             return [
-                'success' => false,
+                'success'      => false,
                 'raw_response' => $response,
-                'message' => 'Invalid JSON response from API'
+                'message'      => 'Invalid JSON response from API'
             ];
         } while ($retry_count <= $max_retries);
     }
