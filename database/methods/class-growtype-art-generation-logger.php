@@ -289,6 +289,66 @@ class Growtype_Art_Generation_Logger
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
+     * Auto-detect where the generation request came from.
+     *
+     * Priority:
+     *   1. wp_doing_cron()           → 'cron'
+     *   2. REST_REQUEST + Referer    → referer domain (e.g. 'talkiemate.com')
+     *      REST_REQUEST alone        → 'api'
+     *   3. is_admin()                → 'admin'
+     *   4. HTTP_REFERER set          → referer domain (e.g. 'partner-site.io')
+     *   5. fallback                  → 'frontend'
+     *
+     * Returns a string safe for storage — at most 100 chars.
+     */
+    private static function detect_source(): string
+    {
+        // 1. WP-Cron context
+        if (wp_doing_cron() || (defined('DOING_CRON') && DOING_CRON)) {
+            return self::SOURCE_CRON;
+        }
+
+        // Helper: extract clean domain from a URL
+        $domain = static function (string $url): string {
+            $host = wp_parse_url($url, PHP_URL_HOST) ?: '';
+            // Strip 'www.' prefix
+            return preg_replace('/^www\./i', '', strtolower($host));
+        };
+
+        $own_domain = $domain(home_url());
+
+        // 2. REST API request
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            $referer = isset($_SERVER['HTTP_REFERER']) ? sanitize_url($_SERVER['HTTP_REFERER']) : '';
+            if ($referer) {
+                $ref_domain = $domain($referer);
+                // External site calling the REST API
+                if ($ref_domain && $ref_domain !== $own_domain) {
+                    return substr($ref_domain, 0, 100);
+                }
+            }
+            return self::SOURCE_API;
+        }
+
+        // 3. WordPress admin panel
+        if (is_admin()) {
+            return self::SOURCE_ADMIN;
+        }
+
+        // 4. Any HTTP referer (frontend/external)
+        $referer = isset($_SERVER['HTTP_REFERER']) ? sanitize_url($_SERVER['HTTP_REFERER']) : '';
+        if ($referer) {
+            $ref_domain = $domain($referer);
+            if ($ref_domain && $ref_domain !== $own_domain) {
+                return substr($ref_domain, 0, 100); // external site
+            }
+        }
+
+        // 5. Default
+        return self::SOURCE_FRONTEND;
+    }
+
+    /**
      * Build a canonical event array shared by handle_success() and handle_failed().
      */
     private static function build_event(
@@ -314,7 +374,7 @@ class Growtype_Art_Generation_Logger
             'prompt'          => $params['prompt'] ?? '',
             'provider'        => $provider,
             'status'          => $status,
-            'source'          => $params['source'] ?? null,
+            'source'          => $params['source'] ?? self::detect_source(),
             'created_by'      => $params['created_by'] ?? null,
             'character_title' => $params['character_title'] ?? null,
             'duration_ms'     => $params['duration_ms'] ?? null,
