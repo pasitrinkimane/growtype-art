@@ -18,6 +18,38 @@ class Growtype_Art_Admin_History
     public function __construct()
     {
         add_action('admin_menu', [$this, 'admin_menu_pages']);
+        add_action('wp_ajax_growtype_art_admin_delete_generation', [$this, 'delete_generation_callback']);
+    }
+
+    public function delete_generation_callback()
+    {
+        check_ajax_referer('growtype_art_admin_history', '_ajax_nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Unauthorized.', 'growtype-art')], 403);
+        }
+
+        $generation_id = isset($_POST['generation_id']) ? (int)$_POST['generation_id'] : 0;
+        if (!$generation_id || !self::table_ready()) {
+            wp_send_json_error(['message' => __('Invalid generation.', 'growtype-art')], 400);
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . Growtype_Art_Database::GENERATIONS_TABLE;
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, meta FROM {$table} WHERE id = %d", $generation_id), ARRAY_A);
+
+        if (empty($row)) {
+            wp_send_json_error(['message' => __('Generation not found.', 'growtype-art')], 404);
+        }
+
+        self::delete_history_file($row['meta'] ?? '');
+
+        $deleted = $wpdb->delete($table, ['id' => $generation_id], ['%d']);
+        if (!$deleted) {
+            wp_send_json_error(['message' => __('Could not delete generation.', 'growtype-art')], 500);
+        }
+
+        wp_send_json_success(['message' => __('Deleted.', 'growtype-art')]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -46,6 +78,34 @@ class Growtype_Art_Admin_History
         global $wpdb;
         $t = $wpdb->prefix . Growtype_Art_Database::GENERATIONS_TABLE;
         return $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $t)) === $t;
+    }
+
+    private static function delete_history_file(string $meta_json): void
+    {
+        $meta = !empty($meta_json) ? json_decode($meta_json, true) : [];
+        if (!is_array($meta) || empty($meta['history_file_url'])) {
+            return;
+        }
+
+        $upload_dir = wp_upload_dir();
+        $base_url = $upload_dir['baseurl'] ?? '';
+        $base_dir = $upload_dir['basedir'] ?? '';
+
+        if (empty($base_url) || empty($base_dir) || strpos($meta['history_file_url'], $base_url) !== 0) {
+            return;
+        }
+
+        $local_path = str_replace($base_url, $base_dir, $meta['history_file_url']);
+        $history_dir = function_exists('growtype_art_get_upload_dir')
+            ? growtype_art_get_upload_dir('history')
+            : $base_dir . '/growtype-ai-uploads/history';
+
+        $real_path = realpath($local_path);
+        $real_history_dir = realpath($history_dir);
+
+        if ($real_path && $real_history_dir && strpos($real_path, $real_history_dir) === 0 && is_file($real_path)) {
+            @unlink($real_path);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -541,6 +601,12 @@ class Growtype_Art_Admin_History
                                 ⓘ
                             </button>
                         <?php } ?>
+                        <button type="button"
+                                class="gh-delete-btn"
+                                data-id="<?php echo (int)$row['id']; ?>"
+                                title="<?php esc_attr_e('Delete this generation', 'growtype-art'); ?>">
+                            <?php esc_html_e('Delete', 'growtype-art'); ?>
+                        </button>
                     </td>
                 </tr>
                 <?php } ?>
@@ -754,6 +820,25 @@ class Growtype_Art_Admin_History
             cursor: pointer;
         }
         .gh-reuse-btn:hover { background: #6366f1; border-color: #6366f1; color: #fff; }
+
+        .gh-delete-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: 1px solid #fecaca;
+            border-radius: 5px;
+            padding: 2px 8px;
+            height: 24px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #dc2626;
+            white-space: nowrap;
+            transition: background .12s, border-color .12s, color .12s;
+            cursor: pointer;
+        }
+        .gh-delete-btn:hover { background: #dc2626; border-color: #dc2626; color: #fff; }
+        .gh-delete-btn:disabled { opacity: .55; pointer-events: none; }
         </style>
         <?php
     }
@@ -782,6 +867,8 @@ class Growtype_Art_Admin_History
         // is called both on the history page AND via AJAX on the content-generator.
         if (!window._ghScriptsInit) {
             window._ghScriptsInit = true;
+            window._ghHistoryNonce = '<?php echo esc_js(wp_create_nonce('growtype_art_admin_history')); ?>';
+            window._ghAjaxUrl = '<?php echo esc_url(admin_url('admin-ajax.php')); ?>';
 
             // ── Meta modal — event delegation (works for AJAX-injected buttons) ─
             document.addEventListener('click', function (e) {
@@ -825,6 +912,46 @@ class Growtype_Art_Admin_History
                 } else {
                     ghLegacyCopy(text, btn);
                 }
+            });
+
+            document.addEventListener('click', function (e) {
+                var btn = e.target.closest('.gh-delete-btn');
+                if (!btn) return;
+
+                e.preventDefault();
+
+                var generationId = btn.getAttribute('data-id');
+                if (!generationId || !confirm('<?php echo esc_js(__('Delete this generation from history?', 'growtype-art')); ?>')) {
+                    return;
+                }
+
+                btn.disabled = true;
+
+                var data = new FormData();
+                data.append('action', 'growtype_art_admin_delete_generation');
+                data.append('_ajax_nonce', window._ghHistoryNonce);
+                data.append('generation_id', generationId);
+
+                fetch(window._ghAjaxUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: data
+                })
+                    .then(function (response) { return response.json(); })
+                    .then(function (response) {
+                        if (!response || !response.success) {
+                            btn.disabled = false;
+                            alert(response && response.data && response.data.message ? response.data.message : 'Delete failed.');
+                            return;
+                        }
+
+                        var row = btn.closest('tr');
+                        if (row) row.remove();
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        alert('Delete failed.');
+                    });
             });
         }
         </script>

@@ -76,6 +76,15 @@ class Replicate_Base extends Growtype_Art_Generator_Base
     private static function get_model_config(string $model_slug): array
     {
         $configs = [
+            'black-forest-labs/flux-2-dev' => [
+                'image_key'         => 'input_images',
+                'aspect_ratio'      => null,
+                'ref_aspect_ratio'  => 'match_input_image',
+                'ref_exclude_fields'=> ['width', 'height', 'num_outputs', 'disable_safety_checker'],
+                'extra_defaults'    => [
+                    'output_format' => 'jpg',
+                ],
+            ],
             'prunaai/p-image' => [
                 'image_key'         => 'images',   // expects array of images
                 'aspect_ratio'      => 'custom',   // valid: 1:1 16:9 9:16 4:3 3:4 3:2 2:3 custom
@@ -117,7 +126,7 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             'width'                  => $params['width']          ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
             'height'                 => $params['height']         ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
             'go_fast'                => $params['go_fast']        ?? true,
-            'output_format'          => $params['output_format']  ?? 'webp',
+            'output_format'          => $params['output_format']  ?? ($config['extra_defaults']['output_format'] ?? 'webp'),
             'output_quality'         => $params['output_quality'] ?? 80,
             'num_outputs'            => $params['num_outputs']    ?? 1,
             'disable_safety_checker' => $params['disable_safety_checker'] ?? true,
@@ -257,6 +266,7 @@ class Replicate_Base extends Growtype_Art_Generator_Base
                 'status' => 'pending',
                 'task_id' => $data['id'],
                 'generation_id' => $data['id'],
+                '_request_payload' => $input,
             ];
         }
 
@@ -283,6 +293,7 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             return [
                 'generations' => $generations,
                 'prediction_id' => $data['id'],
+                '_request_payload' => $input,
             ];
         }
 

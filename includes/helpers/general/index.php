@@ -511,12 +511,7 @@ if (!function_exists('growtype_art_get_image_details')) {
         }
 
         $model_details = growtype_art_get_image_model_details($image['id']);
-
-        if (empty($model_details)) {
-            return null;
-        }
-
-        $image['model_id'] = growtype_art_get_image_model_details($image['id'])['id'];
+        $image['model_id'] = !empty($model_details['id']) ? $model_details['id'] : null;
 
         $models_settings = Growtype_Art_Database_Crud::get_records(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
             [

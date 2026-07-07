@@ -20,6 +20,7 @@ class Growtype_Art_Admin_Content
         add_action('wp_ajax_growtype_art_admin_generate_content',   [$this, 'generate_content_callback']);
         add_action('wp_ajax_growtype_art_admin_get_content_models', [$this, 'get_models_callback']);
         add_action('wp_ajax_growtype_art_admin_get_recent',         [$this, 'get_recent_callback']);
+        add_action('wp_ajax_growtype_art_admin_search_characters',  [$this, 'search_characters_callback']);
     }
 
     /**
@@ -81,6 +82,61 @@ class Growtype_Art_Admin_Content
         $html = Growtype_Art_Admin_History::render_recent(5);
         wp_send_json_success(['html' => $html]);
     }
+
+    public function search_characters_callback()
+    {
+        check_ajax_referer('growtype_art_admin', '_ajax_nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Unauthorized.']);
+        }
+
+        global $wpdb;
+
+        $query = sanitize_text_field(wp_unslash($_POST['q'] ?? ''));
+        if ($query === '') {
+            wp_send_json_success(['characters' => []]);
+        }
+
+        $like = '%' . $wpdb->esc_like($query) . '%';
+
+        $characters = $wpdb->get_results($wpdb->prepare(
+            "SELECT m.id, m.prompt,
+                    MAX(CASE WHEN s.meta_key = 'character_title' THEN s.meta_value END) AS character_title,
+                    MAX(CASE WHEN s.meta_key = 'slug' THEN s.meta_value END) AS slug
+             FROM {$wpdb->prefix}growtype_art_models AS m
+             LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS s ON s.model_id = m.id
+             GROUP BY m.id
+             HAVING CAST(m.id AS CHAR) LIKE %s
+                OR character_title LIKE %s
+                OR slug LIKE %s
+             ORDER BY m.id DESC
+             LIMIT 20",
+            $like,
+            $like,
+            $like
+        ), ARRAY_A) ?: [];
+
+        $characters = array_map([$this, 'format_character_option'], $characters);
+
+        wp_send_json_success(['characters' => $characters]);
+    }
+
+    private function format_character_option(array $character): array
+    {
+        $raw = !empty($character['character_title'])
+            ? $character['character_title']
+            : (!empty($character['slug']) ? $character['slug'] : ($character['prompt'] ?? ''));
+
+        $label = mb_strlen($raw) > 80 ? mb_substr($raw, 0, 80) . '…' : $raw;
+
+        return [
+            'id'    => (int)$character['id'],
+            'label' => $label ?: 'Character #' . $character['id'],
+            'slug'  => $character['slug'] ?? '',
+        ];
+    }
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // AJAX: generate content
@@ -388,7 +444,8 @@ class Growtype_Art_Admin_Content
         global $wpdb;
         $all_characters = $wpdb->get_results($wpdb->prepare(
             "SELECT m.id, m.prompt,
-                    MAX(CASE WHEN s.meta_key = 'character_title' THEN s.meta_value END) AS character_title
+                    MAX(CASE WHEN s.meta_key = 'character_title' THEN s.meta_value END) AS character_title,
+                    MAX(CASE WHEN s.meta_key = 'slug' THEN s.meta_value END) AS slug
              FROM {$wpdb->prefix}growtype_art_models AS m
              LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS s ON s.model_id = m.id
              GROUP BY m.id
@@ -397,12 +454,28 @@ class Growtype_Art_Admin_Content
             500
         ), ARRAY_A) ?: [];
 
+        if ($reuse_character_id && !in_array($reuse_character_id, array_map('intval', array_column($all_characters, 'id')), true)) {
+            $reuse_character = $wpdb->get_row($wpdb->prepare(
+                "SELECT m.id, m.prompt,
+                        MAX(CASE WHEN s.meta_key = 'character_title' THEN s.meta_value END) AS character_title,
+                        MAX(CASE WHEN s.meta_key = 'slug' THEN s.meta_value END) AS slug
+                 FROM {$wpdb->prefix}growtype_art_models AS m
+                 LEFT JOIN {$wpdb->prefix}growtype_art_model_settings AS s ON s.model_id = m.id
+                 WHERE m.id = %d
+                 GROUP BY m.id
+                 LIMIT 1",
+                $reuse_character_id
+            ), ARRAY_A);
+
+            if (!empty($reuse_character)) {
+                array_unshift($all_characters, $reuse_character);
+            }
+        }
+
         // Build compact JS lookup [{id, label}] with labels truncated to 80 chars
         $characters_json = json_encode(
             array_map(function ($c) {
-                $raw   = !empty($c['character_title']) ? $c['character_title'] : ($c['prompt'] ?? '');
-                $label = mb_strlen($raw) > 80 ? mb_substr($raw, 0, 80) . '…' : $raw;
-                return ['id' => (int)$c['id'], 'label' => $label ?: 'Character #' . $c['id']];
+                return $this->format_character_option($c);
             }, $all_characters),
             JSON_HEX_TAG | JSON_HEX_AMP
         );
@@ -412,7 +485,7 @@ class Growtype_Art_Admin_Content
         if ($reuse_character_id) {
             foreach ($all_characters as $c) {
                 if ((int)$c['id'] === $reuse_character_id) {
-                    $raw = !empty($c['character_title']) ? $c['character_title'] : ($c['prompt'] ?? '');
+                    $raw = !empty($c['character_title']) ? $c['character_title'] : (!empty($c['slug']) ? $c['slug'] : ($c['prompt'] ?? ''));
                     $reuse_character_label = mb_strlen($raw) > 80 ? mb_substr($raw, 0, 80) . '…' : ($raw ?: 'Character #' . $c['id']);
                     break;
                 }
@@ -420,7 +493,7 @@ class Growtype_Art_Admin_Content
         }
 
         // Use the reuse_type as the initial tab if it's valid
-        $first_type     = in_array($reuse_type, $valid_types, true) ? $reuse_type : 'text';
+        $first_type     = in_array($reuse_type, $valid_types, true) ? $reuse_type : 'image';
         $first_prov_key = array_key_first($providers_by_type[$first_type]) ?? '';
         // If reuse_provider exists in that type's list, use it as the initial key
         if ($reuse_provider && isset($providers_by_type[$first_type][$reuse_provider])) {
@@ -446,8 +519,8 @@ class Growtype_Art_Admin_Content
 
             <!-- ── Content type toggle ─────────────────────────────────────── -->
             <div class="gc-type-toggle" id="gc-type-toggle">
-                <button type="button" class="gc-type-btn<?php echo $first_type === 'text'  ? ' active' : ''; ?>" data-type="text">✍️  <?php esc_html_e('Text',  'growtype-art'); ?></button>
                 <button type="button" class="gc-type-btn<?php echo $first_type === 'image' ? ' active' : ''; ?>" data-type="image">🖼️ <?php esc_html_e('Image', 'growtype-art'); ?></button>
+                <button type="button" class="gc-type-btn<?php echo $first_type === 'text'  ? ' active' : ''; ?>" data-type="text">✍️  <?php esc_html_e('Text',  'growtype-art'); ?></button>
                 <button type="button" class="gc-type-btn<?php echo $first_type === 'video' ? ' active' : ''; ?>" data-type="video">🎬 <?php esc_html_e('Video', 'growtype-art'); ?></button>
                 <button type="button" class="gc-type-btn<?php echo $first_type === 'audio' ? ' active' : ''; ?>" data-type="audio">🎵 <?php esc_html_e('Audio', 'growtype-art'); ?></button>
             </div>
@@ -727,6 +800,8 @@ class Growtype_Art_Admin_Content
                 var $hidden   = $('#gc-character');
                 var $dropdown = $('#gc-character-dropdown');
                 var focused   = -1;
+                var searchTimer = null;
+                var searchRequestId = 0;
 
                 function renderItems(items) {
                     $dropdown.empty();
@@ -747,9 +822,34 @@ class Growtype_Art_Admin_Content
                     if (!q) { $hidden.val(0); $dropdown.hide(); return; }
                     var ql = q.toLowerCase();
                     var matches = gcCharacters.filter(function (c) {
-                        return String(c.id).indexOf(ql) !== -1 || c.label.toLowerCase().indexOf(ql) !== -1;
+                        return String(c.id).indexOf(ql) !== -1
+                            || c.label.toLowerCase().indexOf(ql) !== -1
+                            || (c.slug && c.slug.toLowerCase().indexOf(ql) !== -1);
                     }).slice(0, 20);
                     renderItems(matches);
+
+                    if (matches.length || q.length < 2) {
+                        return;
+                    }
+
+                    clearTimeout(searchTimer);
+                    var requestId = ++searchRequestId;
+
+                    searchTimer = setTimeout(function () {
+                        $.post(ajaxUrl, {
+                            action: 'growtype_art_admin_search_characters',
+                            _ajax_nonce: nonce,
+                            q: q
+                        }, function (res) {
+                            if (requestId !== searchRequestId || $search.val() !== q) {
+                                return;
+                            }
+
+                            if (res.success && res.data && Array.isArray(res.data.characters)) {
+                                renderItems(res.data.characters);
+                            }
+                        });
+                    }, 180);
                 }
 
                 function selectChar(c) {

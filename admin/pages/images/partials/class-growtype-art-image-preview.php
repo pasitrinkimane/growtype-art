@@ -63,6 +63,7 @@ class Growtype_Art_Image_Preview
         $real_esrgan = !empty($image['settings']['real_esrgan']);
         $img_url     = growtype_art_build_public_image_url($image);
         $provider    = !empty($image['settings']['provider']) ? $image['settings']['provider'] : '-';
+        $has_model   = !empty($image['model_id']);
         $main_colors = isset($image['settings']['main_colors']) && !empty(json_decode($image['settings']['main_colors'], true))
             ? implode(',', json_decode($image['settings']['main_colors'], true)) : '';
 
@@ -116,14 +117,18 @@ class Growtype_Art_Image_Preview
                            data-success-action="remove"
                            data-confirm="<?= __('Are you sure?', 'growtype-art') ?>"><?= __('Delete', 'growtype-art') ?></a>
 
-                        <a style="display: none" href="<?= sprintf('/wp/wp-admin/admin.php?page=growtype-art-models&action=generate-image-content&model=%s&image=%s', growtype_art_get_image_model_details($image['id'])['id'], $image['id']) ?>" class="button button-secondary button-regenerate"><?= __('Regenerate description', 'growtype-art') ?></a>
+                        <?php if ($has_model) { ?>
+                            <a style="display: none" href="<?= sprintf('/wp/wp-admin/admin.php?page=growtype-art-models&action=generate-image-content&model=%s&image=%s', $image['model_id'], $image['id']) ?>" class="button button-secondary button-regenerate"><?= __('Regenerate description', 'growtype-art') ?></a>
+                        <?php } ?>
 
                         <a href="#" class="button button-secondary growtype-ajax-button <?= $is_compressed ? 'is-compressed-btn' : '' ?>"
                            data-action="growtype_art_admin_compress_image"
                            data-success-action="addClass:is-compressed"
                            data-success-text="<?= __('Is compressed!', 'growtype-art') ?>"><?= $is_compressed ? __('Is compressed!', 'growtype-art') : __('Compress photo', 'growtype-art') ?></a>
 
-                        <a style="display: none" href="<?= sprintf('/wp/wp-admin/admin.php?page=growtype-art-models&action=generate-images&model=%s&image=%s', growtype_art_get_image_model_details($image['id'])['id'], $image['id']) ?>" target="_blank" class="button button-secondary button-generate"><?= __('Generate new image', 'growtype-art') ?></a>
+                        <?php if ($has_model) { ?>
+                            <a style="display: none" href="<?= sprintf('/wp/wp-admin/admin.php?page=growtype-art-models&action=generate-images&model=%s&image=%s', $image['model_id'], $image['id']) ?>" target="_blank" class="button button-secondary button-generate"><?= __('Generate new image', 'growtype-art') ?></a>
+                        <?php } ?>
 
                         <a href="#" class="button button-secondary growtype-ajax-button <?= $is_featured ? 'is-active' : '' ?>"
                            data-action="growtype_art_admin_update_image"
@@ -164,12 +169,18 @@ class Growtype_Art_Image_Preview
                             <p><b>Alt text:</b> <?php echo $alt_text ?></p>
                         </div>
 
-                        <div class="image-meta-tags">
-                            <p><b>Tags:</b> <?php echo $tags ?></p>
-                        </div>
+                        <?php if ($has_model) { ?>
+                            <div class="image-meta-tags">
+                                <p><b>Tags:</b> <?php echo $tags ?></p>
+                            </div>
+                        <?php } ?>
 
                         <div class="image-meta-ids">
-                            <p><b>Model id:</b> <?php echo sprintf('<a href="?page=%s&action=%s&model=%s">' . $image['model_id'] . '</a>', Growtype_Art_Admin::MODELS_PAGE_NAME, 'edit', $image['model_id']) ?></p>
+                            <?php if ($has_model) { ?>
+                                <p><b>Model id:</b> <?php echo sprintf('<a href="?page=%s&action=%s&model=%s">' . $image['model_id'] . '</a>', Growtype_Art_Admin::MODELS_PAGE_NAME, 'edit', $image['model_id']) ?></p>
+                            <?php } else { ?>
+                                <p><b>Model:</b> No model assigned</p>
+                            <?php } ?>
                             <p><b>File id:</b> <?php echo $image['id'] ?></p>
                             <?php if (isset($image['settings']['id'])) { ?>
                                 <p><b>External image id:</b> <?php echo $image['settings']['id'] ?></p>
@@ -182,49 +193,53 @@ class Growtype_Art_Image_Preview
                             <?php } ?>
                         </div>
 
-                        <div class="image-meta-flags">
-                            <p><b>EROTIC(NSFW):</b> <input type="checkbox" name="settings[nsfw]" <?php echo checked($image['settings']['nsfw'] ?? false) ?>/></p>
-                            <p><b>NUDITY:</b> <input type="checkbox" name="settings[nudity]" <?php echo checked($image['settings']['nudity'] ?? false) ?>/></p>
-                            <p><b>PORN:</b> <input type="checkbox" name="settings[porn]" <?php echo checked($image['settings']['porn'] ?? false) ?>/></p>
-                            <hr>
-                            <p><b>PRIVATE:</b> <input type="checkbox" name="settings[private]" <?php echo checked($image['settings']['private'] ?? false) ?>/></p>
-                        </div>
+                        <?php if ($has_model) { ?>
+                            <div class="image-meta-flags">
+                                <p><b>EROTIC(NSFW):</b> <input type="checkbox" name="settings[nsfw]" <?php echo checked($image['settings']['nsfw'] ?? false) ?>/></p>
+                                <p><b>NUDITY:</b> <input type="checkbox" name="settings[nudity]" <?php echo checked($image['settings']['nudity'] ?? false) ?>/></p>
+                                <p><b>PORN:</b> <input type="checkbox" name="settings[porn]" <?php echo checked($image['settings']['porn'] ?? false) ?>/></p>
+                                <hr>
+                                <p><b>PRIVATE:</b> <input type="checkbox" name="settings[private]" <?php echo checked($image['settings']['private'] ?? false) ?>/></p>
+                            </div>
+                        <?php } ?>
 
-                        <div class="image-meta-relations">
-                            <p><b>Relation:</b></p>
-                            <div class="relation-set-parent" style="margin-bottom: 8px;">
-                                <p style="margin-bottom: 4px;">
-                                    <b class="relation-label">Parent file:</b>
-                                    <?php if (!empty($image['settings']['parent_image_id'])): ?>
-                                        <a href="?page=<?php echo Growtype_Art_Admin::MODELS_PAGE_NAME ?>&action=edit&model=<?php echo $image['model_id'] ?>&parent_image_id=<?php echo $image['settings']['parent_image_id'] ?>"><?php echo $image['settings']['parent_image_id'] ?></a>
-                                        <a href="#" class="relation-remove-parent" data-child-id="<?= (int)$image['id'] ?>" title="Remove parent">✕</a>
-                                    <?php else: ?>
-                                        <span>None</span>
-                                    <?php endif; ?>
-                                </p>
-                                <input type="number" class="relation-parent-input" placeholder="Parent image ID" min="1">
-                                <button class="button button-small relation-set-parent-btn" data-child-id="<?= (int)$image['id'] ?>">Set parent</button>
-                                <span class="relation-parent-status"></span>
+                        <?php if ($has_model) { ?>
+                            <div class="image-meta-relations">
+                                <p><b>Relation:</b></p>
+                                <div class="relation-set-parent" style="margin-bottom: 8px;">
+                                    <p style="margin-bottom: 4px;">
+                                        <b class="relation-label">Parent file:</b>
+                                        <?php if (!empty($image['settings']['parent_image_id'])): ?>
+                                            <a href="?page=<?php echo Growtype_Art_Admin::MODELS_PAGE_NAME ?>&action=edit&model=<?php echo $image['model_id'] ?>&parent_image_id=<?php echo $image['settings']['parent_image_id'] ?>"><?php echo $image['settings']['parent_image_id'] ?></a>
+                                            <a href="#" class="relation-remove-parent" data-child-id="<?= (int)$image['id'] ?>" title="Remove parent">✕</a>
+                                        <?php else: ?>
+                                            <span>None</span>
+                                        <?php endif; ?>
+                                    </p>
+                                    <input type="number" class="relation-parent-input" placeholder="Parent image ID" min="1">
+                                    <button class="button button-small relation-set-parent-btn" data-child-id="<?= (int)$image['id'] ?>">Set parent</button>
+                                    <span class="relation-parent-status"></span>
+                                </div>
+                                <?php
+                                $child_ids = self::get_children_map()[(int)$image['id']] ?? [];
+                                if (!empty($child_ids)): ?>
+                                    <p>
+                                        <b class="relation-label">Child files:</b>
+                                        <?php foreach ($child_ids as $i => $child_id): ?>
+                                            <span class="relation-child-item" data-child-id="<?= (int)$child_id ?>">
+                                                <a href="?page=<?php echo Growtype_Art_Admin::MODELS_PAGE_NAME ?>&action=edit&model=<?php echo (int)$image['model_id'] ?>&parent_image_id=<?php echo (int)$image['id'] ?>"><?= (int)$child_id ?></a>
+                                                <a href="#" class="relation-remove-child" data-child-id="<?= (int)$child_id ?>" data-parent-id="<?= (int)$image['id'] ?>" title="Unlink child">✕</a><?= $i < count($child_ids) - 1 ? ',' : '' ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </p>
+                                <?php endif; ?>
+                                <div class="relation-add-child">
+                                    <input type="number" class="relation-child-input" placeholder="Child image ID" min="1">
+                                    <button class="button button-small relation-add-child-btn" data-parent-id="<?= (int)$image['id'] ?>">+ Add child</button>
+                                    <span class="relation-add-status"></span>
+                                </div>
                             </div>
-                            <?php
-                            $child_ids = self::get_children_map()[(int)$image['id']] ?? [];
-                            if (!empty($child_ids)): ?>
-                                <p>
-                                    <b class="relation-label">Child files:</b>
-                                    <?php foreach ($child_ids as $i => $child_id): ?>
-                                        <span class="relation-child-item" data-child-id="<?= (int)$child_id ?>">
-                                            <a href="?page=<?php echo Growtype_Art_Admin::MODELS_PAGE_NAME ?>&action=edit&model=<?php echo (int)$image['model_id'] ?>&parent_image_id=<?php echo (int)$image['id'] ?>"><?= (int)$child_id ?></a>
-                                            <a href="#" class="relation-remove-child" data-child-id="<?= (int)$child_id ?>" data-parent-id="<?= (int)$image['id'] ?>" title="Unlink child">✕</a><?= $i < count($child_ids) - 1 ? ',' : '' ?>
-                                        </span>
-                                    <?php endforeach; ?>
-                                </p>
-                            <?php endif; ?>
-                            <div class="relation-add-child">
-                                <input type="number" class="relation-child-input" placeholder="Child image ID" min="1">
-                                <button class="button button-small relation-add-child-btn" data-parent-id="<?= (int)$image['id'] ?>">+ Add child</button>
-                                <span class="relation-add-status"></span>
-                            </div>
-                        </div>
+                        <?php } ?>
                     </div>
                 </div>
             <?php } ?>

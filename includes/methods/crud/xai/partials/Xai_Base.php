@@ -105,18 +105,24 @@ class Xai_Base extends Growtype_Art_Generator_Base
             $api_key = $params['token'];
         }
 
-        $image_url = '';
+        $image_urls = [];
         if (!empty($params['image_urls']) && is_array($params['image_urls'])) {
-            $image_url = $params['image_urls'][0];
+            $image_urls = $params['image_urls'];
         } elseif (!empty($params['reference_image_urls']) && is_array($params['reference_image_urls'])) {
-            $image_url = $params['reference_image_urls'][0];
+            $image_urls = $params['reference_image_urls'];
+        } elseif (!empty($params['reference_image_url']) && is_string($params['reference_image_url'])) {
+            $image_urls = [$params['reference_image_url']];
         } elseif (!empty($params['init_image']) && is_string($params['init_image'])) {
-            $image_url = $params['init_image'];
+            $image_urls = [$params['init_image']];
         } elseif (!empty($params['image_url']) && is_string($params['image_url'])) {
-            $image_url = $params['image_url'];
+            $image_urls = [$params['image_url']];
         }
 
-        if (!empty($image_url)) {
+        $image_urls = array_values(array_filter($image_urls, function ($url) {
+            return is_string($url) && filter_var($url, FILTER_VALIDATE_URL);
+        }));
+
+        if (!empty($image_urls)) {
             $url = 'https://api.x.ai/v1/images/edits';
         } else {
             $url = 'https://api.x.ai/v1/images/generations';
@@ -128,8 +134,15 @@ class Xai_Base extends Growtype_Art_Generator_Base
             'aspect_ratio' => $params['aspect_ratio'] ?? '2:3',
         ];
 
-        if (!empty($image_url)) {
-            $payload['image_url'] = $image_url;
+        if (count($image_urls) === 1) {
+            $payload['image'] = ['url' => $image_urls[0]];
+        } elseif (count($image_urls) > 1) {
+            $payload['images'] = array_map(function ($image_url) {
+                return [
+                    'type' => 'image_url',
+                    'url' => $image_url,
+                ];
+            }, array_slice($image_urls, 0, 3));
         }
 
         $headers = [
