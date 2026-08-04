@@ -91,8 +91,14 @@ class Xai_Base extends Growtype_Art_Generator_Base
     public function get_models(): array
     {
         return [
-            'grok-imagine-image'     => 'Grok Imagine Image',
-            'grok-imagine-image-pro' => 'Grok Imagine Image Pro',
+            'grok-imagine-image' => [
+                'label'                    => 'Grok Imagine Image',
+                'supports_reference_image' => true,
+            ],
+            'grok-imagine-image-pro' => [
+                'label'                    => 'Grok Imagine Image Pro',
+                'supports_reference_image' => true,
+            ],
         ];
     }
 
@@ -131,7 +137,7 @@ class Xai_Base extends Growtype_Art_Generator_Base
         $payload = [
             'model'        => $params['model'] ?? 'grok-imagine-image',
             'prompt'       => $params['prompt'] ?? '',
-            'aspect_ratio' => $params['aspect_ratio'] ?? '2:3',
+            'aspect_ratio' => $params['aspect_ratio'] ?? (!empty($image_urls) ? 'auto' : '2:3'),
         ];
 
         if (count($image_urls) === 1) {

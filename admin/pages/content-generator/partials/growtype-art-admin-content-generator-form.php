@@ -109,23 +109,19 @@ class Growtype_Art_Admin_Content_Generator_Form
                         </select>
                     </div>
 
-                    <!-- Model input (datalist = free-text + registered suggestions) -->
+                    <!-- Model select -->
                     <div class="gc-field">
                         <label class="gc-label" for="gc-model">
                             <?php esc_html_e('Model', 'growtype-art'); ?>
                         </label>
-                        <input type="text"
-                               id="gc-model"
-                               class="gc-select"
-                               list="gc-model-list"
-                               placeholder="<?php esc_attr_e('Select or type a model slug…', 'growtype-art'); ?>"
-                               autocomplete="off"
-                               value="<?php echo esc_attr(array_key_first($default_models) ?? ''); ?>">
-                        <datalist id="gc-model-list">
-                            <?php foreach ($default_models as $key => $label) : ?>
-                                <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+                        <select id="gc-model" class="gc-select">
+                            <?php foreach ($default_models as $key => $meta) : 
+                                $label = is_array($meta) ? ($meta['label'] ?? $key) : $meta;
+                                $ref   = is_array($meta) ? ($meta['ref'] ?? false) : false;
+                            ?>
+                                <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?><?php echo $ref ? ' 🖼️' : ''; ?></option>
                             <?php endforeach; ?>
-                        </datalist>
+                        </select>
                     </div>
 
                 </div>

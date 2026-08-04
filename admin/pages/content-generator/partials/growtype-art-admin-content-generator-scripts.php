@@ -65,19 +65,18 @@ class Growtype_Art_Admin_Content_Generator_Scripts
             function repopulateModels(provider) {
                 var provs  = getProvidersForType(currentType);
                 var models = (provs[provider] && provs[provider].models) ? provs[provider].models : {};
-                var $list  = $('#gc-model-list').empty();
-                var $input = $('#gc-model');
+                var $sel   = $('#gc-model').empty();
                 var keys   = Object.keys(models);
 
-                $.each(models, function (key, label) {
-                    $list.append('<option value="' + key + '">' + label + '</option>');
+                console.log('repopulateModels', {provider: provider, keys: keys});
+
+                $.each(models, function (key, val) {
+                    var label = (typeof val === 'object' && val.label) ? val.label : val;
+                    var ref   = (typeof val === 'object' && val.ref) ? ' 🖼️' : '';
+                    $sel.append('<option value="' + key + '">' + label + ref + '</option>');
                 });
 
-                if (keys.length && !models[$input.val()]) {
-                    $input.val(keys[0]);
-                } else if (!keys.length) {
-                    $input.val('');
-                }
+                // First option is auto-selected by browser — no manual reset needed
             }
 
             // ── Type toggle ──────────────────────────────────────────────────
@@ -312,7 +311,7 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                     }
 
                     if (saved.model) {
-                        if ($('#gc-model-list option[value="' + saved.model + '"]').length) {
+                        if ($('#gc-model option[value="' + saved.model + '"]').length) {
                             $('#gc-model').val(saved.model);
                         }
                     }
@@ -398,7 +397,7 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                 }
 
                 if (reuseModel) {
-                    if ($('#gc-model-list option[value="' + reuseModel + '"]').length) {
+                    if ($('#gc-model option[value="' + reuseModel + '"]').length) {
                         $('#gc-model').val(reuseModel);
                     }
                 }

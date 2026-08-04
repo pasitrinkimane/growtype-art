@@ -801,10 +801,12 @@ class Growtype_Art_Crud
             $models = method_exists($instance, 'get_models') ? $instance->get_models() : [];
 
             // Normalize: get_models() returns ['model-id' => [...meta]] or ['model-id' => 'label']
-            // We want ['model-id' => 'Label'] for the UI dropdown.
+            // We preserve: ['model-id' => {label, ref}] for the UI dropdown.
             $flat = [];
             foreach ($models as $model_id => $meta) {
-                $flat[$model_id] = is_array($meta) ? ($meta['label'] ?? ucwords(str_replace(['-', '_'], ' ', $model_id))) : (string)$meta;
+                $label = is_array($meta) ? ($meta['label'] ?? ucwords(str_replace(['-', '_'], ' ', $model_id))) : (string)$meta;
+                $ref   = is_array($meta) ? !empty($meta['supports_reference_image']) : false;
+                $flat[$model_id] = ['label' => $label, 'ref' => $ref];
             }
 
             if (empty($flat)) {
