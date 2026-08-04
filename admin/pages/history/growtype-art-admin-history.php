@@ -567,7 +567,7 @@ class Growtype_Art_Admin_History
                     <td class="gh-actions-col">
                         <?php if (!empty($row['prompt'])) {
                             $reuse_url = add_query_arg([
-                                'page'                => Growtype_Art_Admin_Content::PAGE_NAME,
+                                'page'                => Growtype_Art_Admin_Content_Generator::PAGE_NAME,
                                 'reuse_prompt'        => rawurlencode($row['prompt']),
                                 'reuse_provider'      => rawurlencode($row['provider'] ?? ''),
                                 'reuse_model'         => rawurlencode($meta['model_used'] ?? ''),

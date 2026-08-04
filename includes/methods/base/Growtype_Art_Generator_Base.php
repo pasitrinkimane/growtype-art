@@ -433,7 +433,9 @@ abstract class Growtype_Art_Generator_Base
                     'image_id' => $saved_image['id'],
                 ]);
 
-                growtype_art_compress_existing_image($saved_image['id']);
+                if (empty($params['skip_compress'])) {
+                    growtype_art_compress_existing_image($saved_image['id']);
+                }
             }
 
             $saved_generations[] = [

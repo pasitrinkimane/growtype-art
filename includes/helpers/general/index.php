@@ -8,6 +8,91 @@ if (!function_exists('d')) {
     }
 }
 
+if (!function_exists('growtype_art_remove_image_background')) {
+    /**
+     * Remove background from an image using Replicate's lucataco/remove-bg model.
+     */
+    function growtype_art_remove_image_background($image_id)
+    {
+        $image_path = growtype_art_get_image_path($image_id);
+        if (empty($image_path) || !file_exists($image_path)) {
+            return;
+        }
+        try {
+            $image_details = growtype_art_get_image_details($image_id);
+            $extension = strtolower($image_details['extension'] ?? '');
+            if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'])) {
+                return;
+            }
+            $is_bg_removed = $image_details['settings']['bg_removed'] ?? false;
+            if ($is_bg_removed) {
+                return;
+            }
+            $token = growtype_art_get_replicate_token();
+            if (empty($token)) {
+                return;
+            }
+            $image_url = growtype_art_get_image_url($image_id);
+            $ch = curl_init('https://api.replicate.com/v1/models/lucataco/remove-bg/predictions');
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => [
+                    'Authorization: Bearer ' . $token,
+                    'Content-Type: application/json',
+                    'Prefer: wait',
+                ],
+                CURLOPT_POSTFIELDS     => json_encode(['input' => ['image' => $image_url]]),
+                CURLOPT_TIMEOUT        => 120,
+            ]);
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($http_code >= 400 || empty($response)) {
+                return;
+            }
+            $data   = json_decode($response, true);
+            $output = $data['output'] ?? null;
+            if (empty($output)) {
+                return;
+            }
+            $result_url = is_array($output) ? ($output[0] ?? $output['image'] ?? '') : $output;
+            if (empty($result_url) || !filter_var($result_url, FILTER_VALIDATE_URL)) {
+                return;
+            }
+            if (!unlink($image_path)) {
+                return;
+            }
+            growtype_art_save_external_file([
+                'location'  => 'locally',
+                'url'       => $result_url,
+                'name'      => $image_details['name'],
+                'extension' => 'png',
+            ], $image_details['folder']);
+            Growtype_Art_Database_Crud::insert_record(Growtype_Art_Database::IMAGE_SETTINGS_TABLE, [
+                'image_id'   => $image_id,
+                'meta_key'   => 'bg_removed',
+                'meta_value' => 'true',
+            ]);
+        } catch (Exception $e) {
+            error_log('Remove BG exception: ' . $e->getMessage());
+        }
+    }
+}
+
+if (!function_exists('growtype_art_get_replicate_token')) {
+    function growtype_art_get_replicate_token()
+    {
+        if (class_exists('partials\Replicate_Base')) {
+            $instance = new partials\Replicate_Base();
+            return $instance->get_random_access_token();
+        }
+        return '';
+    }
+}
+
+
+
 if (!function_exists('ddd')) {
     function ddd($data)
     {

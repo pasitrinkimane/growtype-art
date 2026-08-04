@@ -1015,7 +1015,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
             <div class="gm-actions-pane active" id="gm-pane-gen">
                 <?php
                 $generator_url = add_query_arg([
-                    'page'               => Growtype_Art_Admin_Content::PAGE_NAME,
+                    'page'               => Growtype_Art_Admin_Content_Generator::PAGE_NAME,
                     'reuse_character_id' => (int)$id,
                     'reuse_type'         => 'image',
                     'reuse_prompt'       => rawurlencode($model_details['prompt'] ?? ''),

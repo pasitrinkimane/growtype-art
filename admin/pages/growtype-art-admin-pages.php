@@ -67,7 +67,7 @@ class Growtype_Art_Admin_Pages
          * Content Generator
          */
         require_once 'content-generator/growtype-art-admin-content-generator.php';
-        new Growtype_Art_Admin_Content();
+        new Growtype_Art_Admin_Content_Generator();
     }
 
     public static function render_pagination($page, $total_items, $current_offset, $limit)
