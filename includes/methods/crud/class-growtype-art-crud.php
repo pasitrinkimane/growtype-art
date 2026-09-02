@@ -24,6 +24,8 @@ class Growtype_Art_Crud
 
     const XAI_KEY = 'xai';
 
+    const PROMPTCHAN_KEY = 'promptchan';
+
     const DEFAULT_IMAGE_PROVIDER = self::XAI_KEY;
 
     /**
@@ -45,6 +47,7 @@ class Growtype_Art_Crud
         self::FAL_KEY,
         self::XAI_KEY,
         self::REPLICATE_KEY,
+        self::PROMPTCHAN_KEY,
 //        self::SEGMIND_KEY,
 //        self::FREEFLUX_KEY,
 //        self::WRITECREAM_KEY,
@@ -60,6 +63,7 @@ class Growtype_Art_Crud
         self::PICLUMEN_KEY,
         self::XAI_KEY,
         self::REPLICATE_KEY,
+        self::PROMPTCHAN_KEY,
     ];
 
     const API_GENERATE_VIDEO_PROVIDERS = [
@@ -74,6 +78,7 @@ class Growtype_Art_Crud
         self::XAI_KEY,
         self::POLLINATIONS_KEY,
         self::REPLICATE_KEY,
+        self::PROMPTCHAN_KEY,
     ];
 
     const MODEL_GENERATE_IMAGE_PROVIDERS = [
@@ -90,6 +95,7 @@ class Growtype_Art_Crud
         Growtype_Art_Crud::WRITECREAM_KEY => Growtype_Art_Crud::WRITECREAM_KEY,
         Growtype_Art_Crud::XAI_KEY => Growtype_Art_Crud::XAI_KEY,
         Growtype_Art_Crud::REPLICATE_KEY => Growtype_Art_Crud::REPLICATE_KEY,
+        Growtype_Art_Crud::PROMPTCHAN_KEY => Growtype_Art_Crud::PROMPTCHAN_KEY,
     ];
 
     const IMAGES_FOLDER_NAME = 'models';
@@ -154,6 +160,9 @@ class Growtype_Art_Crud
 
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/xai/Xai_Crud.php';
         new Xai_Crud();
+
+        require_once GROWTYPE_ART_PATH . 'includes/methods/crud/promptchan/Promptchan_Crud.php';
+        new Promptchan_Crud();
 
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/cloudinary/Cloudinary_Crud.php';
         require_once GROWTYPE_ART_PATH . 'includes/methods/crud/tinypng/TinyPng_Crud.php';
@@ -368,6 +377,23 @@ class Growtype_Art_Crud
             ];
 
             $saved_image = growtype_art_save_local_file($image, $file['folder']);
+        }
+
+        if (!empty($image['target_width']) && !empty($image['target_height']) && isset($saved_image['path'])) {
+            $target_width  = max(1, (int) $image['target_width']);
+            $target_height = max(1, (int) $image['target_height']);
+            $editor        = wp_get_image_editor($saved_image['path']);
+
+            if (!is_wp_error($editor)) {
+                $resized = $editor->resize($target_width, $target_height, true);
+                if (!is_wp_error($resized)) {
+                    $saved = $editor->save($saved_image['path']);
+                    if (!is_wp_error($saved)) {
+                        $file['width']  = (int) ($saved['width'] ?? $target_width);
+                        $file['height'] = (int) ($saved['height'] ?? $target_height);
+                    }
+                }
+            }
         }
 
         if (!empty($crop_percent) && isset($saved_image['path'])) {
@@ -800,13 +826,22 @@ class Growtype_Art_Crud
 
             $models = method_exists($instance, 'get_models') ? $instance->get_models() : [];
 
-            // Normalize: get_models() returns ['model-id' => [...meta]] or ['model-id' => 'label']
-            // We preserve: ['model-id' => {label, ref}] for the UI dropdown.
+            // Normalize: get_models() returns ['model-id' => [...meta]] or ['model-id' => 'label'].
+            // Preserve the fields needed by the generator UI.
             $flat = [];
             foreach ($models as $model_id => $meta) {
                 $label = is_array($meta) ? ($meta['label'] ?? ucwords(str_replace(['-', '_'], ' ', $model_id))) : (string)$meta;
                 $ref   = is_array($meta) ? !empty($meta['supports_reference_image']) : false;
-                $flat[$model_id] = ['label' => $label, 'ref' => $ref];
+                $cost  = is_array($meta) && array_key_exists('cost_usd', $meta) && $meta['cost_usd'] !== null
+                    ? (float) $meta['cost_usd']
+                    : null;
+                $cost_label = is_array($meta) ? ($meta['cost_label'] ?? null) : null;
+                $flat[$model_id] = [
+                    'label'      => $label,
+                    'ref'        => $ref,
+                    'cost_usd'   => $cost,
+                    'cost_label' => $cost_label,
+                ];
             }
 
             if (empty($flat)) {
@@ -872,4 +907,3 @@ class Growtype_Art_Crud
         return $data;
     }
 }
-

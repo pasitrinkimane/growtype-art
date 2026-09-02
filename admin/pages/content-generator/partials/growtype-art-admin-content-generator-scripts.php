@@ -39,12 +39,48 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                 return allProviders[type] || {};
             }
 
+            function updateModelPrice() {
+                var provider = $('#gc-provider').val();
+                var model    = $('#gc-model').val();
+                var provs    = getProvidersForType(currentType);
+                var meta     = provs[provider] && provs[provider].models
+                    ? provs[provider].models[model]
+                    : null;
+                var cost     = meta && typeof meta === 'object' ? meta.cost_usd : null;
+                var costLabel = meta && typeof meta === 'object' ? meta.cost_label : null;
+                var label    = '<?php echo esc_js(__('Price unavailable', 'growtype-art')); ?>';
+
+                if (costLabel) {
+                    label = costLabel;
+                } else if (cost !== null && cost !== '' && !isNaN(Number(cost))) {
+                    cost = Number(cost);
+                    if (cost === 0) {
+                        label = '<?php echo esc_js(__('Free', 'growtype-art')); ?>';
+                    } else {
+                        var formatted = cost.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+                        label = '$' + formatted + ' <?php echo esc_js(__('/ image', 'growtype-art')); ?>';
+                    }
+                }
+
+                $('#gc-model-price-value').text(label);
+            }
+
+            function updateCustomSizeVisibility() {
+                $('#gc-custom-size-wrap').css(
+                    'display',
+                    $('#gc-image-size').val() === 'custom' ? 'grid' : 'none'
+                );
+            }
+
             function repopulateProviders(type) {
                 var provs  = getProvidersForType(type);
                 var keys   = Object.keys(provs);
                 var $pSel  = $('#gc-provider').empty();
                 var $row   = $('.gc-form-row');
                 var $none  = $('#gc-no-providers');
+
+                $('#gc-default-prompt-wrap').toggle(type === 'image');
+                $('#gc-image-size-wrap').toggle(type === 'image');
 
                 if (!keys.length) {
                     $row.hide();
@@ -77,6 +113,7 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                 });
 
                 // First option is auto-selected by browser — no manual reset needed
+                updateModelPrice();
             }
 
             // ── Type toggle ──────────────────────────────────────────────────
@@ -92,18 +129,27 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                 repopulateModels($(this).val());
             });
 
+            // ── Default prompt presets ───────────────────────────────────────
+            $('#gc-default-prompt').on('change', function () {
+                var prompt = $(this).find('option:selected').data('prompt') || '';
+                if (!prompt) return;
+                $('#gc-prompt').val(prompt).trigger('input').focus();
+            });
+
             // ── Reference image ───────────────────────────────────────────────
             (function () {
                 var $urlInput = $('#gc-reference-image-url');
                 var $preview  = $('#gc-ref-preview');
                 var $thumb    = $('#gc-ref-thumb');
+                var $lightbox = $('#gc-ref-lightbox');
                 var $label    = $('#gc-ref-label');
 
                 function applyUrl(url) {
                     url = (url || '').trim();
                     $urlInput.val(url);
                     if (url) {
-                        $thumb.attr('src', url);
+                        $thumb.css('opacity', '').attr('src', url);
+                        $lightbox.attr('href', url);
                         try {
                             var parts = url.split('/');
                             $label.text(decodeURIComponent(parts[parts.length - 1] || url));
@@ -112,6 +158,7 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                     } else {
                         $preview.slideUp(150);
                         $thumb.attr('src', '');
+                        $lightbox.attr('href', '');
                     }
                 }
 
@@ -236,6 +283,9 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                         content_type:       currentType,
                         provider:           provider,
                         model:              model,
+                        image_size:         $('#gc-image-size').val() || 'default',
+                        custom_width:       parseInt($('#gc-custom-width').val(), 10) || 768,
+                        custom_height:      parseInt($('#gc-custom-height').val(), 10) || 1024,
                         prompt:             prompt,
                         character_id:       parseInt($('#gc-character').val()) || 0,
                         reference_image_url: $('#gc-reference-image-url').val() || '',
@@ -271,6 +321,11 @@ class Growtype_Art_Admin_Content_Generator_Scripts
             // ── Clear ─────────────────────────────────────────────────────────
             $('#gc-clear-btn').on('click', function () {
                 $('#gc-prompt').val('').focus();
+                $('#gc-default-prompt').val('');
+                $('#gc-image-size').val('default');
+                $('#gc-custom-width').val(768);
+                $('#gc-custom-height').val(1024);
+                updateCustomSizeVisibility();
                 $('#gc-reference-image-url').val('').trigger('input');
                 try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
             });
@@ -283,6 +338,10 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                     type:      currentType,
                     provider:  $('#gc-provider').val(),
                     model:     $('#gc-model').val(),
+                    imageSize: $('#gc-image-size').val(),
+                    customWidth: $('#gc-custom-width').val(),
+                    customHeight: $('#gc-custom-height').val(),
+                    promptPreset: $('#gc-default-prompt').val(),
                     prompt:    $('#gc-prompt').val(),
                     character: $('#gc-character').val(),
                     charLabel: $('#gc-character-search').val(),
@@ -316,6 +375,26 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                         }
                     }
 
+                    updateModelPrice();
+
+                    if (saved.promptPreset && $('#gc-default-prompt option[value="' + saved.promptPreset + '"]').length) {
+                        $('#gc-default-prompt').val(saved.promptPreset);
+                    }
+
+                    if (saved.imageSize && $('#gc-image-size option[value="' + saved.imageSize + '"]').length) {
+                        $('#gc-image-size').val(saved.imageSize);
+                    }
+
+                    if (saved.customWidth) {
+                        $('#gc-custom-width').val(saved.customWidth);
+                    }
+
+                    if (saved.customHeight) {
+                        $('#gc-custom-height').val(saved.customHeight);
+                    }
+
+                    updateCustomSizeVisibility();
+
                     if (saved.prompt) {
                         $('#gc-prompt').val(saved.prompt);
                     }
@@ -335,8 +414,12 @@ class Growtype_Art_Admin_Content_Generator_Scripts
 
             // Save on changes
             $('#gc-prompt').on('input', saveForm);
+            $('#gc-default-prompt').on('change', saveForm);
+            $('#gc-image-size').on('change', function () { updateCustomSizeVisibility(); saveForm(); });
+            $('#gc-custom-width, #gc-custom-height').on('input change', saveForm);
             $('#gc-provider').on('change', function () { repopulateModels($(this).val()); saveForm(); });
             $('#gc-model').on('input change', saveForm);
+            $('#gc-model').on('change', updateModelPrice);
             $('#gc-character-search').on('input', saveForm);
             $('#gc-reference-image-url').on('input change', saveForm);
             $('#gc-type-toggle .gc-type-btn').on('click', function () {
@@ -402,6 +485,8 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                     }
                 }
 
+                updateModelPrice();
+
                 var reuseCharId = <?php echo (int)$reuse_character_id; ?>;
                 if (reuseCharId) {
                     $('#gc-character').val(reuseCharId);
@@ -420,6 +505,9 @@ class Growtype_Art_Admin_Content_Generator_Scripts
                     $('#gc-prompt').focus();
                 }, 150);
             }
+
+            updateModelPrice();
+            updateCustomSizeVisibility();
         }(jQuery));
         </script>
         <?php

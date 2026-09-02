@@ -82,29 +82,41 @@ class Xai_Base extends Growtype_Art_Generator_Base
         return $decoded['choices'][0]['message']['content'] ?? null;
     }
 
-    /**
-     * Image models available for xAI image generation.
-     * grok-imagine-image     = standard image generation
-     * grok-imagine-image-pro = higher quality / more credits
-     * ("aurora" is the internal engine name, not an API model ID)
-     */
     public function get_models(): array
     {
         return [
             'grok-imagine-image' => [
                 'label'                    => 'Grok Imagine Image',
                 'supports_reference_image' => true,
+                'cost_usd'                 => 0.02,
+            ],
+            'grok-imagine-image-quality' => [
+                'label'                    => 'Grok Imagine Image Quality',
+                'supports_reference_image' => true,
+                'cost_usd'                 => null,
+                'cost_label'               => '$0.05 (1K) / $0.07 (2K)',
             ],
             'grok-imagine-image-pro' => [
                 'label'                    => 'Grok Imagine Image Pro',
                 'supports_reference_image' => true,
+                'cost_usd'                 => null,
+                'cost_label'               => '$0.05 (1K) / $0.07 (2K)',
+            ],
+            'grok-imagine-image-edit' => [
+                'label'                    => 'Grok Imagine Image Edit',
+                'supports_reference_image' => true,
+                'cost_usd'                 => null,
+                'cost_label'               => 'from $0.04/output + $0.01/input image',
             ],
         ];
     }
 
     public function generate_image_init($params)
     {
-        $url = 'https://api.x.ai/v1/images/edits';
+        $selected_model = $params['model'] ?? 'grok-imagine-image';
+        $is_edit_mode = $selected_model === 'grok-imagine-image-edit';
+        $api_model = $is_edit_mode ? 'grok-imagine-image-2.0' : $selected_model;
+        $url = 'https://api.x.ai/v1/images/generations';
         $api_key = $params['token'];
 
         if (!empty($params['token']) && $params['token'] !== 'not-needed') {
@@ -128,6 +140,13 @@ class Xai_Base extends Growtype_Art_Generator_Base
             return is_string($url) && filter_var($url, FILTER_VALIDATE_URL);
         }));
 
+        if ($is_edit_mode && empty($image_urls)) {
+            return [
+                'success' => false,
+                'message' => 'Grok Imagine Image Edit requires a reference image.',
+            ];
+        }
+
         if (!empty($image_urls)) {
             $url = 'https://api.x.ai/v1/images/edits';
         } else {
@@ -135,7 +154,7 @@ class Xai_Base extends Growtype_Art_Generator_Base
         }
 
         $payload = [
-            'model'        => $params['model'] ?? 'grok-imagine-image',
+            'model'        => $api_model,
             'prompt'       => $params['prompt'] ?? '',
             'aspect_ratio' => $params['aspect_ratio'] ?? (!empty($image_urls) ? 'auto' : '2:3'),
         ];
@@ -148,7 +167,7 @@ class Xai_Base extends Growtype_Art_Generator_Base
                     'type' => 'image_url',
                     'url' => $image_url,
                 ];
-            }, array_slice($image_urls, 0, 3));
+            }, array_slice($image_urls, 0, 5));
         }
 
         $headers = [

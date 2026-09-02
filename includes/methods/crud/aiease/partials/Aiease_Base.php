@@ -41,7 +41,7 @@ class Aiease_Base extends Growtype_Art_Generator_Base
             "art_v1_extra_data" => [
                 "prompt" => $params['prompt'],
                 "style_id" => 1,
-                "size" => "9-16",
+                "size" => str_replace(':', '-', $params['aspect_ratio'] ?? '9:16'),
             ]
         ];
 
@@ -275,4 +275,3 @@ class Aiease_Base extends Growtype_Art_Generator_Base
         return $this->generate_image_sync($params);
     }
 }
-

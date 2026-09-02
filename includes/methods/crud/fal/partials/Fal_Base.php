@@ -35,7 +35,10 @@ class Fal_Base extends Growtype_Art_Generator_Base
         $postData = [
             'prompt' => $params['prompt'],
             'image_urls' => !empty($params['image_urls']) ? $params['image_urls'] : ($params['reference_image_urls'] ?? []),// Array of input image URLs
-            'image_size' => $params['image_size'] ?? self::DEFAULT_IMAGE_DIMENSIONS,
+            'image_size' => $params['image_size'] ?? [
+                'width'  => $params['width'] ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
+                'height' => $params['height'] ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
+            ],
             'num_images' => $params['num_images'] ?? 1,
             'enable_safety_checker' => $params['enable_safety_checker'] ?? false,
             'guidance_scale' => $params['guidance_scale'] ?? 7.5,
@@ -177,4 +180,3 @@ class Fal_Base extends Growtype_Art_Generator_Base
         return self::api_key()[$api_group_key]['api_key'] ?? '';
     }
 }
-

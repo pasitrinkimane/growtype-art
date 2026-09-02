@@ -102,6 +102,8 @@ class Growtype_Art_Generation_Logger
         'token', 'api_key', 'jwt_token', 'x_api_key', 'x-api-key',
         // ── Internal / system ─────────────────────────────────────────
         'generation_id', 'task_id', 'save_to_db',
+        'enforce_output_dimensions',
+        '_auto_dimensions',
         '_provider_request_payload',
         'model_id', 'api_group_key',
         // ── Already surfaced at root meta level ───────────────────────

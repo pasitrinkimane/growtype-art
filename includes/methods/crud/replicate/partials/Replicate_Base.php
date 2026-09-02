@@ -35,19 +35,43 @@ class Replicate_Base extends Growtype_Art_Generator_Base
                 'label'    => 'Flux 2 Dev',
                 'is_nsfw'  => false,
                 'rating'   => 9,
-                'cost_usd' => 0.003,
+                // Variable pricing: go_fast=true is billed for both input and
+                // output megapixels, so a single flat cost would be misleading.
+                'cost_usd'   => null,
+                'cost_label' => '$0.012/output MP + $0.012/input MP',
+            ],
+            'black-forest-labs/flux-dev' => [
+                'label'                    => 'Flux Dev (Native)',
+                'is_nsfw'                  => false,
+                'rating'                   => 9,
+                'cost_usd'                 => 0.025,
+                'supports_reference_image' => true,
+            ],
+            'bytedance/seedream-4.5' => [
+                'label'                    => 'Seedream 4.5',
+                'is_nsfw'                  => false,
+                'rating'                   => 9,
+                'cost_usd'                 => 0.04,
+                'supports_reference_image' => true,
+            ],
+            'bytedance/seedream-5-lite' => [
+                'label'                    => 'Seedream 5.0',
+                'is_nsfw'                  => false,
+                'rating'                   => 9,
+                'cost_usd'                 => 0.035,
+                'supports_reference_image' => true,
             ],
             'prunaai/p-image' => [
                 'label'    => 'Prun AI / P-Image',
                 'is_nsfw'  => true,
                 'rating'   => 8,
-                'cost_usd' => 0.002,
+                'cost_usd' => 0.005,
             ],
             'prunaai/p-image-edit' => [
                 'label'    => 'Prun AI / P-Image Edit',
                 'is_nsfw'  => true,
                 'rating'   => 8,
-                'cost_usd' => 0.002,
+                'cost_usd' => 0.01,
             ],
         ];
     }
@@ -67,9 +91,11 @@ class Replicate_Base extends Growtype_Art_Generator_Base
      *
      * Keys:
      *   image_key        – param name used to pass reference image(s) to the API
+     *   image_is_array   – whether image_key expects an array even when its name is singular
      *   aspect_ratio     – default aspect_ratio when NO reference image is provided (null = omit)
      *   ref_aspect_ratio – default aspect_ratio when a reference image IS provided (null = omit)
      *   extra_defaults   – any additional fields to inject when not already set by the caller
+     *   allowed_fields   – optional allow-list for models with strict input schemas
      *
      * To add a new model: add one entry here. No logic changes needed.
      */
@@ -80,15 +106,73 @@ class Replicate_Base extends Growtype_Art_Generator_Base
                 'image_key'         => 'input_images',
                 'aspect_ratio'      => null,
                 'ref_aspect_ratio'  => 'match_input_image',
+                'custom_dimensions' => true,
                 'ref_exclude_fields'=> ['width', 'height', 'num_outputs', 'disable_safety_checker'],
                 'extra_defaults'    => [
                     'output_format' => 'jpg',
+                ],
+            ],
+            'black-forest-labs/flux-dev' => [
+                'image_key'          => 'image',
+                'image_is_array'     => false,
+                'aspect_ratio'       => '3:4',
+                'ref_aspect_ratio'   => '3:4',
+                'custom_dimensions'  => false,
+                'ref_exclude_fields' => ['width', 'height'],
+                'extra_defaults'     => [
+                    'go_fast'             => false,
+                    'megapixels'          => '1',
+                    'output_format'       => 'png',
+                    'num_inference_steps' => 50,
+                    'prompt_strength'     => 0.35,
+                ],
+                'allowed_fields'     => [
+                    'prompt', 'image', 'go_fast', 'guidance', 'megapixels',
+                    'num_outputs', 'aspect_ratio', 'output_format', 'output_quality',
+                    'prompt_strength', 'num_inference_steps', 'disable_safety_checker', 'seed',
+                ],
+            ],
+            'bytedance/seedream-4.5' => [
+                'image_key'          => 'image_input',
+                'image_is_array'     => true,
+                'aspect_ratio'       => '3:4',
+                'ref_aspect_ratio'   => 'match_input_image',
+                'custom_dimensions'  => true,
+                'ref_exclude_fields' => ['width', 'height'],
+                'extra_defaults'     => [
+                    'size'                        => '2K',
+                    'sequential_image_generation' => 'disabled',
+                    'max_images'                  => 1,
+                ],
+                'allowed_fields'     => [
+                    'prompt', 'image_input', 'size', 'width', 'height', 'aspect_ratio',
+                    'sequential_image_generation', 'max_images', 'disable_safety_checker',
+                ],
+            ],
+            'bytedance/seedream-5-lite' => [
+                'image_key'          => 'image_input',
+                'image_is_array'     => true,
+                'aspect_ratio'       => '3:4',
+                'ref_aspect_ratio'   => 'match_input_image',
+                'custom_dimensions'  => false,
+                'ref_exclude_fields' => ['width', 'height', 'disable_safety_checker'],
+                'extra_defaults'     => [
+                    'size'                        => '2K',
+                    'sequential_image_generation' => 'disabled',
+                    'max_images'                  => 1,
+                    'output_format'               => 'png',
+                ],
+                'allowed_fields'     => [
+                    'prompt', 'image_input', 'size', 'aspect_ratio',
+                    'sequential_image_generation', 'max_images', 'output_format',
+                    'return_byteplus_urls',
                 ],
             ],
             'prunaai/p-image' => [
                 'image_key'         => 'images',   // expects array of images
                 'aspect_ratio'      => 'custom',   // valid: 1:1 16:9 9:16 4:3 3:4 3:2 2:3 custom
                 'ref_aspect_ratio'  => 'custom',   // same restriction; 'match_input_image' NOT valid
+                'custom_dimensions'=> true,
                 'ref_exclude_fields'=> [],
                 'extra_defaults'    => [],
             ],
@@ -98,6 +182,7 @@ class Replicate_Base extends Growtype_Art_Generator_Base
                 'image_key'         => 'images',
                 'aspect_ratio'      => '1:1',             // no ref-image case
                 'ref_aspect_ratio'  => 'match_input_image', // ref-image case
+                'custom_dimensions'=> false,
                 'ref_exclude_fields'=> ['width', 'height'], // incompatible with match_input_image
                 'extra_defaults'    => ['megapixels' => '2'],
             ],
@@ -108,9 +193,36 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             'image_key'         => 'image',
             'aspect_ratio'      => null,                // don't send unless caller specifies
             'ref_aspect_ratio'  => 'match_input_image', // safe default for most flux-style models
+            'custom_dimensions' => true,
             'ref_exclude_fields'=> [],
             'extra_defaults'    => [],
         ];
+    }
+
+    private static function nearest_supported_aspect_ratio(int $width, int $height): string
+    {
+        $target = $height > 0 ? $width / $height : 0.75;
+        $ratios = [
+            '1:1'  => 1,
+            '16:9' => 16 / 9,
+            '9:16' => 9 / 16,
+            '4:3'  => 4 / 3,
+            '3:4'  => 3 / 4,
+            '3:2'  => 3 / 2,
+            '2:3'  => 2 / 3,
+        ];
+
+        $closest = '3:4';
+        $distance = PHP_FLOAT_MAX;
+        foreach ($ratios as $label => $ratio) {
+            $candidate_distance = abs($target - $ratio);
+            if ($candidate_distance < $distance) {
+                $closest = $label;
+                $distance = $candidate_distance;
+            }
+        }
+
+        return $closest;
     }
 
     public function generate_image_init($params)
@@ -125,7 +237,7 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             'prompt'                 => $params['prompt'],
             'width'                  => $params['width']          ?? self::DEFAULT_IMAGE_DIMENSIONS['width'],
             'height'                 => $params['height']         ?? self::DEFAULT_IMAGE_DIMENSIONS['height'],
-            'go_fast'                => $params['go_fast']        ?? true,
+            'go_fast'                => $params['go_fast']        ?? ($config['extra_defaults']['go_fast'] ?? true),
             'output_format'          => $params['output_format']  ?? ($config['extra_defaults']['output_format'] ?? 'webp'),
             'output_quality'         => $params['output_quality'] ?? 80,
             'num_outputs'            => $params['num_outputs']    ?? 1,
@@ -134,7 +246,7 @@ class Replicate_Base extends Growtype_Art_Generator_Base
 
         // ── Model-specific extra defaults (e.g. megapixels for p-image-edit) ─
         foreach ($config['extra_defaults'] as $field => $value) {
-            if (!isset($input[$field])) {
+            if (!array_key_exists($field, $params) && !isset($input[$field])) {
                 $input[$field] = $value;
             }
         }
@@ -153,8 +265,9 @@ class Replicate_Base extends Growtype_Art_Generator_Base
         $image_key = $config['image_key'];
 
         if (!empty($reference_image_urls)) {
-            // Plural key → full array; singular key → first URL only
-            $input[$image_key] = str_contains($image_key, 'images')
+            // Array key → full array; scalar key → first URL only.
+            $image_is_array = $config['image_is_array'] ?? str_contains($image_key, 'images');
+            $input[$image_key] = $image_is_array
                 ? $reference_image_urls
                 : $reference_image_urls[0];
 
@@ -175,6 +288,31 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             $input['aspect_ratio'] = $default_ar;
         }
 
+        // Translate custom dimensions into each model's supported schema.
+        if (($params['aspect_ratio'] ?? null) === 'custom') {
+            $custom_width  = (int) ($params['width'] ?? self::DEFAULT_IMAGE_DIMENSIONS['width']);
+            $custom_height = (int) ($params['height'] ?? self::DEFAULT_IMAGE_DIMENSIONS['height']);
+
+            if ($model_slug === 'bytedance/seedream-4.5') {
+                $input['size'] = 'custom';
+                $input['width'] = max(1024, min(4096, $custom_width));
+                $input['height'] = max(1024, min(4096, $custom_height));
+                unset($input['aspect_ratio']);
+            } elseif (empty($config['custom_dimensions'])) {
+                unset($input['width'], $input['height']);
+                $input['aspect_ratio'] = self::nearest_supported_aspect_ratio($custom_width, $custom_height);
+            } else {
+                $input['width'] = $custom_width;
+                $input['height'] = $custom_height;
+                $input['aspect_ratio'] = 'custom';
+            }
+        }
+
+        // Auto sizing delegates dimensions and aspect ratio to the model schema.
+        if (!empty($params['_auto_dimensions'])) {
+            unset($input['width'], $input['height'], $input['aspect_ratio']);
+        }
+
         // ── Forward any extra caller params not already set ───────────────────
         // (lora_weights, guidance, num_inference_steps, etc.)
         $internal_keys = [
@@ -183,12 +321,18 @@ class Replicate_Base extends Growtype_Art_Generator_Base
             'reference_image_url', 'aspect_ratio', 'token', 'model_id', 'model',
             'save_to_db', 'providers', 'types', 'images_amount', 'reference_files',
             'prompt_params', 'generation_id', 'segmind_model', 'api_group_key',
-            'source', 'created_by',
+            'source', 'created_by', 'skip_compress',
+            '_auto_dimensions',
         ];
         foreach ($params as $key => $value) {
             if (!in_array($key, $internal_keys, true) && !isset($input[$key])) {
                 $input[$key] = $value;
             }
+        }
+
+        // Some official models reject unknown fields instead of ignoring them.
+        if (!empty($config['allowed_fields'])) {
+            $input = array_intersect_key($input, array_flip($config['allowed_fields']));
         }
 
         error_log('Growtype Art - Replicate params: ' . json_encode(array_keys($params)));
@@ -290,11 +434,35 @@ class Replicate_Base extends Growtype_Art_Generator_Base
                 ];
             }
 
-            return [
+            $result = [
                 'generations' => $generations,
                 'prediction_id' => $data['id'],
                 '_request_payload' => $input,
             ];
+
+            $metrics = isset($data['metrics']) && is_array($data['metrics'])
+                ? $data['metrics']
+                : [];
+            $duration_seconds = $metrics['total_time'] ?? $metrics['predict_time'] ?? null;
+
+            if (is_numeric($duration_seconds)) {
+                $result['duration_ms'] = (int) round((float) $duration_seconds * 1000);
+            }
+
+            if (!empty($metrics)) {
+                $result['provider_metrics'] = $metrics;
+            }
+
+            // Replicate's official fixed-price models are billed per output.
+            // History stores one row per output, so record the unit price on
+            // each row rather than duplicating the prediction's total charge.
+            $unit_cost = $this->get_model_cost($model_slug);
+            if ($unit_cost !== null) {
+                $result['cost_usd'] = $unit_cost;
+                $result['cost_source'] = 'replicate_official_output_price';
+            }
+
+            return $result;
         }
 
         return [

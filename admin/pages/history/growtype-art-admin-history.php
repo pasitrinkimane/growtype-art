@@ -428,6 +428,107 @@ class Growtype_Art_Admin_History
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
+     * Resolve current model pricing for rows created before cost logging existed.
+     */
+    private static function get_model_pricing(string $provider, string $model): array
+    {
+        static $cache = [];
+
+        $cache_key = $provider . ':' . $model;
+        if (isset($cache[$cache_key])) {
+            return $cache[$cache_key];
+        }
+
+        $namespaced = sprintf('\\partials\\%s_Base', ucfirst($provider));
+        $plain      = sprintf('%s_Base', ucfirst($provider));
+        $class      = class_exists($namespaced) ? $namespaced : (class_exists($plain) ? $plain : null);
+
+        if (!$class) {
+            return $cache[$cache_key] = [];
+        }
+
+        $instance = new $class();
+        $models   = method_exists($instance, 'get_models') ? $instance->get_models() : [];
+        $pricing  = isset($models[$model]) && is_array($models[$model]) ? $models[$model] : [];
+
+        return $cache[$cache_key] = $pricing;
+    }
+
+    private static function format_cost(array $row, array $meta): array
+    {
+        if (array_key_exists('cost_usd', $row) && $row['cost_usd'] !== null && $row['cost_usd'] !== '') {
+            return [
+                'text'      => '$' . number_format((float) $row['cost_usd'], 4),
+                'estimated' => false,
+            ];
+        }
+
+        $model = (string) ($meta['model_used'] ?? '');
+        if ($model === '') {
+            return ['text' => '—', 'estimated' => false];
+        }
+
+        $pricing = self::get_model_pricing((string) ($row['provider'] ?? ''), $model);
+
+        if (isset($pricing['cost_usd'])) {
+            return [
+                'text'      => '≈$' . number_format((float) $pricing['cost_usd'], 4),
+                'estimated' => true,
+            ];
+        }
+
+        if (!empty($pricing['cost_label'])) {
+            return [
+                'text'      => '≈' . $pricing['cost_label'],
+                'estimated' => true,
+            ];
+        }
+
+        return ['text' => '—', 'estimated' => false];
+    }
+
+    /**
+     * Return the actual generated image dimensions when the history copy is
+     * stored locally, falling back to the dimensions requested at generation.
+     */
+    private static function format_image_dimensions(array $meta, string $image_url, bool $is_video): string
+    {
+        if ($is_video) {
+            return '—';
+        }
+
+        $width  = 0;
+        $height = 0;
+
+        if ($image_url !== '') {
+            $upload_dir = wp_upload_dir();
+            $base_url   = (string) ($upload_dir['baseurl'] ?? '');
+            $base_dir   = (string) ($upload_dir['basedir'] ?? '');
+
+            if ($base_url !== '' && $base_dir !== '' && strpos($image_url, $base_url) === 0) {
+                $local_path = str_replace($base_url, $base_dir, $image_url);
+                if (is_file($local_path)) {
+                    $dimensions = @getimagesize($local_path);
+                    $width      = (int) ($dimensions[0] ?? 0);
+                    $height     = (int) ($dimensions[1] ?? 0);
+                }
+            }
+        }
+
+        if ($width <= 0 || $height <= 0) {
+            $request_payload = isset($meta['request_payload']) && is_array($meta['request_payload'])
+                ? $meta['request_payload']
+                : [];
+            $width  = (int) ($meta['width'] ?? $request_payload['width'] ?? 0);
+            $height = (int) ($meta['height'] ?? $request_payload['height'] ?? 0);
+        }
+
+        return $width > 0 && $height > 0
+            ? $width . '×' . $height
+            : '—';
+    }
+
+    /**
      * Render the generations table for the given rows.
      *
      * Public & static so any admin page can call it:
@@ -458,6 +559,7 @@ class Growtype_Art_Admin_History
                     <th><?php esc_html_e('Status', 'growtype-art'); ?></th>
                     <th><?php esc_html_e('Source', 'growtype-art'); ?></th>
                     <th><?php esc_html_e('Creator', 'growtype-art'); ?></th>
+                    <th><?php esc_html_e('Image size', 'growtype-art'); ?></th>
                     <th><?php esc_html_e('Cost', 'growtype-art'); ?></th>
                     <th><?php esc_html_e('Duration', 'growtype-art'); ?></th>
                     <th><?php esc_html_e('Date', 'growtype-art'); ?></th>
@@ -476,8 +578,10 @@ class Growtype_Art_Admin_History
                         : '';
                     $meta     = !empty($row['meta']) ? json_decode($row['meta'], true) : [];
                     $meta     = is_array($meta) ? $meta : [];
+                    $cost     = self::format_cost($row, $meta);
                     $is_video = (isset($meta['asset_type']) && $meta['asset_type'] === 'video')
                              || preg_match('/\.(mp4|webm|ogg|mov)$/i', $image_url);
+                    $image_dimensions = self::format_image_dimensions($meta, $image_url, $is_video);
                 ?>
                 <tr>
                     <td class="gh-id-col">#<?php echo (int)$row['id']; ?></td>
@@ -489,7 +593,9 @@ class Growtype_Art_Admin_History
                                 <span style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:1px 3px;border-radius:3px;line-height:1;font-family:-apple-system,sans-serif;">▶</span>
                             </a>
                         <?php } else { ?>
-                            <a href="<?php echo esc_url($image_url); ?>" target="_blank">
+                            <a href="<?php echo esc_url($image_url); ?>"
+                               class="gh-lightbox-trigger"
+                               aria-label="<?php esc_attr_e('Open image preview', 'growtype-art'); ?>">
                                 <img src="<?php echo esc_url($image_url); ?>" class="gh-thumb" alt="" loading="lazy">
                             </a>
                         <?php } ?>
@@ -548,12 +654,12 @@ class Growtype_Art_Admin_History
 
                     <td class="gh-sub"><?php echo esc_html($row['source'] ?: '—'); ?></td>
                     <td class="gh-sub"><?php echo esc_html($row['created_by'] ?: '—'); ?></td>
-                    <td class="gh-duration" style="font-family:monospace;font-size:12px;"><?php
-                        $cost = isset($row['cost_usd']) && $row['cost_usd'] > 0
-                            ? '$' . number_format((float)$row['cost_usd'], 4)
-                            : '—';
-                        echo esc_html($cost);
-                    ?></td>
+                    <td class="gh-duration" style="font-family:monospace;font-size:12px;white-space:nowrap;"><?php echo esc_html($image_dimensions); ?></td>
+                    <td class="gh-duration" style="font-family:monospace;font-size:12px;"<?php
+                        echo !empty($cost['estimated'])
+                            ? ' title="' . esc_attr__('Estimated from the model’s current published price.', 'growtype-art') . '"'
+                            : '';
+                    ?>><?php echo esc_html($cost['text']); ?></td>
                     <td class="gh-duration"><?php echo esc_html($dur); ?></td>
 
                     <td style="font-size:12px;color:#64748b;white-space:nowrap;">
@@ -765,6 +871,15 @@ class Growtype_Art_Admin_History
             border: 1px solid #e2e8f0;
             display: block;
         }
+        .gh-lightbox-trigger {
+            display: inline-block;
+            cursor: zoom-in;
+            border-radius: 6px;
+        }
+        .gh-lightbox-trigger:focus-visible {
+            outline: 3px solid rgba(99,102,241,.35);
+            outline-offset: 2px;
+        }
         .gh-thumb-placeholder {
             width: 44px;
             height: 44px;
@@ -839,6 +954,48 @@ class Growtype_Art_Admin_History
         }
         .gh-delete-btn:hover { background: #dc2626; border-color: #dc2626; color: #fff; }
         .gh-delete-btn:disabled { opacity: .55; pointer-events: none; }
+
+        /* ── Image lightbox ────────────────────────────── */
+        #gh-image-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            background: rgba(2,6,23,.9);
+            backdrop-filter: blur(4px);
+        }
+        #gh-image-lightbox.is-open { display: flex; }
+        #gh-lightbox-image {
+            display: block;
+            max-width: min(94vw, 1600px);
+            max-height: 90vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 24px 70px rgba(0,0,0,.55);
+        }
+        .gh-lightbox-close {
+            position: absolute;
+            top: 18px;
+            right: 22px;
+            width: 42px;
+            height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 50%;
+            background: rgba(15,23,42,.75);
+            color: #fff;
+            font-size: 26px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .gh-lightbox-close:hover { background: #fff; color: #0f172a; }
         </style>
         <?php
     }
@@ -862,6 +1019,12 @@ class Growtype_Art_Admin_History
             </div>
         </div>
 
+        <!-- gh-* image lightbox -->
+        <div id="gh-image-lightbox" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e('Image preview', 'growtype-art'); ?>" aria-hidden="true">
+            <button type="button" class="gh-lightbox-close" aria-label="<?php esc_attr_e('Close image preview', 'growtype-art'); ?>">✕</button>
+            <img id="gh-lightbox-image" src="" alt="<?php esc_attr_e('Generation preview', 'growtype-art'); ?>">
+        </div>
+
         <script>
         // Guard: only initialise once per page — safe when render_table_scripts()
         // is called both on the history page AND via AJAX on the content-generator.
@@ -870,8 +1033,44 @@ class Growtype_Art_Admin_History
             window._ghHistoryNonce = '<?php echo esc_js(wp_create_nonce('growtype_art_admin_history')); ?>';
             window._ghAjaxUrl = '<?php echo esc_url(admin_url('admin-ajax.php')); ?>';
 
+            function ghCloseLightbox() {
+                var lightbox = document.getElementById('gh-image-lightbox');
+                var image = document.getElementById('gh-lightbox-image');
+                if (!lightbox) return;
+                lightbox.classList.remove('is-open');
+                lightbox.setAttribute('aria-hidden', 'true');
+                if (image) image.removeAttribute('src');
+            }
+
             // ── Meta modal — event delegation (works for AJAX-injected buttons) ─
             document.addEventListener('click', function (e) {
+                var imageLink = e.target.closest('.gh-lightbox-trigger');
+                if (imageLink) {
+                    e.preventDefault();
+                    var imageUrl = imageLink.getAttribute('href');
+                    var lightbox = document.getElementById('gh-image-lightbox');
+                    var image = document.getElementById('gh-lightbox-image');
+                    if (imageUrl && lightbox && image) {
+                        image.setAttribute('src', imageUrl);
+                        lightbox.classList.add('is-open');
+                        lightbox.setAttribute('aria-hidden', 'false');
+                        var closeButton = lightbox.querySelector('.gh-lightbox-close');
+                        if (closeButton) closeButton.focus();
+                    }
+                    return;
+                }
+
+                if (e.target.closest('.gh-lightbox-close')) {
+                    ghCloseLightbox();
+                    return;
+                }
+
+                var lightbox = document.getElementById('gh-image-lightbox');
+                if (lightbox && e.target === lightbox) {
+                    ghCloseLightbox();
+                    return;
+                }
+
                 var btn = e.target.closest('.gh-meta-btn');
                 if (btn) {
                     var raw = btn.getAttribute('data-meta') || '';
@@ -882,6 +1081,13 @@ class Growtype_Art_Admin_History
                 // Close on backdrop click
                 var modal = document.getElementById('gh-meta-modal');
                 if (modal && e.target === modal) { modal.style.display = 'none'; }
+            });
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key !== 'Escape') return;
+                ghCloseLightbox();
+                var modal = document.getElementById('gh-meta-modal');
+                if (modal) modal.style.display = 'none';
             });
 
             // ── Copy-prompt buttons — event delegation ───────────────────────

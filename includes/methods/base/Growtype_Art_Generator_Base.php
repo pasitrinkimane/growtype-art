@@ -199,6 +199,36 @@ abstract class Growtype_Art_Generator_Base
         return $params;
     }
 
+    /**
+     * Carry provider response telemetry into the parameters used by history.
+     */
+    private function merge_generation_telemetry(array $params, array $generation_result): array
+    {
+        foreach (['cost_usd', 'cost_source', 'duration_ms', 'provider_metrics'] as $key) {
+            if (array_key_exists($key, $generation_result)) {
+                $params[$key] = $generation_result[$key];
+            }
+        }
+
+        return $params;
+    }
+
+    /**
+     * Measure the provider request when its response does not include timing.
+     * Provider-reported duration remains authoritative when available.
+     */
+    private function generate_image_init_with_duration(array $params)
+    {
+        $started_at = microtime(true);
+        $result = $this->generate_image_init($params);
+
+        if (is_array($result) && (!isset($result['duration_ms']) || (int) $result['duration_ms'] <= 0)) {
+            $result['duration_ms'] = max(1, (int) round((microtime(true) - $started_at) * 1000));
+        }
+
+        return $result;
+    }
+
     // ──────────────────────────────────────────────
     // Public Generation Methods
     // ──────────────────────────────────────────────
@@ -243,12 +273,16 @@ abstract class Growtype_Art_Generator_Base
         $params['generation_id'] = wp_generate_password(52, false);
         $params['model_id'] = $model_id;
 
-        $generation_result = $this->generate_image_init($params);
+        $generation_result = $this->generate_image_init_with_duration($params);
 
         // If the provider returned the exact payload it sent to the API, capture it for history.
         if (isset($generation_result['_request_payload'])) {
             $params['_provider_request_payload'] = $generation_result['_request_payload'];
             unset($generation_result['_request_payload']);
+        }
+
+        if (is_array($generation_result)) {
+            $params = $this->merge_generation_telemetry($params, $generation_result);
         }
 
         if (empty($generation_result) || isset($generation_result['errors']) || (isset($generation_result['success']) && !$generation_result['success'])) {
@@ -303,12 +337,16 @@ abstract class Growtype_Art_Generator_Base
         $params['prompt'] = $formatted_prompt;
         $params['generation_id'] = wp_generate_password(52, false);
 
-        $generation_result = $this->generate_image_init($params);
+        $generation_result = $this->generate_image_init_with_duration($params);
 
         // If the provider returned the exact payload it sent to the API, capture it for history.
         if (isset($generation_result['_request_payload'])) {
             $params['_provider_request_payload'] = $generation_result['_request_payload'];
             unset($generation_result['_request_payload']);
+        }
+
+        if (is_array($generation_result)) {
+            $params = $this->merge_generation_telemetry($params, $generation_result);
         }
 
         if (empty($generation_result) || isset($generation_result['errors']) || (isset($generation_result['success']) && !$generation_result['success'])) {
@@ -386,6 +424,11 @@ abstract class Growtype_Art_Generator_Base
                     ],
                 ],
             ];
+
+            if (!empty($params['enforce_output_dimensions']) && !empty($params['width']) && !empty($params['height'])) {
+                $image['target_width']  = (int) $params['width'];
+                $image['target_height'] = (int) $params['height'];
+            }
 
             // Normalize Content/URL
             if (isset($generation['imageBase64'])) {
@@ -506,7 +549,7 @@ abstract class Growtype_Art_Generator_Base
                 $params['generation_id'] = wp_generate_password(52, false);
                 $params['api_group_key'] = $api_group_key;
 
-                $generation_result = $this->generate_image_init($params);
+                $generation_result = $this->generate_image_init_with_duration($params);
 
                 // If unauthorized, try the next token
                 if (isset($generation_result['success']) && $generation_result['success'] === false && strpos($generation_result['message'] ?? '', 'Unauthorized') !== false) {
