@@ -107,6 +107,7 @@ $doc_params = [
 
     // ── character_details inner keys ─────────────────────────────────────────
     ['character_details.character_title',                    'string',  false, 'same as top-level', 'Character name (redundant if set at top level).'],
+    ['character_details.character_summary',                  'string',  false, '""',                'One concise sentence for character preview cards.'],
     ['character_details.character_description',              'string',  false, 'auto',              'Short bio / description shown on the character profile.'],
     ['character_details.character_personality',              'string',  false, '""',                'Comma-separated personality traits (e.g. <code style="font-family:var(--mono);font-size:11px">Bratty, Seductive</code>).'],
     ['character_details.character_occupation',               'string',  false, 'random',            'Job or role. Underscores converted to spaces.'],

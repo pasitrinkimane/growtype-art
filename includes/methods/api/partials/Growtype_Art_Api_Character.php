@@ -508,7 +508,7 @@ class Growtype_Art_Api_Character
             'character_breast_size', 'character_butt_size', 'character_body_type', 'character_body_shape',
             'character_title', 'character_occupation', 'character_nationality', 'character_location',
             'character_height', 'character_weight', 'character_hobbies', 'character_dreams',
-            'character_description', 'character_personality', 'character_introduction',
+            'character_summary', 'character_description', 'character_personality', 'character_introduction',
             'character_intro_message', 'character_intro_actions_message',
             'character_can_answer_to_questions', 'character_popular_topics_to_discuss',
             'character_gpt_personality_extension', 'face_swap_photos', 'faceswap_new_uploads',

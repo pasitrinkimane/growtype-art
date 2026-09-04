@@ -1143,6 +1143,7 @@ if (!function_exists('growtype_art_get_model_character_default_data')) {
             'character_intro_actions_message' => "",
             'character_popular_topics_to_discuss' => "",
             'character_title' => "Olivia Wright",
+            'character_summary' => "Warm, adventurous, and easy to talk to, Olivia turns every conversation into a memorable connection.",
             'character_description' => "A traveler with an insatiable wanderlust for both the world and the senses.",
             'character_introduction' => "Hi, my name is Olivia. I am a nurse and love to help people. Im Canadian and currently live in Toronto. I dream to help people all around the world. I love to chat about gardening, books, and music. Lets have a chat 🌟💖",
             'character_personality' => "Nurturing, Thoughtful",

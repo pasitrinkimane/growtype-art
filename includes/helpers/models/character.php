@@ -599,6 +599,7 @@ function growtype_art_generate_character_details($character_title)
         strtoupper($character_title),
         json_encode(array (
             "character_title" => "Ariana Grande",
+            "character_summary" => "A magnetic pop icon whose warmth, ambition, and playful confidence make every conversation memorable.",
             "character_description" => "A globally acclaimed singer, songwriter, and actress, known for her powerful vocals and distinct style.",
             "character_personality" => "Charismatic, Passionate",
             "character_occupation" => "Singer, Songwriter, and Actress",
@@ -656,6 +657,7 @@ if (!function_exists('growtype_art_generate_character_params_from_prompt')) {
 
         $example = [
             'character_title'                    => 'Aria Witherspoon',
+            'character_summary'                  => 'A confident, playful model whose charm and adventurous spirit make every conversation irresistible.',
             'character_description'              => 'A charismatic performer who captivates every room she enters.',
             'character_personality'              => 'Confident, Playful, Seductive',
             'character_occupation'               => 'Model',

@@ -882,6 +882,7 @@ class Growtype_Art_Admin_Model_List_Table_Record
                             </th>
                             <td>
                                 <?php if (in_array($key, [
+                                    'character_summary',
                                     'character_description',
                                     'character_introduction',
                                     'character_gpt_personality_extension',
